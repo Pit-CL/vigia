@@ -21,17 +21,21 @@ services:
     image: python:3.12-alpine
     container_name: clima-ingesta
     working_dir: /app
-    command: crond -f -l 8
+    # el crontab se copia (no se monta) a /etc/crontabs/root: BusyBox crond
+    # exige que sea de root y el bind-mount preserva el uid del host
+    command: sh -c "cp /crontab-src /etc/crontabs/root && chown root:root /etc/crontabs/root && exec crond -f -l 6"
     environment:
       TZ: America/Santiago
       CLIMA_DB: /data/clima.db
       CLIMA_STATUS: /data/status.json
+      CLIMA_VERIF: /data/verificacion.json
+      CLIMA_ESTACIONES: /data/estaciones.json
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}
     volumes:
       - ./ingesta:/app/ingesta:ro
-      - ./deploy/crontab:/etc/crontabs/root:ro
+      - ./deploy/crontab:/crontab-src:ro
       - ./data:/data
     security_opt:
       - no-new-privileges:true

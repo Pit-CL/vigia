@@ -1,6 +1,6 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'sinoptica-shell-v1';
-const DATA_CACHE = 'sinoptica-data-v1';
+const SHELL_CACHE = 'sinoptica-shell-v2';
+const DATA_CACHE = 'sinoptica-data-v2';
 const SHELL = [
   './',
   'index.html',
@@ -8,6 +8,8 @@ const SHELL = [
   'app.js',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
+  'vendor/leaflet.js',
+  'vendor/leaflet.css',
   'fonts/fonts.css',
   'fonts/BricolageGrotesque-300-800-0.woff2',
   'fonts/IBMPlexMono-400-1.woff2',
@@ -33,8 +35,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
 
-  // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline)
-  const isData = url.hostname.endsWith('open-meteo.com') || url.pathname.endsWith('status.json');
+  // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
+  // Los tiles del mapa quedan fuera (los maneja el navegador).
+  const isData = url.hostname.endsWith('open-meteo.com') ||
+    /\/(status|verificacion|estaciones)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
       fetch(e.request)

@@ -8,11 +8,12 @@ Uso:
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import config
 import db
 import sources
+import verify
 
 
 def write_status(con) -> None:
@@ -32,6 +33,34 @@ def write_status(con) -> None:
     config.STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
     config.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False) + "\n")
     print(f"status → {config.STATUS_PATH}: {status}")
+
+
+def write_estaciones(con) -> int:
+    """Última observación por estación (mapa en vivo de la PWA)."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    latest: dict = {}
+    for station, variable, value, obs_time in con.execute(
+        "SELECT station, variable, value, obs_time FROM observations"
+        " WHERE obs_time >= ? ORDER BY obs_time", (cutoff,)):
+        d = latest.setdefault(station, {"obs": {}, "obs_time": obs_time})
+        d["obs"][variable] = value
+        if obs_time > d["obs_time"]:
+            d["obs_time"] = obs_time
+    estaciones = [{
+        "id": s["id"], "nombre": s["nombre"], "lat": s["lat"], "lon": s["lon"],
+        "fuente": "metar" if s.get("metar") else "dmc",
+        "obs_time": latest[s["id"]]["obs_time"] if s["id"] in latest else None,
+        "obs": latest[s["id"]]["obs"] if s["id"] in latest else {},
+    } for s in config.STATIONS]
+    payload = {
+        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "estaciones": estaciones,
+    }
+    config.ESTACIONES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    config.ESTACIONES_PATH.write_text(json.dumps(payload, ensure_ascii=False) + "\n")
+    con_datos = sum(1 for e in estaciones if e["obs"])
+    print(f"estaciones → {config.ESTACIONES_PATH}: {con_datos}/{len(estaciones)} con datos")
+    return con_datos
 
 
 def step(con, run_at: str, kind: str, fn) -> bool:
@@ -67,6 +96,8 @@ def main() -> int:
     if do_forecasts:
         ok &= step(con, run_at, "openmeteo_det", lambda: sources.ingest_openmeteo_det(con, run_tag))
         ok &= step(con, run_at, "openmeteo_ens", lambda: sources.ingest_openmeteo_ens(con, run_tag))
+    ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
+    ok &= step(con, run_at, "estaciones", lambda: write_estaciones(con))
     write_status(con)
     con.close()
     return 0 if ok else 1

@@ -1,5 +1,6 @@
 /* Sinóptica — pronóstico multi-modelo para Chile central.
-   Datos: Open-Meteo (CC BY 4.0). Sin claves, sin tracking. */
+   Datos: Open-Meteo (CC BY 4.0). Observaciones: DMC + red OMM (NOAA).
+   Sin claves, sin tracking, sin CDNs. */
 'use strict';
 
 // ── Configuración ──────────────────────────────────────────────
@@ -58,12 +59,91 @@ const WMO = {
 
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSO', 'SO', 'OSO', 'O', 'ONO', 'NO', 'NNO'];
 const DAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const DAYS_FULL = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+
+const OBS_LABELS = {
+  temperature_2m: ['Temperatura', '°C'],
+  dew_point_2m: ['Punto de rocío', '°C'],
+  relative_humidity_2m: ['Humedad relativa', '%'],
+  pressure_msl: ['Presión (nivel del mar)', 'hPa'],
+  wind_speed_10m: ['Viento (prom. 10 min)', 'km/h'],
+  wind_direction_10m: ['Dirección del viento', '°'],
+  visibility: ['Visibilidad', 'm'],
+  cloud_cover: ['Nubosidad', '%'],
+  precipitation_6h: ['Precipitación últimas 6 h', 'mm'],
+};
+
+// ── Explicaciones (simple primero, ciencia después) ────────────
+
+const INFO = {
+  actual: {
+    title: '¿Qué significa cada dato?',
+    html: `
+<p><strong>Temperatura y sensación.</strong> La temperatura es la del aire a 2 metros del suelo. La «sensación» corrige ese número por el viento y la humedad: el viento le roba calor a tu piel (te enfría) y la humedad alta impide que el sudor evapore (te acalora). Por eso un día de 5 °C con viento fuerte se siente bajo cero.</p>
+<p><strong>Humedad relativa.</strong> Cuánto vapor de agua tiene el aire respecto del máximo que podría tener a esa temperatura. 100 % = aire saturado (niebla o rocío probables); bajo 30 % = aire muy seco.</p>
+<p><strong>Viento.</strong> Velocidad y <em>de dónde viene</em> (un viento SO viene desde el suroeste). En la costa de la V Región el viento SO de la tarde es la clásica brisa marina.</p>
+<p><strong>Presión al nivel del mar.</strong> El peso de la atmósfera, normalizado al nivel del mar para poder comparar ciudades a distinta altura. Sobre ~1020 hPa suele dominar el buen tiempo (anticiclón); si cae rápido, se acerca un sistema frontal.</p>
+<p class="info-fine">Este panel muestra la <em>síntesis de modelo</em> para el punto elegido (la mejor estimación interpolada). El mapa de observaciones, en cambio, muestra lo que los sensores físicos están midiendo de verdad.</p>`,
+  },
+  mapa: {
+    title: '¿De dónde salen estas mediciones?',
+    html: `
+<p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico:</p>
+<p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación: Pudahuel, Tobalaba, Torquemada, Rodelillo y Santo Domingo.</p>
+<p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto: Quinta Normal (la estación de referencia histórica de Santiago), Jardín Botánico de Viña, Quillota, San Felipe, Quintero, Colina, Talagante, La Florida, San José de Maipo y Los Libertadores a 2.955 m en plena cordillera.</p>
+<p class="info-fine">¿Por qué una estación puede diferir del «ahora» del panel superior? Porque el panel es un modelo interpolado a tu punto exacto y la estación es un sensor físico en SU punto exacto — comparar ambos es justamente cómo medimos la calidad del pronóstico (ver «¿Cuánto acierta cada modelo?»).</p>`,
+  },
+  ensamble: {
+    title: 'La banda de incertidumbre (ensamble)',
+    html: `
+<p><strong>En simple:</strong> el futuro de la atmósfera no se puede conocer con exactitud, así que el centro europeo ECMWF corre su modelo <strong>51 veces</strong>, cada vez partiendo de condiciones iniciales levemente distintas. La banda muestra dónde cae el 80 % de esos 51 futuros posibles. Banda angosta = los escenarios coinciden, alta confianza. Banda ancha = la atmósfera está «difícil», cualquier número exacto sería una falsa promesa.</p>
+<p><strong>La ciencia:</strong> la atmósfera es un sistema caótico — errores diminutos en el estado inicial crecen exponencialmente (el famoso «efecto mariposa» que describió Edward Lorenz en 1963). El pronóstico por ensambles es la respuesta operativa de la meteorología moderna a ese caos: en vez de fingir certeza, se cuantifica la incertidumbre. La línea segmentada es la mediana (la mitad de los escenarios está arriba y la mitad abajo).</p>
+<p class="info-fine">Las líneas finas de colores son los modelos <em>deterministas</em> de 5 centros mundiales — si además de la banda los modelos discrepan entre sí, la incertidumbre es doble.</p>`,
+  },
+  precipitacion: {
+    title: '¿Qué significa «70 % de probabilidad de lluvia»?',
+    html: `
+<p><strong>Lo que SÍ significa:</strong> de 10 situaciones atmosféricas como la pronosticada, en 7 cae al menos 0,1 mm de agua en esa hora y en ese punto. Es una frecuencia esperada, igual que «este dado tiene 1/6 de probabilidad de salir 6».</p>
+<p><strong>Lo que NO significa:</strong> ni que lloverá el 70 % del tiempo, ni que lloverá en el 70 % de la ciudad, ni que la lluvia será «fuerte al 70 %».</p>
+<p><strong>¿De dónde sale el número?</strong> Principalmente de contar miembros del ensamble: si 36 de los 51 escenarios dan lluvia a esa hora, la probabilidad ronda el 70 %. Por eso probabilidad e intensidad son cosas distintas: puede haber 90 % de probabilidad de una llovizna de 0,2 mm, o 20 % de un chubasco de 15 mm.</p>
+<p class="info-fine">Las barras muestran la intensidad esperada (mm por hora); la línea segmentada, la probabilidad. Para decidir si llevar paraguas, mira la probabilidad; para saber si se inunda el patio, mira los milímetros.</p>`,
+  },
+  diario: {
+    title: 'Cómo leer la franja semanal',
+    html: `
+<p>Cada tarjeta resume un día: ícono del tiempo predominante, temperatura <strong>máxima</strong> (grande) y <strong>mínima</strong> (gris), y abajo la lluvia: milímetros acumulados esperados y la probabilidad más alta del día.</p>
+<p><strong>Toca cualquier día</strong> para abrir su detalle hora a hora, con la comparación entre modelos cuando está disponible.</p>
+<p class="info-fine">Ten presente que la confianza decae con el plazo: el pronóstico para mañana es mucho más firme que el del día 7. Es física, no defecto: el caos atmosférico pone un límite duro de ~10-14 días a cualquier pronóstico determinista, por mucho computador que se le ponga.</p>`,
+  },
+  modelos: {
+    title: '¿Qué es un modelo meteorológico y por qué difieren?',
+    html: `
+<p><strong>En simple:</strong> un modelo numérico divide la atmósfera del planeta en una grilla 3D de celdas (de ~10 a 25 km de lado según el modelo) y resuelve las ecuaciones de la física — movimiento, calor, humedad — hacia adelante en el tiempo, en algunos de los supercomputadores más grandes del mundo.</p>
+<p><strong>Los cinco que mostramos:</strong> IFS del centro europeo ECMWF (el de mayor prestigio mundial en verificaciones), GFS de la NOAA estadounidense, ICON del servicio alemán DWD, GEM del canadiense ECCC y ARPEGE de Météo-France.</p>
+<p><strong>¿Por qué no dicen lo mismo?</strong> Difieren en la resolución de su grilla, en cómo representan procesos más pequeños que una celda (una nube, una quebrada de la cordillera) y en cómo digieren las observaciones iniciales. Chile es terreno difícil: el salto del Pacífico a los Andes en ~150 km es más angosto que una celda de algunos modelos.</p>
+<p class="info-fine">La fila «dispersión» es información valiosa: si los 5 modelos coinciden, puedes confiar; si difieren en 6 °C o en 10 mm de lluvia, la atmósfera está genuinamente impredecible y quien te dé un solo número te está simplificando de más.</p>`,
+  },
+  verificacion: {
+    title: '¿Cómo medimos el acierto?',
+    html: `
+<p><strong>El método:</strong> guardamos cada pronóstico en el momento en que se emite. Cuando llega la hora pronosticada, lo comparamos con lo que <em>realmente midieron</em> las 15 estaciones (aeropuertos + DMC). Nadie puede retocar el pronóstico después: queda archivado.</p>
+<p><strong>MAE (error absoluto medio):</strong> el tamaño típico del error, en grados. «MAE 1,5 °C a 1 día» significa que, en promedio, la temperatura pronosticada para el día siguiente difirió 1,5 °C de la observada. Mientras más chico, mejor.</p>
+<p><strong>Sesgo:</strong> el error <em>con signo</em>. Un sesgo de +1 °C significa que el modelo tiende a pronosticar más calor del que llega; −1 °C, más frío. Conocer el sesgo de cada modelo en cada lugar es la base para corregirlo — exactamente lo que hará nuestro modelo de calibración local.</p>
+<p><strong>Los plazos:</strong> «a 1 día» evalúa pronósticos emitidos 24 h antes; «a 4 días», 96 h antes. El error crece con el plazo — eso también lo puedes ver aquí, transparente.</p>
+<p class="info-fine">Ventana móvil: últimos 14 días, todas las estaciones, todas las horas. El número «n» son los pares pronóstico-observación evaluados: con n chico las cifras bailan; con miles, se estabilizan. Este archivo partió el 9 de junio de 2026 y mejora solo con cada hora que pasa.</p>`,
+  },
+};
 
 // ── Estado ─────────────────────────────────────────────────────
 
 const $ = (sel) => document.querySelector(sel);
-let charts = { temp: null, precip: null };
-let lastData = null; // para redibujar al cambiar de tema
+const charts = {};            // canvasId → instancia Chart
+let lastData = null;          // { best, multi, ens } para redibujar
+let verifData = null;
+let verifBucket = '24';
+let estacionesData = null;
+let map = null;
+let tileLayer = null;
 
 function savedPlace() {
   try {
@@ -89,15 +169,14 @@ const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
 
 function fetchJSON(url) {
   return fetch(url).then((res) => {
-    if (!res.ok) throw new Error(`HTTP ${res.status} en ${new URL(url).hostname}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} en ${new URL(url, location.href).hostname}`);
     return res.json();
   });
 }
 
-function weekdayShort(iso) {
-  // iso "YYYY-MM-DD" → día de semana sin trampas de timezone (mediodía local)
+function weekday(iso, full = false) {
   const [y, m, d] = iso.split('-').map(Number);
-  return DAYS[new Date(y, m - 1, d, 12).getDay()];
+  return (full ? DAYS_FULL : DAYS)[new Date(y, m - 1, d, 12).getDay()];
 }
 
 function percentile(sorted, p) {
@@ -106,16 +185,34 @@ function percentile(sorted, p) {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
 }
 
+function tempClass(t) {
+  if (t == null) return 'tcx';
+  const limits = [0, 5, 10, 15, 20, 25, 30];
+  for (let i = 0; i < limits.length; i++) if (t < limits[i]) return `tc${i}`;
+  return 'tc7';
+}
+
+function horaLocal(isoUtc) {
+  try {
+    return new Date(isoUtc).toLocaleTimeString('es-CL', {
+      hour: '2-digit', minute: '2-digit', timeZone: TZ,
+    });
+  } catch (_) { return isoUtc; }
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
 // ── Carga de datos ─────────────────────────────────────────────
 
 function urlBase(extra) {
-  const q = new URLSearchParams({
+  return new URLSearchParams({
     latitude: place.lat.toFixed(4),
     longitude: place.lon.toFixed(4),
     timezone: TZ,
     ...extra,
-  });
-  return q.toString();
+  }).toString();
 }
 
 async function loadAll() {
@@ -125,8 +222,8 @@ async function loadAll() {
 
   const qBest = urlBase({
     current: 'temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,pressure_msl,precipitation',
-    hourly: 'precipitation,precipitation_probability',
-    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max',
+    hourly: 'temperature_2m,precipitation,precipitation_probability,wind_speed_10m,relative_humidity_2m',
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,uv_index_max',
     forecast_days: '7',
   });
   const qModels = urlBase({
@@ -152,7 +249,7 @@ async function loadAll() {
   app.dataset.state = 'ready';
 }
 
-// ── Render ─────────────────────────────────────────────────────
+// ── Render principal ───────────────────────────────────────────
 
 function render() {
   if (!lastData) return;
@@ -177,6 +274,16 @@ function renderNow(best) {
   document.title = `${Math.round(c.temperature_2m)}°C ${place.name} — Sinóptica`;
 }
 
+// ── Constructores de gráficos (página y modal comparten) ───────
+
+function chartTheme() {
+  Chart.defaults.font.family = getComputedStyle(document.body).getPropertyValue('--font-mono');
+  Chart.defaults.font.size = 10.5;
+  Chart.defaults.color = css('--ink-soft');
+  return { ink: css('--ink'), grid: css('--grid-line'), band: css('--band'),
+           accent: css('--accent'), accent2: css('--accent2') };
+}
+
 function ensembleSeries(ens, times) {
   if (!ens || !ens.hourly) return null;
   const h = ens.hourly;
@@ -195,113 +302,102 @@ function ensembleSeries(ens, times) {
   return { p10, p50, p90, n: members.length };
 }
 
-function renderCharts(best, multi, ens) {
-  const h = multi.hourly;
-  // ventana: desde la hora actual, 48 h
-  const nowIso = best.current.time.slice(0, 13); // "YYYY-MM-DDTHH"
-  let start = h.time.findIndex((t) => t.slice(0, 13) === nowIso);
-  if (start < 0) start = 0;
-  const window = Math.min(48, h.time.length - start);
-  const times = h.time.slice(start, start + window);
-
-  const labels = times.map((t) => {
-    const hour = t.slice(11, 13);
-    return hour === '00' ? `${weekdayShort(t.slice(0, 10))} ${hour}h` : `${hour}h`;
-  });
-
+function buildTempChart(canvasId, labels, { ensS, modelSeries, bestSeries }) {
+  const th = chartTheme();
   const colors = modelColors();
-  const ink = css('--ink');
-  const inkSoft = css('--ink-soft');
-  const grid = css('--grid-line');
-  const band = css('--band');
-
-  Chart.defaults.font.family = getComputedStyle(document.body).getPropertyValue('--font-mono');
-  Chart.defaults.font.size = 10.5;
-  Chart.defaults.color = inkSoft;
-
-  // ── Temperatura: banda de ensamble + modelos ──
-  const dsTemp = [];
-  const ensS = ensembleSeries(ens, times);
+  const ds = [];
   if (ensS) {
-    dsTemp.push(
+    ds.push(
       { label: 'p90', data: ensS.p90, borderWidth: 0, pointRadius: 0, fill: false, tension: 0.35 },
       { label: `banda 10–90 % (${ensS.n} miembros)`, data: ensS.p10, borderWidth: 0, pointRadius: 0,
-        fill: '-1', backgroundColor: band, tension: 0.35 },
-      { label: 'mediana ensamble', data: ensS.p50, borderColor: ink, borderDash: [5, 4],
+        fill: '-1', backgroundColor: th.band, tension: 0.35 },
+      { label: 'mediana ensamble', data: ensS.p50, borderColor: th.ink, borderDash: [5, 4],
         borderWidth: 1.6, pointRadius: 0, fill: false, tension: 0.35 },
     );
   }
-  MODELS.forEach((m, i) => {
-    const arr = h[`temperature_2m_${m.id}`];
-    if (!arr) return;
-    dsTemp.push({
-      label: m.name, data: arr.slice(start, start + window),
-      borderColor: colors[i], borderWidth: 1.3, pointRadius: 0, fill: false, tension: 0.35,
-    });
+  (modelSeries || []).forEach((s, i) => {
+    ds.push({ label: s.name, data: s.data, borderColor: colors[s.colorIdx ?? i],
+              borderWidth: 1.3, pointRadius: 0, fill: false, tension: 0.35 });
   });
-
-  charts.temp?.destroy();
-  charts.temp = new Chart($('#chart-temp'), {
+  if (bestSeries) {
+    ds.push({ label: 'síntesis', data: bestSeries, borderColor: th.accent,
+              borderWidth: 2, pointRadius: 0, fill: false, tension: 0.35 });
+  }
+  destroyChart(canvasId);
+  charts[canvasId] = new Chart($(`#${canvasId}`), {
     type: 'line',
-    data: { labels, datasets: dsTemp },
+    data: { labels, datasets: ds },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          labels: {
-            boxWidth: 14, boxHeight: 2,
-            filter: (item) => !['p90'].includes(item.text),
-          },
-        },
+        legend: { labels: { boxWidth: 14, boxHeight: 2, filter: (it) => it.text !== 'p90' } },
         tooltip: {
           callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${r1(ctx.parsed.y)} °C` },
-          filter: (item) => item.dataset.label !== 'p90',
+          filter: (it) => it.dataset.label !== 'p90',
         },
       },
       scales: {
-        x: { grid: { color: grid }, ticks: { maxTicksLimit: 9, maxRotation: 0 } },
-        y: { grid: { color: grid }, ticks: { callback: (v) => `${v}°` } },
+        x: { grid: { color: th.grid }, ticks: { maxTicksLimit: 9, maxRotation: 0 } },
+        y: { grid: { color: th.grid }, ticks: { callback: (v) => `${v}°` } },
       },
     },
   });
+}
 
-  // ── Precipitación: mm best_match + probabilidad ──
-  const hb = best.hourly;
-  let bStart = hb.time.findIndex((t) => t.slice(0, 13) === nowIso);
-  if (bStart < 0) bStart = 0;
-  const mm = hb.precipitation.slice(bStart, bStart + window);
-  const prob = hb.precipitation_probability
-    ? hb.precipitation_probability.slice(bStart, bStart + window) : null;
-
-  const dsP = [{
-    type: 'bar', label: 'mm/h', data: mm,
-    backgroundColor: css('--accent2'), yAxisID: 'y',
-  }];
+function buildPrecipChart(canvasId, labels, mm, prob) {
+  const th = chartTheme();
+  const ds = [{ type: 'bar', label: 'mm/h', data: mm, backgroundColor: th.accent2, yAxisID: 'y' }];
   if (prob) {
-    dsP.push({
-      type: 'line', label: 'probabilidad %', data: prob,
-      borderColor: css('--accent'), borderWidth: 1.4, pointRadius: 0,
-      borderDash: [4, 3], yAxisID: 'y1', tension: 0.3,
-    });
+    ds.push({ type: 'line', label: 'probabilidad %', data: prob, borderColor: th.accent,
+              borderWidth: 1.4, pointRadius: 0, borderDash: [4, 3], yAxisID: 'y1', tension: 0.3 });
   }
-
-  charts.precip?.destroy();
-  charts.precip = new Chart($('#chart-precip'), {
-    data: { labels, datasets: dsP },
+  destroyChart(canvasId);
+  charts[canvasId] = new Chart($(`#${canvasId}`), {
+    data: { labels, datasets: ds },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } },
       scales: {
-        x: { grid: { color: grid }, ticks: { maxTicksLimit: 9, maxRotation: 0 } },
-        y: { grid: { color: grid }, beginAtZero: true, title: { display: true, text: 'mm/h' } },
+        x: { grid: { color: th.grid }, ticks: { maxTicksLimit: 9, maxRotation: 0 } },
+        y: { grid: { color: th.grid }, beginAtZero: true, title: { display: true, text: 'mm/h' } },
         y1: { position: 'right', min: 0, max: 100, grid: { drawOnChartArea: false },
               ticks: { callback: (v) => `${v}%` } },
       },
     },
   });
 }
+
+function renderCharts(best, multi, ens) {
+  const h = multi.hourly;
+  const nowIso = best.current.time.slice(0, 13);
+  let start = h.time.findIndex((t) => t.slice(0, 13) === nowIso);
+  if (start < 0) start = 0;
+  const window = Math.min(48, h.time.length - start);
+  const times = h.time.slice(start, start + window);
+  const labels = times.map((t) => {
+    const hour = t.slice(11, 13);
+    return hour === '00' ? `${weekday(t.slice(0, 10))} ${hour}h` : `${hour}h`;
+  });
+
+  buildTempChart('chart-temp', labels, {
+    ensS: ensembleSeries(ens, times),
+    modelSeries: MODELS.map((m, i) => {
+      const arr = h[`temperature_2m_${m.id}`];
+      return arr ? { name: m.name, data: arr.slice(start, start + window), colorIdx: i } : null;
+    }).filter(Boolean),
+  });
+
+  const hb = best.hourly;
+  let bStart = hb.time.findIndex((t) => t.slice(0, 13) === nowIso);
+  if (bStart < 0) bStart = 0;
+  buildPrecipChart('chart-precip', labels,
+    hb.precipitation.slice(bStart, bStart + window),
+    hb.precipitation_probability ? hb.precipitation_probability.slice(bStart, bStart + window) : null);
+}
+
+// ── Franja diaria + detalle por día ────────────────────────────
 
 function renderDaily(best) {
   const d = best.daily;
@@ -311,8 +407,10 @@ function renderDaily(best) {
     const [desc, icon] = wmo(d.weather_code[i]);
     const li = document.createElement('li');
     li.className = 'day';
-    li.title = desc;
-    const name = i === 0 ? 'hoy' : i === 1 ? 'mañana' : weekdayShort(iso);
+    li.title = `${desc} — toca para el detalle hora a hora`;
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    const name = i === 0 ? 'hoy' : i === 1 ? 'mañana' : weekday(iso);
     const pp = d.precipitation_sum[i];
     const prob = d.precipitation_probability_max[i];
     li.innerHTML = `
@@ -321,9 +419,77 @@ function renderDaily(best) {
       <span class="day-max">${Math.round(d.temperature_2m_max[i])}°</span>
       <span class="day-min">${Math.round(d.temperature_2m_min[i])}°</span>
       <span class="day-pp">${pp >= 0.1 ? `${r1(pp)} mm · ` : ''}${prob != null ? prob + ' %' : ''}</span>`;
+    li.addEventListener('click', () => openDay(i));
+    li.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDay(i); }
+    });
     ol.appendChild(li);
   });
 }
+
+function openDay(i) {
+  if (!lastData) return;
+  const { best, multi, ens } = lastData;
+  const d = best.daily;
+  const iso = d.time[i];
+  const [desc, icon] = wmo(d.weather_code[i]);
+
+  const fecha = `${weekday(iso, true)} ${Number(iso.slice(8, 10))}`;
+  $('#day-dialog-title').textContent =
+    `${icon} ${i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : fecha} · ${place.name}`;
+  $('#day-dialog-sub').textContent =
+    `${desc} · máxima ${Math.round(d.temperature_2m_max[i])}° · mínima ${Math.round(d.temperature_2m_min[i])}°`;
+
+  // estadísticas del día (desde best_match)
+  const hb = best.hourly;
+  const idxDay = hb.time.map((t, j) => [t, j]).filter(([t]) => t.slice(0, 10) === iso).map(([, j]) => j);
+  const windMax = Math.max(...idxDay.map((j) => hb.wind_speed_10m[j] ?? 0));
+  const rhMean = idxDay.length
+    ? Math.round(idxDay.reduce((a, j) => a + (hb.relative_humidity_2m[j] ?? 0), 0) / idxDay.length) : null;
+  const stats = [
+    ['☀️ UV máx', d.uv_index_max?.[i] != null ? r1(d.uv_index_max[i]) : '—'],
+    ['🌅 Sale el sol', d.sunrise?.[i] ? d.sunrise[i].slice(11, 16) : '—'],
+    ['🌇 Se pone', d.sunset?.[i] ? d.sunset[i].slice(11, 16) : '—'],
+    ['💨 Viento máx', `${Math.round(windMax)} km/h`],
+    ['💧 Humedad prom.', rhMean != null ? `${rhMean} %` : '—'],
+    ['🌧️ Lluvia total', `${r1(d.precipitation_sum[i]) ?? 0} mm`],
+  ];
+  const ul = $('#day-stats');
+  ul.innerHTML = '';
+  stats.forEach(([k, v]) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${k}</span><strong>${v}</strong>`;
+    ul.appendChild(li);
+  });
+
+  const labels = idxDay.map((j) => hb.time[j].slice(11, 13) + 'h');
+
+  // multi-modelo y ensamble cubren 3 días; más allá, solo síntesis
+  const hm = multi.hourly;
+  const idxMulti = hm.time.map((t, j) => [t, j]).filter(([t]) => t.slice(0, 10) === iso).map(([, j]) => j);
+  const timesDay = idxMulti.map((j) => hm.time[j]);
+  const modelSeries = idxMulti.length ? MODELS.map((m, k) => {
+    const arr = hm[`temperature_2m_${m.id}`];
+    return arr ? { name: m.name, data: idxMulti.map((j) => arr[j]), colorIdx: k } : null;
+  }).filter(Boolean) : [];
+
+  buildTempChart('chart-day-temp', labels, {
+    ensS: timesDay.length ? ensembleSeries(ens, timesDay) : null,
+    modelSeries,
+    bestSeries: idxDay.map((j) => hb.temperature_2m[j]),
+  });
+  buildPrecipChart('chart-day-precip', labels,
+    idxDay.map((j) => hb.precipitation[j]),
+    hb.precipitation_probability ? idxDay.map((j) => hb.precipitation_probability[j]) : null);
+
+  $('#day-dialog-note').textContent = idxMulti.length
+    ? 'Líneas de colores: los 5 modelos. Línea gruesa: síntesis best-match. Si se separan, la atmósfera está difícil de pronosticar.'
+    : 'Para días más allá de 72 h mostramos solo la síntesis: la dispersión entre modelos crece y el detalle hora a hora pierde precisión — es el límite físico del caos atmosférico, no un defecto.';
+
+  $('#day-dialog').showModal();
+}
+
+// ── Tabla de modelos ───────────────────────────────────────────
 
 function renderModelTable(multi) {
   const h = multi.hourly;
@@ -374,6 +540,145 @@ function renderModelTable(multi) {
       <td>Δ ${spread((r) => r.pp ?? 0)} mm</td>`;
     tfoot.appendChild(tr);
   }
+}
+
+// ── Verificación: ¿cuánto acierta cada modelo? ─────────────────
+
+async function loadVerif() {
+  try {
+    const res = await fetch('verificacion.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    verifData = await res.json();
+    renderVerif();
+  } catch (_) { /* sin archivo aún */ }
+}
+
+function renderVerif() {
+  const list = $('#verif-list');
+  const caveat = $('#verif-caveat');
+  if (!verifData || !list) return;
+  list.innerHTML = '';
+
+  const entries = MODELS.map((m, i) => {
+    const b = verifData.models?.[m.id]?.[verifBucket];
+    return b ? { ...m, ...b, colorIdx: i } : { ...m, mae: null, colorIdx: i };
+  });
+  const withData = entries.filter((e) => e.mae != null).sort((a, b) => a.mae - b.mae);
+  const totalN = withData.reduce((a, e) => a + e.n, 0);
+
+  if (!withData.length) {
+    caveat.hidden = false;
+    caveat.textContent = `Aún no hay pares pronóstico-observación para este plazo: el archivo partió el ${verifData ? '9 de junio de 2026' : '—'} y los pronósticos a ${verifBucket} h necesitan ese tiempo para poder evaluarse. Vuelve pronto.`;
+    return;
+  }
+
+  caveat.hidden = totalN >= 500;
+  if (totalN < 500) {
+    caveat.textContent = `⚠ Cifras preliminares: recién ${totalN} pares evaluados (el archivo partió el 9 de junio de 2026). Con ~2 semanas de datos los números se estabilizan; mientras tanto, tómalos como tendencia.`;
+  }
+
+  const colors = modelColors();
+  const maxMae = Math.max(...withData.map((e) => e.mae), 0.1);
+  withData.forEach((e, rank) => {
+    const li = document.createElement('li');
+    li.className = 'verif-row';
+    const biasTxt = Math.abs(e.bias) < 0.15 ? 'sin sesgo claro'
+      : e.bias > 0 ? `tiende +${r1(e.bias)}° cálido` : `tiende ${r1(e.bias)}° frío`;
+    li.innerHTML = `
+      <span class="verif-rank">${rank === 0 ? '★' : rank + 1}</span>
+      <span class="verif-name">${e.name}<small>${e.org}</small></span>
+      <span class="verif-bar-wrap"><span class="verif-bar"></span></span>
+      <span class="verif-mae">${e.mae.toFixed(2)} °C</span>
+      <span class="verif-bias">${biasTxt} · n=${e.n}</span>`;
+    const bar = li.querySelector('.verif-bar');
+    bar.style.width = `${Math.max(6, (e.mae / maxMae) * 100)}%`;
+    bar.style.backgroundColor = colors[e.colorIdx];
+    list.appendChild(li);
+  });
+}
+
+function setupVerifTabs() {
+  document.querySelectorAll('.verif-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      verifBucket = btn.dataset.bucket;
+      document.querySelectorAll('.verif-tab').forEach((b) =>
+        b.setAttribute('aria-selected', String(b === btn)));
+      renderVerif();
+    });
+  });
+}
+
+// ── Mapa de observaciones en vivo ──────────────────────────────
+
+const TILES = {
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+};
+const TILES_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>';
+
+async function loadMapa() {
+  try {
+    const res = await fetch('estaciones.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error();
+    estacionesData = await res.json();
+  } catch (_) {
+    $('#map').closest('.panel').hidden = true;
+    return;
+  }
+  renderMapa();
+}
+
+function renderMapa() {
+  if (!estacionesData || typeof L === 'undefined') return;
+  const est = estacionesData.estaciones.filter((e) => e.obs && e.obs.temperature_2m != null);
+  if (!map) {
+    map = L.map('map', { scrollWheelZoom: false, zoomSnap: 0.5 });
+    const bounds = L.latLngBounds(estacionesData.estaciones.map((e) => [e.lat, e.lon]));
+    map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
+  }
+  if (tileLayer) map.removeLayer(tileLayer);
+  tileLayer = L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
+    attribution: TILES_ATTR, maxZoom: 13, subdomains: 'abcd',
+  }).addTo(map);
+
+  // limpiar marcadores previos
+  map.eachLayer((layer) => { if (layer instanceof L.Marker) map.removeLayer(layer); });
+
+  est.forEach((e) => {
+    const t = e.obs.temperature_2m;
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="stn-label ${tempClass(t)}">${Math.round(t)}°</span>`,
+      iconSize: [44, 26],
+      iconAnchor: [22, 13],
+    });
+    const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(map);
+
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong');
+    h.textContent = e.nombre;
+    box.appendChild(h);
+    const meta = document.createElement('small');
+    meta.textContent = `${e.fuente === 'metar' ? 'Aeropuerto · red OMM' : 'EMA · Dirección Meteorológica de Chile'} · ${horaLocal(e.obs_time)} h`;
+    box.appendChild(meta);
+    const dl = document.createElement('dl');
+    Object.entries(OBS_LABELS).forEach(([key, [label, unit]]) => {
+      if (e.obs[key] == null) return;
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = key === 'wind_direction_10m'
+        ? `${Math.round(e.obs[key])}° (${compass(e.obs[key])})`
+        : `${r1(e.obs[key])} ${unit}`;
+      dl.append(dt, dd);
+    });
+    box.appendChild(dl);
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+
+  $('#map-meta').textContent =
+    `${est.length} estaciones reportando · actualizado ${horaLocal(estacionesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`;
 }
 
 // ── Ubicaciones: chips y búsqueda ──────────────────────────────
@@ -467,7 +772,32 @@ function setupSearch() {
   input.addEventListener('blur', () => setTimeout(hide, 150));
 }
 
-// ── Estado del archivo científico (fase 1) ─────────────────────
+// ── Diálogos (info + día) ──────────────────────────────────────
+
+function setupDialogs() {
+  document.querySelectorAll('.info-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const info = INFO[btn.dataset.info];
+      if (!info) return;
+      $('#info-dialog-title').textContent = info.title;
+      $('#info-dialog-body').innerHTML = info.html; // contenido estático propio
+      $('#info-dialog').showModal();
+    });
+  });
+  document.querySelectorAll('dialog').forEach((dlg) => {
+    dlg.querySelector('[data-close]')?.addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => {
+      // clic fuera del contenido = cerrar
+      const r = dlg.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close();
+    });
+    dlg.addEventListener('close', () => {
+      if (dlg.id === 'day-dialog') { destroyChart('chart-day-temp'); destroyChart('chart-day-precip'); }
+    });
+  });
+}
+
+// ── Estado del archivo científico ──────────────────────────────
 
 async function loadArchiveStatus() {
   try {
@@ -476,7 +806,7 @@ async function loadArchiveStatus() {
     const s = await res.json();
     const el = $('#archive-status');
     el.textContent = `archivo científico: ${s.forecast_rows.toLocaleString('es-CL')} pronósticos · ` +
-      `${s.obs_rows.toLocaleString('es-CL')} observaciones · desde ${s.since} · ` +
+      `${s.obs_rows.toLocaleString('es-CL')} observaciones · ${s.stations} estaciones · desde ${s.since} · ` +
       `última ingesta ${s.last_run}`;
     el.hidden = false;
   } catch (_) { /* aún sin archivo: silencio */ }
@@ -491,13 +821,21 @@ function showError(err) {
   $('#app').dataset.state = 'error';
 }
 
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  render();
+  renderVerif();
+  renderMapa();
+});
 
 if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
 setupSearch();
+setupDialogs();
+setupVerifTabs();
 renderChips();
 loadAll().catch(showError);
 loadArchiveStatus();
+loadVerif();
+loadMapa();
