@@ -1,0 +1,16 @@
+# Datos locales de ingesta (el activo vive en el servidor, no en git)
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Status generado por la ingesta (artefacto, no fuente)
+web/status.json
