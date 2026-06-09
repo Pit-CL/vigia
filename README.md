@@ -34,7 +34,7 @@ sudo docker exec clima-ingesta python3 /app/ingesta/run.py --all  # ingesta manu
 sqlite3 data/clima.db 'SELECT kind, ok, rows, run_at FROM ingest_log ORDER BY rowid DESC LIMIT 8'
 ```
 
-Actualizar: `rsync` desde el Mac y `docker compose restart web` (la ingesta toma el código nuevo en el siguiente tick de cron):
+Actualizar: `rsync` desde el Mac y `docker compose restart web` (la ingesta toma el código nuevo en el siguiente tick de cron). **Importante**: si cambiaste `app.js` o `app.css`, sube el `?v=N` en `index.html` — Cloudflare cachea js/css por extensión y sin el bump seguiría sirviendo la versión vieja:
 
 ```bash
 rsync -av --delete --exclude data/ --exclude .git/ \
