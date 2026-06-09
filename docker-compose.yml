@@ -1,0 +1,38 @@
+# Sinóptica — clima.cavara.cl
+# web:     nginx estático endurecido, solo expuesto en 127.0.0.1 (entra por
+#          Cloudflare Tunnel; nada abierto a LAN ni a internet).
+# ingesta: crond + Python stdlib, sin puertos; archiva pronósticos y
+#          observaciones en ./data/clima.db.
+services:
+  web:
+    image: nginx:1.27-alpine
+    container_name: clima-web
+    ports:
+      - "127.0.0.1:8100:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./data:/data:ro
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  ingesta:
+    image: python:3.12-alpine
+    container_name: clima-ingesta
+    working_dir: /app
+    command: crond -f -l 8
+    environment:
+      TZ: America/Santiago
+      CLIMA_DB: /data/clima.db
+      CLIMA_STATUS: /data/status.json
+      DMC_USUARIO: ${DMC_USUARIO:-}
+      DMC_TOKEN: ${DMC_TOKEN:-}
+      DMC_STATIONS: ${DMC_STATIONS:-}
+    volumes:
+      - ./ingesta:/app/ingesta:ro
+      - ./deploy/crontab:/etc/crontabs/root:ro
+      - ./data:/data
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

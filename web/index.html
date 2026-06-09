@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Pronóstico del tiempo multi-modelo con incertidumbre honesta para la V Región y la Región Metropolitana, Chile. Datos de ECMWF, GFS, ICON, GEM y ARPEGE.">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f2ea">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b111d">
+  <title>Sinóptica — clima multi-modelo · V Región y RM</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://api.open-meteo.com" crossorigin>
+  <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
+  <link rel="stylesheet" href="fonts/fonts.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-brand">
+    <span class="brand-mark">▞</span>
+    <h1>Sinóptica</h1>
+    <span class="brand-sub">pronóstico multi-modelo · Chile central</span>
+  </div>
+  <nav class="locbar" aria-label="Ubicación">
+    <div class="search-wrap">
+      <input id="search" type="search" placeholder="Buscar ciudad en Chile…"
+             autocomplete="off" aria-label="Buscar ciudad">
+      <ul id="search-results" class="search-results" hidden></ul>
+    </div>
+    <div id="chips" class="chips" role="listbox" aria-label="Ubicaciones frecuentes"></div>
+  </nav>
+</header>
+
+<main id="app" data-state="loading">
+
+  <!-- Lectura actual -->
+  <section class="panel panel-now" aria-labelledby="now-title">
+    <header class="panel-head">
+      <h2 id="now-title">Condiciones actuales</h2>
+      <span id="now-place" class="panel-meta">—</span>
+    </header>
+    <div class="now-grid">
+      <div class="now-main">
+        <span id="now-icon" class="now-icon" aria-hidden="true">—</span>
+        <span id="now-temp" class="now-temp">—</span>
+        <span class="now-unit">°C</span>
+      </div>
+      <p id="now-desc" class="now-desc">Cargando…</p>
+      <dl class="now-detail">
+        <div><dt>Sensación</dt><dd id="now-feels">—</dd></div>
+        <div><dt>Humedad</dt><dd id="now-rh">—</dd></div>
+        <div><dt>Viento</dt><dd id="now-wind">—</dd></div>
+        <div><dt>Presión</dt><dd id="now-pres">—</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- Banda de ensamble -->
+  <section class="panel panel-chart" aria-labelledby="ens-title">
+    <header class="panel-head">
+      <h2 id="ens-title">Temperatura próximas 48 h</h2>
+      <span class="panel-meta">banda 10–90 % · ensamble ECMWF (51 miembros) + 5 modelos deterministas</span>
+    </header>
+    <div class="chart-box"><canvas id="chart-temp"></canvas></div>
+    <p class="panel-note">La banda muestra la incertidumbre real del pronóstico: mientras más ancha, menos certeza. Las líneas finas son los modelos individuales.</p>
+  </section>
+
+  <!-- Precipitación -->
+  <section class="panel panel-chart" aria-labelledby="pp-title">
+    <header class="panel-head">
+      <h2 id="pp-title">Precipitación próximas 48 h</h2>
+      <span class="panel-meta">mm/h y probabilidad</span>
+    </header>
+    <div class="chart-box chart-box-low"><canvas id="chart-precip"></canvas></div>
+  </section>
+
+  <!-- 7 días -->
+  <section class="panel" aria-labelledby="daily-title">
+    <header class="panel-head">
+      <h2 id="daily-title">Próximos 7 días</h2>
+      <span class="panel-meta">síntesis best-match</span>
+    </header>
+    <ol id="daily" class="daily"></ol>
+  </section>
+
+  <!-- Comparación de modelos -->
+  <section class="panel" aria-labelledby="models-title">
+    <header class="panel-head">
+      <h2 id="models-title">¿Qué dice cada modelo para mañana?</h2>
+      <span class="panel-meta">desacuerdo = incertidumbre honesta</span>
+    </header>
+    <div class="table-wrap">
+      <table id="model-table" class="model-table">
+        <thead>
+          <tr><th scope="col">Modelo</th><th scope="col">Centro</th><th scope="col">Máx</th><th scope="col">Mín</th><th scope="col">Precip.</th></tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <p id="error" class="error" hidden></p>
+</main>
+
+<footer class="colophon">
+  <p id="archive-status" class="archive-status" hidden></p>
+  <p>
+    Datos meteorológicos de <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (CC BY 4.0) ·
+    modelos ECMWF, NOAA GFS, DWD ICON, ECCC GEM y Météo-France ARPEGE ·
+    observaciones <a href="https://www.meteochile.gob.cl/" rel="noopener">Dirección Meteorológica de Chile</a> vía red WMO.
+  </p>
+  <p>Proyecto open source sin fines comerciales · hecho en Chile.</p>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

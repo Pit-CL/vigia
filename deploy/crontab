@@ -1,0 +1,6 @@
+# Ingesta Sinóptica (TZ del contenedor: America/Santiago)
+# Observaciones METAR/DMC cada hora; pronósticos cada 6 h.
+7 * * * * python3 /app/ingesta/run.py >> /data/ingesta.log 2>&1
+37 1,7,13,19 * * * python3 /app/ingesta/run.py --forecasts >> /data/ingesta.log 2>&1
+# Mantener el log acotado (~100 KB)
+12 4 * * * sh -c 'tail -c 100000 /data/ingesta.log > /data/ingesta.log.tmp && mv /data/ingesta.log.tmp /data/ingesta.log'
