@@ -48,11 +48,9 @@ rsync -av --delete --exclude data/ --exclude .git/ \
 - CSP estricta sin `unsafe-inline` (Chart.js y fuentes vendorizadas, sin CDNs).
 - Secretos (token DMC) solo vía `.env` en el servidor — nunca en git.
 
-## Activar observaciones DMC (pendiente, 5 min)
+## Observaciones DMC (activas)
 
-1. Solicita acceso gratuito en https://climatologia.meteochile.gob.cl (usuario = tu correo + API key).
-2. En omen: `cd /opt/clima && printf 'DMC_USUARIO=tu@correo\nDMC_TOKEN=xxxx\nDMC_STATIONS=330020,330021\n' | sudo tee .env && sudo chmod 600 .env && sudo docker compose up -d`.
-3. La ingesta empezará a archivar los payloads crudos de las EMA (tabla `raw_payloads`); el parser se escribe cuando veamos la forma real del JSON.
+Credenciales en `/opt/clima/.env` (chmod 600, fuera de git): `DMC_USUARIO` + `DMC_TOKEN` del registro gratuito en https://climatologia.meteochile.gob.cl. La ingesta parsea 10 EMA de V/RM sin METAR cercano (Quinta Normal, Jardín Botánico, Quillota, San Felipe, Quintero, Colina, Talagante, La Florida, San José/Guayacán y Los Libertadores a 2.955 m): temperatura, rocío, humedad, presión QNH, viento promedio 10 min y precipitación acumulada 6 h en horas sinópticas. Cada fetch trae 12 h minuto a minuto; se guardan los instantes horarios y el `UNIQUE` deduplica/backfillea cortes.
 
 ## Fases
 

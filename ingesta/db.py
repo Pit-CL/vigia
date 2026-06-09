@@ -5,7 +5,7 @@ import config
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS stations (
-  icao    TEXT PRIMARY KEY,
+  id      TEXT PRIMARY KEY,   -- ICAO (METAR) o código nacional DMC
   nombre  TEXT NOT NULL,
   lat     REAL NOT NULL,
   lon     REAL NOT NULL
@@ -64,11 +64,15 @@ def connect() -> sqlite3.Connection:
     con = sqlite3.connect(config.DB_PATH, timeout=60)
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA synchronous=NORMAL")
+    # migración: la primera versión del esquema llamaba 'icao' a la PK
+    cols = [r[1] for r in con.execute("PRAGMA table_info(stations)")]
+    if "icao" in cols:
+        con.execute("ALTER TABLE stations RENAME COLUMN icao TO id")
     con.executescript(SCHEMA)
     for s in config.STATIONS:
         con.execute(
-            "INSERT OR IGNORE INTO stations(icao, nombre, lat, lon) VALUES (?,?,?,?)",
-            (s["icao"], s["nombre"], s["lat"], s["lon"]),
+            "INSERT OR IGNORE INTO stations(id, nombre, lat, lon) VALUES (?,?,?,?)",
+            (s["id"], s["nombre"], s["lat"], s["lon"]),
         )
     con.commit()
     return con

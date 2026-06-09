@@ -1,6 +1,7 @@
 """Fetchers: Open-Meteo (pronósticos), METAR/NOAA y DMC (observaciones)."""
 import json
 import math
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -47,7 +48,7 @@ def ingest_openmeteo_det(con, run_tag: str) -> int:
                 if series is None:
                     continue
                 for t, v in zip(times, series):
-                    rows.append((st["icao"], model, run_tag, t, var, -1, v))
+                    rows.append((st["id"], model, run_tag, t, var, -1, v))
     con.executemany(
         "INSERT INTO forecasts(station, model, run_tag, valid_time, variable, member, value)"
         " VALUES (?,?,?,?,?,?,?)", rows)
@@ -83,7 +84,7 @@ def ingest_openmeteo_ens(con, run_tag: str) -> int:
                 else:
                     continue
                 for t, v in zip(times, series):
-                    rows.append((st["icao"], config.ENSEMBLE_MODEL, run_tag, t, var, member, v))
+                    rows.append((st["id"], config.ENSEMBLE_MODEL, run_tag, t, var, member, v))
     con.executemany(
         "INSERT INTO forecasts(station, model, run_tag, valid_time, variable, member, value)"
         " VALUES (?,?,?,?,?,?,?)", rows)
@@ -104,7 +105,7 @@ def _rh_from_dewpoint(t: float, td: float) -> float:
 
 
 def ingest_metar(con, fetched_at: str) -> int:
-    icaos = ",".join(s["icao"] for s in config.STATIONS)
+    icaos = ",".join(s["id"] for s in config.STATIONS if s.get("metar"))
     data, url = http_get_json(config.API_METAR, {"ids": icaos, "format": "json", "hours": 3})
     con.execute(
         "INSERT INTO raw_payloads(fetched_at, source, url, payload) VALUES (?,?,?,?)",
@@ -142,21 +143,66 @@ def ingest_metar(con, fetched_at: str) -> int:
     return len(rows)
 
 
-# ── DMC: archivo crudo hasta tener credenciales y parser ────────
+# ── DMC: estaciones EMA (API de climatología, registro gratuito) ──
+# Valores como strings con unidad ("9.4 °C", "0.1 kt"); momento en UTC.
+# Cada fetch trae 12 h minuto a minuto → guardamos solo instantes horarios
+# (calibramos contra pronósticos horarios) y el cron horario backfillea
+# cortes de hasta 12 h gracias al UNIQUE.
+
+_NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
+
+_DMC_FIELDS = [
+    ("temperatura", "temperature_2m", 1.0),
+    ("puntoDeRocio", "dew_point_2m", 1.0),
+    ("humedadRelativa", "relative_humidity_2m", 1.0),
+    ("presionNivelDelMar", "pressure_msl", 1.0),
+    ("fuerzaDelVientoPromedio10Minutos", "wind_speed_10m", 1.852),   # kt → km/h (promedio 10 min, estándar OMM)
+    ("direccionDelVientoPromedio10Minutos", "wind_direction_10m", 1.0),
+]
+
+
+def _dmc_num(raw):
+    if raw is None:
+        return None
+    m = _NUM_RE.search(str(raw))
+    return float(m.group()) if m else None
+
 
 def ingest_dmc(con, fetched_at: str) -> int:
-    if not (config.DMC_USUARIO and config.DMC_TOKEN and config.DMC_STATIONS):
+    if not (config.DMC_USUARIO and config.DMC_TOKEN):
         return 0
-    count = 0
-    for code in config.DMC_STATIONS:
-        data, url = http_get_json(
-            f"{config.API_DMC}/{code}",
-            {"usuario": config.DMC_USUARIO, "token": config.DMC_TOKEN},
-        )
-        con.execute(
-            "INSERT INTO raw_payloads(fetched_at, source, url, payload) VALUES (?,?,?,?)",
-            (fetched_at, "dmc", url.split("?")[0], json.dumps(data, ensure_ascii=False)),
-        )
-        count += 1
+    rows, errores = [], []
+    for st in [s for s in config.STATIONS if s.get("dmc")]:
+        try:
+            data, _ = http_get_json(
+                f"{config.API_DMC}/{st['id']}",
+                {"usuario": config.DMC_USUARIO, "token": config.DMC_TOKEN},
+            )
+        except RuntimeError as err:
+            errores.append(f"{st['id']}: {err}")
+            continue
+        registros = ((data.get("datosEstaciones") or {}).get("datos")) or []
+        for reg in registros:
+            momento = reg.get("momento") or ""        # "YYYY-MM-DD HH:MM:SS" UTC
+            if len(momento) < 19 or momento[14:16] != "00":
+                continue
+            t_iso = momento.replace(" ", "T") + "Z"
+            for src_key, var, factor in _DMC_FIELDS:
+                val = _dmc_num(reg.get(src_key))
+                if val is not None:
+                    rows.append((st["id"], t_iso, var, round(val * factor, 2), "dmc"))
+            # acumulado 6 h en horas sinópticas: ground truth de precipitación
+            if momento[11:13] in ("00", "06", "12", "18"):
+                val = _dmc_num(reg.get("aguaCaida6Horas"))
+                if val is not None:
+                    rows.append((st["id"], t_iso, "precipitation_6h", val, "dmc"))
+    con.executemany(
+        "INSERT INTO observations(station, obs_time, variable, value, source) VALUES (?,?,?,?,?)",
+        rows)
     con.commit()
-    return count
+    if errores:
+        msg = "; ".join(errores)
+        if not rows:
+            raise RuntimeError(f"todas las estaciones DMC fallaron: {msg}")
+        print(f"[aviso] DMC parcial ({len(errores)} estaciones sin datos): {msg}")
+    return len(rows)
