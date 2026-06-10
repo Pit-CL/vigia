@@ -17,6 +17,7 @@ web/status.json
 web/verificacion.json
 web/estaciones.json
 web/aire.json
+web/bias.json
 
 # Secretos: jamás al repo
 .env

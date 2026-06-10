@@ -699,7 +699,7 @@ function renderVerif() {
   list.innerHTML = '';
 
   const entries = MODELS.map((m, i) => {
-    const b = verifData.models?.[m.id]?.[verifBucket];
+    const b = verifData.models?.[m.id]?.['temperature_2m']?.[verifBucket];
     return b ? { ...m, ...b, colorIdx: i } : { ...m, mae: null, colorIdx: i };
   });
   const withData = entries.filter((e) => e.mae != null).sort((a, b) => a.mae - b.mae);
@@ -752,7 +752,7 @@ function fechaDisponible(bucketHoras) {
 function marcarTabsVerif() {
   document.querySelectorAll('.verif-tab').forEach((btn) => {
     const hayDatos = verifData && Object.values(verifData.models || {})
-      .some((m) => m[btn.dataset.bucket]);
+      .some((m) => m['temperature_2m'] && m['temperature_2m'][btn.dataset.bucket]);
     btn.classList.toggle('sin-datos', !hayDatos);
     btn.title = hayDatos ? '' : `Se habilita ${fechaDisponible(btn.dataset.bucket)}`;
   });

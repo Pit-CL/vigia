@@ -14,6 +14,7 @@ import config
 import db
 import sources
 import verify
+import calibrate
 
 
 def write_status(con) -> None:
@@ -113,6 +114,8 @@ def main() -> int:
         ok &= step(con, run_at, "openmeteo_det", lambda: sources.ingest_openmeteo_det(con, run_tag))
         ok &= step(con, run_at, "openmeteo_ens", lambda: sources.ingest_openmeteo_ens(con, run_tag))
     ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
+    ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))
+    ok &= step(con, run_at, "bias_json", lambda: calibrate.export_json(con))
     ok &= step(con, run_at, "estaciones", lambda: write_estaciones(con))
     write_status(con)
     con.close()

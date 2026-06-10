@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS stations (
   id      TEXT PRIMARY KEY,   -- ICAO (METAR) o código nacional DMC
   nombre  TEXT NOT NULL,
   lat     REAL NOT NULL,
-  lon     REAL NOT NULL
+  lon     REAL NOT NULL,
+  alt     REAL                -- altitud (m); habilita corrección orográfica
 );
 
 -- Pronósticos archivados en formato largo.
@@ -69,11 +70,17 @@ def connect() -> sqlite3.Connection:
     if "icao" in cols:
         con.execute("ALTER TABLE stations RENAME COLUMN icao TO id")
     con.executescript(SCHEMA)
+    # migración: columna alt añadida después (poblar siempre por si faltaba)
+    cols = [r[1] for r in con.execute("PRAGMA table_info(stations)")]
+    if "alt" not in cols:
+        con.execute("ALTER TABLE stations ADD COLUMN alt REAL")
     for s in config.STATIONS:
         con.execute(
-            "INSERT OR IGNORE INTO stations(id, nombre, lat, lon) VALUES (?,?,?,?)",
-            (s["id"], s["nombre"], s["lat"], s["lon"]),
+            "INSERT OR IGNORE INTO stations(id, nombre, lat, lon, alt) VALUES (?,?,?,?,?)",
+            (s["id"], s["nombre"], s["lat"], s["lon"], s.get("alt")),
         )
+        con.execute("UPDATE stations SET alt=? WHERE id=? AND alt IS NULL",
+                    (s.get("alt"), s["id"]))
     con.commit()
     return con
 
