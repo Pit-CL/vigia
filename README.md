@@ -33,6 +33,7 @@ Todo con APIs **gratuitas y abiertas**, sin claves para el usuario, sin tracking
 ## Características
 
 - 📈 **Banda de ensamble** (10–90 %, 51 miembros) + 5 modelos deterministas superpuestos.
+- 🌫️ **Calidad del aire** con el índice **ICAP oficial chileno** (D.S. 12/2011 MMA): nivel, color y consejo de salud, más el pronóstico de MP2,5 — el contaminante crítico del invierno en Chile central.
 - 🗺️ **Mapa de observaciones en vivo** con la temperatura medida por 15 estaciones reales.
 - 🔍 **Detalle hora a hora** al tocar cualquier día: temperatura multi-modelo, precipitación, UV, sol, viento.
 - 🎯 **Panel de verificación** con el acierto de cada modelo por plazo (1 a 4 días), actualizado solo.
@@ -92,8 +93,11 @@ El cron archiva observaciones cada hora y pronósticos cada 6 h. Detalle de oper
 - [x] Ingesta y archivo histórico (SQLite)
 - [x] Mapa de observaciones en vivo
 - [x] Verificación pública (MAE/sesgo por modelo y plazo)
+- [x] Calidad del aire con índice ICAP chileno
 - [ ] **Calibración local**: corrección de sesgo → EMOS → ML cuantílico (requiere ~2 semanas de archivo)
-- [ ] Calidad del aire (SINCA), índice UV y alertas configurables
+- [ ] Mediciones oficiales SINCA en el mapa (ground truth de calidad del aire)
+- [ ] Modelo regional chileno WRF de la DMC (4 km) como 6.º modelo
+- [ ] Índice UV y alertas configurables
 
 La visión técnica completa está en [`PROPUESTA.md`](PROPUESTA.md).
 
