@@ -11,6 +11,7 @@ DB_PATH = Path(os.environ.get("CLIMA_DB", ROOT / "data" / "clima.db"))
 STATUS_PATH = Path(os.environ.get("CLIMA_STATUS", ROOT / "web" / "status.json"))
 VERIF_PATH = Path(os.environ.get("CLIMA_VERIF", ROOT / "web" / "verificacion.json"))
 ESTACIONES_PATH = Path(os.environ.get("CLIMA_ESTACIONES", ROOT / "web" / "estaciones.json"))
+AIRE_PATH = Path(os.environ.get("CLIMA_AIRE", ROOT / "web" / "aire.json"))
 
 # ── Estaciones (V Región + RM) ──────────────────────────────────
 # id: ICAO si la observación llega por METAR (NOAA AWC, sin clave),

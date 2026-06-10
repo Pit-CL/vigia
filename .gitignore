@@ -16,6 +16,7 @@ __pycache__/
 web/status.json
 web/verificacion.json
 web/estaciones.json
+web/aire.json
 
 # Secretos: jamás al repo
 .env

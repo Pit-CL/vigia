@@ -63,6 +63,21 @@ def write_estaciones(con) -> int:
     return con_datos
 
 
+def write_aire(con, run_at: str) -> int:
+    """Archiva SINCA y publica aire.json (estaciones oficiales de V/RM)."""
+    _, estaciones = sources.ingest_sinca(con, run_at)
+    payload = {
+        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "fuente": "SINCA · Ministerio del Medio Ambiente de Chile",
+        "estaciones": estaciones,
+    }
+    config.AIRE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    config.AIRE_PATH.write_text(json.dumps(payload, ensure_ascii=False) + "\n")
+    con_pm = sum(1 for e in estaciones if e.get("pm2_5") is not None)
+    print(f"aire → {config.AIRE_PATH}: {len(estaciones)} estaciones SINCA ({con_pm} con MP2,5)")
+    return len(estaciones)
+
+
 def step(con, run_at: str, kind: str, fn) -> bool:
     try:
         n = fn()
@@ -93,6 +108,7 @@ def main() -> int:
     if do_obs:
         ok &= step(con, run_at, "metar", lambda: sources.ingest_metar(con, run_at))
         ok &= step(con, run_at, "dmc", lambda: sources.ingest_dmc(con, run_at))
+        ok &= step(con, run_at, "sinca", lambda: write_aire(con, run_at))
     if do_forecasts:
         ok &= step(con, run_at, "openmeteo_det", lambda: sources.ingest_openmeteo_det(con, run_tag))
         ok &= step(con, run_at, "openmeteo_ens", lambda: sources.ingest_openmeteo_ens(con, run_tag))

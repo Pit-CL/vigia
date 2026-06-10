@@ -168,6 +168,85 @@ def _dmc_num(raw):
     return float(m.group()) if m else None
 
 
+# ── SINCA: calidad del aire oficial (Ministerio del Medio Ambiente) ──
+# JSON público con las estaciones de la red nacional. El valor crudo de cada
+# fila viene con offset +10 (para evitar negativos); el tooltip trae la
+# concentración real y el ICAP oficial (promedio móvil 24 h).
+
+import html as _html
+
+_SINCA_REGIONES = {"Región de Valparaíso", "Región Metropolitana de Santiago"}
+_SINCA_CONTAM = {"PM25": "pm2_5", "PM10": "pm10"}
+_TIP_CONC = re.compile(r"<strong>\s*([\d.]+)")
+_TIP_ICAP = re.compile(r"(\d+)\s*ICAP", re.I)
+
+
+def _sinca_parse_medicion(m: dict):
+    rows = (m.get("info") or {}).get("rows") or []
+    # La última hora suele venir "no disponible" (aún sin validar); buscamos
+    # hacia atrás la lectura más reciente con dato real.
+    for row in reversed(rows):
+        c = row.get("c") or []
+        if len(c) < 4:
+            continue
+        tip = _html.unescape(str(c[3].get("v") or ""))
+        if "no disponible" in tip.lower():
+            continue
+        conc = _TIP_CONC.search(tip)
+        if not conc:
+            continue
+        icap = _TIP_ICAP.search(tip)
+        return {
+            "momento": c[0].get("v"),
+            "valor": float(conc.group(1)),
+            "icap": int(icap.group(1)) if icap else None,
+        }
+    return None
+
+
+def ingest_sinca(con, fetched_at: str):
+    """Archiva observaciones SINCA y devuelve la lista de estaciones de V/RM
+    con su última lectura de MP2,5/MP10 (para aire.json)."""
+    data, _ = http_get_json("https://sinca.mma.gob.cl/index.php/json/listadomapa2k19/")
+    rows, estaciones = [], []
+    for st in data:
+        region = (st.get("region") or "").strip()
+        if region not in _SINCA_REGIONES:
+            continue
+        try:
+            lat, lon = float(st["latitud"]), float(st["longitud"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        medidas = {}
+        for m in st.get("realtime", []):
+            var = _SINCA_CONTAM.get(m.get("code"))
+            if not var:
+                continue
+            parsed = _sinca_parse_medicion(m)
+            if not parsed:
+                continue
+            medidas[var] = parsed
+            t = (parsed["momento"] or "").replace(" ", "T")
+            if len(t) >= 16:
+                rows.append((f"sinca:{st['key']}", t + ":00", var, parsed["valor"], "sinca"))
+        if "pm2_5" in medidas or "pm10" in medidas:
+            estaciones.append({
+                "key": st["key"], "nombre": st.get("nombre"), "comuna": st.get("comuna"),
+                "region": region, "lat": lat, "lon": lon,
+                "pm2_5": medidas.get("pm2_5", {}).get("valor"),
+                "pm10": medidas.get("pm10", {}).get("valor"),
+                "icap": (medidas.get("pm2_5") or medidas.get("pm10") or {}).get("icap"),
+                "momento": (medidas.get("pm2_5") or medidas.get("pm10") or {}).get("momento"),
+            })
+    con.executemany(
+        "INSERT INTO observations(station, obs_time, variable, value, source) VALUES (?,?,?,?,?)",
+        rows)
+    con.commit()
+    return rows, estaciones
+
+
+# ── DMC: estaciones EMA (API de climatología, registro gratuito) ──
+
 def ingest_dmc(con, fetched_at: str) -> int:
     if not (config.DMC_USUARIO and config.DMC_TOKEN):
         return 0

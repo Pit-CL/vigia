@@ -116,7 +116,8 @@ const INFO = {
 <p><strong>¿Qué es el MP2,5?</strong> Material particulado fino: partículas de 2,5 micrones o menos —30 veces más delgadas que un cabello—. Son tan pequeñas que esquivan las defensas de la nariz, llegan al fondo del pulmón y pasan a la sangre. Es el contaminante más dañino para la salud y el que dispara las emergencias ambientales.</p>
 <p><strong>Por qué importa tanto en Chile central:</strong> en invierno, el aire frío queda atrapado bajo una capa de aire más cálido (inversión térmica) y el humo de la calefacción a leña y los vehículos no logra dispersarse. Por eso Santiago y el valle central tienen episodios críticos de mayo a agosto.</p>
 <p><strong>Los niveles oficiales</strong> (según el ICAP, sobre el promedio de 24 horas de MP2,5):</p>
-<p class="info-fine">Buena 0–99 · Regular 100–199 · Alerta 200–299 · Preemergencia 300–499 · Emergencia 500+. Concentraciones de quiebre: 50 µg/m³ (norma diaria), 80 (alerta), 110 (preemergencia), 170 (emergencia). Pronóstico del modelo CAMS de Copernicus vía Open-Meteo; el ICAP se calcula con la fórmula del D.S. 12/2011 del MMA.</p>`,
+<p class="info-fine">Buena 0–99 · Regular 100–199 · Alerta 200–299 · Preemergencia 300–499 · Emergencia 500+. Concentraciones de quiebre: 50 µg/m³ (norma diaria), 80 (alerta), 110 (preemergencia), 170 (emergencia).</p>
+<p class="info-fine"><strong>El dato grande es real, no pronóstico:</strong> cuando hay una estación de la red oficial <strong>SINCA</strong> (Ministerio del Medio Ambiente) cerca de tu ubicación, mostramos su medición y su ICAP oficial. El gráfico de 48 h es el pronóstico del modelo CAMS de Copernicus (vía Open-Meteo). Si no hay estación cercana, todo el panel usa CAMS.</p>`,
   },
   mapa: {
     title: '¿De dónde salen estas mediciones?',
@@ -175,6 +176,7 @@ let lastData = null;          // { best, multi, ens } para redibujar
 let verifData = null;
 let verifBucket = '24';
 let estacionesData = null;
+let aireStations = [];   // estaciones SINCA oficiales (calidad del aire)
 let map = null;
 let tileLayer = null;
 
@@ -302,20 +304,49 @@ function render() {
   renderChips();
 }
 
+function haversineKm(aLat, aLon, bLat, bLon) {
+  const R = 6371, rad = Math.PI / 180;
+  const dLat = (bLat - aLat) * rad, dLon = (bLon - aLon) * rad;
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function estacionAireCercana() {
+  let best = null;
+  for (const e of aireStations) {
+    if (e.pm2_5 == null) continue;
+    const d = haversineKm(place.lat, place.lon, e.lat, e.lon);
+    if (!best || d < best.dist) best = { ...e, dist: d };
+  }
+  return best && best.dist <= 60 ? best : null;   // dentro de la zona
+}
+
 function renderAire(aire) {
   const panel = $('.panel-aire');
   if (!aire || !aire.current) { if (panel) panel.hidden = true; return; }
   panel.hidden = false;
   const c = aire.current;
 
-  // ICAP sobre el promedio móvil de las últimas 24 h de MP2,5 (norma chilena)
+  // Serie horaria CAMS (siempre disponible para el gráfico de pronóstico).
   const h = aire.hourly || {};
   const serie = h.pm2_5 || [];
   const nowIdx = (h.time || []).indexOf((c.time || '').slice(0, 13) + ':00');
-  const lo = nowIdx >= 23 ? nowIdx - 23 : 0;
-  const ventana = serie.slice(lo, (nowIdx >= 0 ? nowIdx : serie.length - 1) + 1).filter((v) => v != null);
-  const pm25_24h = ventana.length ? ventana.reduce((a, b) => a + b, 0) / ventana.length : c.pm2_5;
-  const icap = mp25ToIcap(pm25_24h);
+
+  // Dato principal: estación oficial SINCA más cercana (medición real).
+  // Si no hay una cerca, el pronóstico CAMS sobre el promedio móvil 24 h.
+  const oficial = estacionAireCercana();
+  let icap, fuenteTxt;
+  if (oficial && oficial.icap != null) {
+    icap = oficial.icap;
+    fuenteTxt = `estación oficial ${oficial.nombre} · ${Math.round(oficial.dist)} km`;
+  } else {
+    const lo = nowIdx >= 23 ? nowIdx - 23 : 0;
+    const ventana = serie.slice(lo, (nowIdx >= 0 ? nowIdx : serie.length - 1) + 1).filter((v) => v != null);
+    const pm25_24h = ventana.length ? ventana.reduce((a, b) => a + b, 0) / ventana.length : c.pm2_5;
+    icap = mp25ToIcap(pm25_24h);
+    fuenteTxt = 'pronóstico CAMS (sin estación cercana)';
+  }
   const nivel = icapNivel(icap);
 
   $('#aire-icap').textContent = icap ?? '—';
@@ -325,10 +356,12 @@ function renderAire(aire) {
   nv.style.color = nivel.c;
   $('#aire-consejo').textContent = nivel.consejo;
   $('.aire-gauge').style.borderColor = nivel.c;
+  $('#aire-place').textContent = fuenteTxt;
 
+  // Concentraciones: las de la estación oficial si existe; si no, CAMS actual.
   const set = (id, v, u) => { $(id).textContent = v == null ? '—' : `${Math.round(v)} ${u}`; };
-  set('#aire-pm25', c.pm2_5, 'µg/m³');
-  set('#aire-pm10', c.pm10, 'µg/m³');
+  set('#aire-pm25', oficial ? oficial.pm2_5 : c.pm2_5, 'µg/m³');
+  set('#aire-pm10', oficial ? oficial.pm10 : c.pm10, 'µg/m³');
   set('#aire-no2', c.nitrogen_dioxide, 'µg/m³');
   set('#aire-o3', c.ozone, 'µg/m³');
 
@@ -948,6 +981,16 @@ if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
+async function loadAireSinca() {
+  try {
+    const res = await fetch('aire.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const data = await res.json();
+    aireStations = data.estaciones || [];
+    if (lastData) renderAire(lastData.aire);   // re-render con dato oficial
+  } catch (_) { /* sin SINCA: el panel usa el pronóstico CAMS */ }
+}
+
 setupSearch();
 setupDialogs();
 setupVerifTabs();
@@ -956,3 +999,4 @@ loadAll().catch(showError);
 loadArchiveStatus();
 loadVerif();
 loadMapa();
+loadAireSinca();
