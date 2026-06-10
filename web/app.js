@@ -1,4 +1,4 @@
-/* Sinóptica — pronóstico multi-modelo para Chile central.
+/* Sinóptica — pronóstico multi-modelo para la V Región y la RM (Chile).
    Datos: Open-Meteo (CC BY 4.0). Observaciones: DMC + red OMM (NOAA).
    Sin claves, sin tracking, sin CDNs. */
 'use strict';
