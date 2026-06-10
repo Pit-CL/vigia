@@ -178,6 +178,8 @@ let verifBucket = '24';
 let estacionesData = null;
 let aireStations = [];   // estaciones SINCA oficiales (calidad del aire)
 let mapMode = 'temp';    // 'temp' | 'aire'
+let biasData = null;     // correcciones de sesgo por estación/modelo/lead
+let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
 let tileLayer = null;
 
@@ -508,6 +510,50 @@ function buildPrecipChart(canvasId, labels, mm, prob) {
   });
 }
 
+// ── Calibración: corrección de sesgo local validada (bias.json) ──
+
+function leadBucketH(h) {
+  if (h <= 0) return null;
+  if (h <= 24) return '24';
+  if (h <= 48) return '48';
+  if (h <= 72) return '72';
+  if (h <= 96) return '96';
+  return null;
+}
+
+function updateBiasStation() {
+  biasStation = null;
+  if (!biasData || !biasData.estaciones) return;
+  let best = null;
+  for (const [id, e] of Object.entries(biasData.estaciones)) {
+    const d = haversineKm(place.lat, place.lon, e.lat, e.lon);
+    if (!best || d < best.dist) best = { id, ...e, dist: d };
+  }
+  if (best && best.dist <= 35) biasStation = best;   // solo si la estación es local
+}
+
+// b_eff de temperatura para un modelo a cierto lead (horas). 0 si no aplica.
+function biasFor(modelId, leadH) {
+  if (!biasStation) return 0;
+  const bk = leadBucketH(leadH);
+  if (!bk) return 0;
+  const b = biasData?.bias?.[biasStation.id]?.[modelId]?.['temperature_2m']?.[bk];
+  return b || 0;
+}
+
+// Corrige una serie de temperatura de un modelo restando el bias por lead.
+// times[0] ≈ ahora; el lead de cada punto es su distancia horaria a times[0].
+function corregirTemp(modelId, arr, times) {
+  if (!biasStation || !arr.length) return arr;
+  const t0 = new Date(times[0]).getTime();
+  return arr.map((v, j) => {
+    if (v == null) return v;
+    const leadH = Math.round((new Date(times[j]).getTime() - t0) / 3600000);
+    const b = biasFor(modelId, leadH);
+    return b ? Math.round((v - b) * 10) / 10 : v;
+  });
+}
+
 function renderCharts(best, multi, ens) {
   const h = multi.hourly;
   const nowIso = best.current.time.slice(0, 13);
@@ -524,9 +570,20 @@ function renderCharts(best, multi, ens) {
     ensS: ensembleSeries(ens, times),
     modelSeries: MODELS.map((m, i) => {
       const arr = h[`temperature_2m_${m.id}`];
-      return arr ? { name: m.name, data: arr.slice(start, start + window), colorIdx: i } : null;
+      if (!arr) return null;
+      const raw = arr.slice(start, start + window);
+      return { name: m.name, data: corregirTemp(m.id, raw, times), colorIdx: i };
     }).filter(Boolean),
   });
+  // indicador de calibración en el panel
+  const meta = document.querySelector('#ens-title')?.closest('.panel-head')?.querySelector('.panel-meta');
+  if (meta) {
+    const base = 'banda 10–90 % · ensamble ECMWF (51 miembros) + 5 modelos';
+    meta.textContent = biasStation ? `${base} · ✓ calibrado` : base;
+    meta.title = biasStation
+      ? `Modelos corregidos por sesgo local validado (estación ${biasStation.nombre}, holdout skill +0.21)`
+      : '';
+  }
 
   const hb = best.hourly;
   let bStart = hb.time.findIndex((t) => t.slice(0, 13) === nowIso);
@@ -643,13 +700,22 @@ function renderModelTable(multi) {
   tbody.innerHTML = '';
   tfoot.innerHTML = '';
 
+  // 'ahora' real para calcular el lead de cada hora de mañana (corrección de sesgo)
+  const t0 = lastData?.best?.current?.time
+    ? new Date(lastData.best.current.time).getTime() : new Date(h.time[0]).getTime();
   const colors = modelColors();
   const rows = [];
   MODELS.forEach((m, i) => {
     const temps = h[`temperature_2m_${m.id}`];
     const precs = h[`precipitation_${m.id}`];
     if (!temps) return;
-    const dayT = idx.map((j) => temps[j]).filter((v) => v != null);
+    const dayT = idx.map((j) => {
+      const v = temps[j];
+      if (v == null) return null;
+      const leadH = Math.round((new Date(h.time[j]).getTime() - t0) / 3600000);
+      const b = biasFor(m.id, leadH);
+      return b ? v - b : v;
+    }).filter((v) => v != null);
     const dayP = idx.map((j) => (precs ? precs[j] : null)).filter((v) => v != null);
     if (!dayT.length) return;
     const row = {
@@ -907,6 +973,7 @@ function setupMapModes() {
 function setPlace(p) {
   place = p;
   try { localStorage.setItem('sinoptica.place', JSON.stringify(p)); } catch (_) { /* opcional */ }
+  updateBiasStation();   // recalcular la estación de calibración cercana
   loadAll().catch(showError);
 }
 
@@ -1063,6 +1130,16 @@ async function loadAireSinca() {
   } catch (_) { /* sin SINCA: el panel usa el pronóstico CAMS */ }
 }
 
+async function loadBias() {
+  try {
+    const res = await fetch('bias.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    biasData = await res.json();
+    updateBiasStation();
+    if (lastData) render();   // re-pintar con modelos calibrados
+  } catch (_) { /* sin calibración: pronóstico crudo */ }
+}
+
 setupSearch();
 setupDialogs();
 setupVerifTabs();
@@ -1073,3 +1150,4 @@ loadArchiveStatus();
 loadVerif();
 loadMapa();
 loadAireSinca();
+loadBias();

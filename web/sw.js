@@ -4,8 +4,8 @@ const DATA_CACHE = 'sinoptica-data-v4';
 const SHELL = [
   './',
   'index.html',
-  'app.css?v=15',
-  'app.js?v=15',
+  'app.css?v=16',
+  'app.js?v=16',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -44,7 +44,7 @@ self.addEventListener('fetch', (e) => {
 
   // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
   const isData = isOpenMeteo ||
-    /\/(status|verificacion|estaciones|aire)\.json$/.test(url.pathname);
+    /\/(status|verificacion|estaciones|aire|bias)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
       fetch(e.request)
