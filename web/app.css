@@ -187,6 +187,7 @@ a { color: var(--accent2); text-underline-offset: 2px; }
 
 .chip-region {
   align-self: center;
+  white-space: nowrap;
   font: 600 0.66rem var(--font-mono);
   letter-spacing: 0.1em;
   color: var(--accent);
@@ -201,6 +202,10 @@ main {
   margin: 0 auto;
   padding: 18px clamp(16px, 4vw, 48px) 24px;
   display: grid;
+  /* minmax(0,1fr), no el 1fr implícito (=minmax(auto,1fr)): 'auto' impide
+     que el track baje del min-content de un panel ancho (el canvas, la tabla
+     o el mapa), lo que inflaba TODOS los paneles y causaba el desborde. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
 }
 
@@ -848,10 +853,14 @@ dialog::backdrop {
     row-gap: 12px;
   }
   .now-temp { font-size: clamp(3.2rem, 18vw, 4.4rem); }
+  /* 2x2 fijo: el auto-fit con minmax(110px) se desbordaba a la derecha */
+  .now-detail { grid-template-columns: 1fr 1fr; gap: 10px 14px; }
 
-  /* tabla: que la primera columna no se aplaste y el resto deslice */
+  /* tabla: el "Centro" sobra en celular (el nombre del modelo ya identifica),
+     quitarlo deja que Max/Min/Precip quepan sin cortarse */
   .model-table { font-size: 0.8rem; }
   .model-table th, .model-table td { padding: 7px 8px; }
+  .model-table th:nth-child(2), .model-table td:nth-child(2) { display: none; }
 
   dialog { padding: 16px 16px 18px; max-width: calc(100vw - 16px); }
   .dialog-head h3 { font-size: 1.02rem; }
