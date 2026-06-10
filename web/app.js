@@ -769,17 +769,19 @@ async function loadMapa() {
 
 function ensureMap() {
   if (map || typeof L === 'undefined' || !estacionesData) return map;
-  // En táctil las estaciones ya caben en la vista, así que apagamos pan y
-  // zoom táctil: el mapa no roba el scroll vertical y los marcadores siguen
-  // siendo tappables.
-  const touch = matchMedia('(hover: none)').matches;
+  // Interacción completa: arrastrar, pinch-zoom y botones +/− en todos los
+  // dispositivos (scrollWheelZoom off para no capturar el scroll de rueda).
   map = L.map('map', {
-    scrollWheelZoom: false, zoomSnap: 0.5,
-    dragging: !touch, touchZoom: !touch, doubleClickZoom: !touch,
-    zoomControl: !touch, tap: true,
+    scrollWheelZoom: false,
+    zoomSnap: 0.5,
+    zoomControl: true,
+    tap: true,
   });
   const bounds = L.latLngBounds(estacionesData.estaciones.map((e) => [e.lat, e.lon]));
   map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
+  // Leaflet calcula mal los tiles si el contenedor aún estaba animándose al
+  // crearse (queda fondo sin tiles); recalcular asegura que se llenen.
+  setTimeout(() => map.invalidateSize(), 200);
   return map;
 }
 
@@ -811,6 +813,7 @@ function renderMapa() {
     b.setAttribute('aria-selected', String(b.dataset.mode === mapMode)));
 
   if (aire) paintAire(); else paintTemp();
+  map.invalidateSize();   // por si el panel cambió de tamaño desde el último render
 }
 
 function paintTemp() {
