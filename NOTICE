@@ -1,0 +1,12 @@
+Sinóptica — atribución de datos
+
+El código de este proyecto está bajo licencia MIT (ver LICENSE). Los datos
+meteorológicos que consume y redistribuye mantienen sus propias licencias y
+requieren atribución a la fuente, presente en la interfaz de la aplicación:
+
+- Open-Meteo (https://open-meteo.com/) — pronósticos de múltiples modelos y
+  ensamble ECMWF. Licencia CC BY 4.0.
+- Dirección Meteorológica de Chile (https://climatologia.meteochile.gob.cl/) —
+  observaciones de estaciones automáticas (EMA). Uso público con atribución.
+- Red OMM / METAR vía NOAA Aviation Weather Center (https://aviationweather.gov/)
+  — observaciones horarias de aeropuertos. Dominio público.

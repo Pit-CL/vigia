@@ -19,12 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Nota sobre los datos: este software consume y redistribuye datos meteorológicos
-de Open-Meteo (CC BY 4.0, https://open-meteo.com/) y observaciones de la
-Dirección Meteorológica de Chile y de la red OMM/METAR vía NOAA. Esos datos
-mantienen sus respectivas licencias y requieren atribución a la fuente, como se
-indica en la interfaz de la aplicación. La licencia MIT cubre el código, no los
-datos.
