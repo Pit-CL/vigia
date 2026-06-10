@@ -34,7 +34,7 @@ Todo con APIs **gratuitas y abiertas**, sin claves para el usuario, sin tracking
 
 - 📈 **Banda de ensamble** (10–90 %, 51 miembros) + 5 modelos deterministas superpuestos.
 - 🌫️ **Calidad del aire** con la **medición oficial de la red SINCA** (Ministerio del Medio Ambiente) de la estación más cercana y su índice **ICAP** (D.S. 12/2011): nivel, color y consejo de salud, más el pronóstico de MP2,5 a 48 h — el contaminante crítico del invierno en Chile central.
-- 🗺️ **Mapa de observaciones en vivo** con la temperatura medida por 15 estaciones reales.
+- 🗺️ **Mapa de observaciones en vivo** con dos capas: temperatura (15 estaciones meteorológicas) y calidad del aire (27 estaciones SINCA por nivel ICAP).
 - 🔍 **Detalle hora a hora** al tocar cualquier día: temperatura multi-modelo, precipitación, UV, sol, viento.
 - 🎯 **Panel de verificación** con el acierto de cada modelo por plazo (1 a 4 días), actualizado solo.
 - ℹ️ **Explicaciones en cada panel**, en doble registro: simple para cualquiera, riguroso para curiosos (qué significa de verdad «70 % de lluvia», qué es el ensamble, por qué los modelos difieren…).
@@ -97,8 +97,8 @@ El cron archiva observaciones cada hora y pronósticos cada 6 h. Detalle de oper
 - [x] Verificación pública (MAE/sesgo por modelo y plazo)
 - [x] Calidad del aire con índice ICAP chileno
 - [x] Mediciones oficiales SINCA (estación más cercana como dato real)
+- [x] Mapa de calidad del aire con todas las estaciones SINCA por ICAP
 - [ ] **Calibración local**: corrección de sesgo → EMOS → ML cuantílico (requiere ~2 semanas de archivo)
-- [ ] Mapa de calidad del aire con todas las estaciones SINCA
 - [ ] Modelo regional chileno WRF de la DMC (4 km) como 6.º modelo
 - [ ] Índice UV y alertas configurables
 
