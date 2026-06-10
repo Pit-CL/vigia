@@ -12,5 +12,14 @@ __pycache__/
 # macOS
 .DS_Store
 
-# Status generado por la ingesta (artefacto, no fuente)
+# Artefactos generados por la ingesta (no son fuente; los crea run.py)
 web/status.json
+web/verificacion.json
+web/estaciones.json
+
+# Secretos: jamás al repo
+.env
+
+# Config local del entorno de trabajo
+.claude/settings.json
+.claude/settings.local.json
