@@ -659,6 +659,11 @@ dialog::backdrop {
   border-color: var(--ink);
 }
 
+/* Plazo aún sin datos suficientes: atenuado, con reloj */
+.verif-tab.sin-datos { opacity: 0.5; border-style: dashed; }
+.verif-tab.sin-datos::after { content: ' ⏳'; }
+.verif-tab.sin-datos[aria-selected="true"] { opacity: 0.75; }
+
 .verif-caveat {
   font: 400 0.78rem var(--font-mono);
   color: var(--accent);

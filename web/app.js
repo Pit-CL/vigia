@@ -705,9 +705,14 @@ function renderVerif() {
   const withData = entries.filter((e) => e.mae != null).sort((a, b) => a.mae - b.mae);
   const totalN = withData.reduce((a, e) => a + e.n, 0);
 
+  marcarTabsVerif();
+
   if (!withData.length) {
     caveat.hidden = false;
-    caveat.textContent = `Aún no hay pares pronóstico-observación para este plazo: el archivo partió el ${verifData ? '9 de junio de 2026' : '—'} y los pronósticos a ${verifBucket} h necesitan ese tiempo para poder evaluarse. Vuelve pronto.`;
+    const dias = Math.round(Number(verifBucket) / 24);
+    caveat.textContent = `Todavía no se puede medir el acierto a ${dias} día${dias > 1 ? 's' : ''}: ` +
+      `un pronóstico a ${verifBucket} h solo se compara con lo observado ${verifBucket} h después. ` +
+      `El archivo empezó el 9 de junio de 2026, así que este plazo se habilita ${fechaDisponible(verifBucket)}.`;
     return;
   }
 
@@ -733,6 +738,23 @@ function renderVerif() {
     bar.style.width = `${Math.max(6, (e.mae / maxMae) * 100)}%`;
     bar.style.backgroundColor = colors[e.colorIdx];
     list.appendChild(li);
+  });
+}
+
+const ARCHIVE_START = new Date('2026-06-09T22:00:00Z');
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+function fechaDisponible(bucketHoras) {
+  const d = new Date(ARCHIVE_START.getTime() + Number(bucketHoras) * 3600 * 1000);
+  return `alrededor del ${d.getUTCDate()} de ${MESES[d.getUTCMonth()]}`;
+}
+
+function marcarTabsVerif() {
+  document.querySelectorAll('.verif-tab').forEach((btn) => {
+    const hayDatos = verifData && Object.values(verifData.models || {})
+      .some((m) => m[btn.dataset.bucket]);
+    btn.classList.toggle('sin-datos', !hayDatos);
+    btn.title = hayDatos ? '' : `Se habilita ${fechaDisponible(btn.dataset.bucket)}`;
   });
 }
 
