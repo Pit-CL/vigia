@@ -4,8 +4,8 @@ const DATA_CACHE = 'sinoptica-data-v4';
 const SHELL = [
   './',
   'index.html',
-  'app.css?v=19',
-  'app.js?v=19',
+  'app.css?v=20',
+  'app.js?v=20',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',

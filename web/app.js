@@ -107,7 +107,7 @@ const INFO = {
 <p><strong>Humedad relativa.</strong> Cuánto vapor de agua tiene el aire respecto del máximo que podría tener a esa temperatura. 100 % = aire saturado (niebla o rocío probables); bajo 30 % = aire muy seco.</p>
 <p><strong>Viento.</strong> Velocidad y <em>de dónde viene</em> (un viento SO viene desde el suroeste). En la costa de la V Región el viento SO de la tarde es la clásica brisa marina.</p>
 <p><strong>Presión al nivel del mar.</strong> El peso de la atmósfera, normalizado al nivel del mar para poder comparar ciudades a distinta altura. Sobre ~1020 hPa suele dominar el buen tiempo (anticiclón); si cae rápido, se acerca un sistema frontal.</p>
-<p class="info-fine">Este panel muestra la <em>síntesis de modelo</em> para el punto elegido (la mejor estimación interpolada). El mapa de observaciones, en cambio, muestra lo que los sensores físicos están midiendo de verdad.</p>`,
+<p class="info-fine">Cuando hay una <strong>central de monitoreo cerca</strong> de tu ubicación (≤25 km), este panel muestra su <strong>medición real</strong> —no un pronóstico—: lo indica con "medido en …". Son las mismas estaciones del mapa (aeropuertos de la red OMM y estaciones de la Dirección Meteorológica de Chile). Si no hay ninguna cerca, cae a la estimación interpolada del modelo y lo señala como "estimación de modelo".</p>`,
   },
   aire: {
     title: 'Calidad del aire: MP2,5 y el índice ICAP',
@@ -420,7 +420,20 @@ function wxToDesc(wx) {
   return null;
 }
 
-// Estación de observación más cercana (<35 km) con fenómeno reciente.
+// Estación de observación más cercana con dato de temperatura reciente.
+// Para "Condiciones actuales": preferimos la medición REAL sobre el modelo.
+function estacionObsCercana(maxKm) {
+  if (!estacionesData) return null;
+  let best = null;
+  for (const e of estacionesData.estaciones) {
+    if (!e.obs || e.obs.temperature_2m == null) continue;
+    const d = haversineKm(place.lat, place.lon, e.lat, e.lon);
+    if (!best || d < best.dist) best = { ...e, dist: d };
+  }
+  return best && best.dist <= maxKm ? best : null;
+}
+
+// Estación METAR más cercana (<35 km) con fenómeno presente reciente.
 function estacionWxCercana() {
   if (!estacionesData) return null;
   let best = null;
@@ -432,23 +445,49 @@ function estacionWxCercana() {
   return best && best.dist <= 35 ? best : null;
 }
 
+// Sensación térmica: wind chill cuando hace frío y hay viento; si no, la temp.
+function sensacion(t, vKmh) {
+  if (t == null) return null;
+  if (t <= 10 && vKmh != null && vKmh > 4.8) {
+    const w = Math.pow(vKmh, 0.16);
+    return 13.12 + 0.6215 * t - 11.37 * w + 0.3965 * t * w;
+  }
+  return t;
+}
+
 function renderNow(best) {
   const c = best.current;
+  // Si hay una central de monitoreo cerca, "Condiciones actuales" son su
+  // MEDICIÓN REAL (no el modelo). El modelo solo cuando no hay estación cerca.
+  const est = estacionObsCercana(25);
+  const o = est ? est.obs : null;
   let [desc, icon] = wmo(c.weather_code);
-  // El tiempo REAL observado por la estación cercana manda sobre el del modelo
-  // (el modelo puede decir "llovizna" mientras la estación reporta lluvia).
-  const ew = estacionWxCercana();
-  const obs = ew ? wxToDesc(ew.wx) : null;
-  if (obs) { [desc, icon] = obs; }
-  $('#now-place').textContent = `${place.name}${place.admin1 ? ' · ' + place.admin1 : ''}`;
+
+  // fenómeno: el observado (de la propia estación o de una METAR cercana) manda
+  const ew = (est && est.wx) ? est : estacionWxCercana();
+  const obsWx = ew ? wxToDesc(ew.wx) : null;
+  if (obsWx) { [desc, icon] = obsWx; }
+
+  const temp = o ? o.temperature_2m : c.temperature_2m;
+  const rh = o && o.relative_humidity_2m != null ? o.relative_humidity_2m : c.relative_humidity_2m;
+  const wsp = o && o.wind_speed_10m != null ? o.wind_speed_10m : c.wind_speed_10m;
+  const wdir = o && o.wind_direction_10m != null ? o.wind_direction_10m : c.wind_direction_10m;
+  const pres = o && o.pressure_msl != null ? o.pressure_msl : c.pressure_msl;
+  const feels = o ? sensacion(temp, wsp) : c.apparent_temperature;
+
+  const lugar = `${place.name}${place.admin1 ? ' · ' + place.admin1 : ''}`;
+  const nombreCorto = est ? est.nombre.split('·').pop().trim().replace(/\s*\(.*\)/, '') : '';
+  $('#now-place').textContent = est
+    ? `${lugar} · medido en ${nombreCorto} (${Math.round(est.dist)} km)`
+    : `${lugar} · estimación de modelo`;
   $('#now-icon').textContent = icon;
-  $('#now-temp').textContent = Math.round(c.temperature_2m);
-  $('#now-desc').textContent = obs ? `${desc} · observado` : desc;
-  $('#now-feels').textContent = `${Math.round(c.apparent_temperature)} °C`;
-  $('#now-rh').textContent = `${c.relative_humidity_2m} %`;
-  $('#now-wind').textContent = `${Math.round(c.wind_speed_10m)} km/h ${compass(c.wind_direction_10m)}`;
-  $('#now-pres').textContent = `${Math.round(c.pressure_msl)} hPa`;
-  document.title = `${Math.round(c.temperature_2m)}°C ${place.name} — Sinóptica`;
+  $('#now-temp').textContent = Math.round(temp);
+  $('#now-desc').textContent = desc;
+  $('#now-feels').textContent = feels == null ? '—' : `${Math.round(feels)} °C`;
+  $('#now-rh').textContent = rh == null ? '—' : `${Math.round(rh)} %`;
+  $('#now-wind').textContent = wsp == null ? '—' : `${Math.round(wsp)} km/h ${compass(wdir)}`;
+  $('#now-pres').textContent = pres == null ? '—' : `${Math.round(pres)} hPa`;
+  document.title = `${Math.round(temp)}°C ${place.name} — Sinóptica`;
 }
 
 // ── Constructores de gráficos (página y modal comparten) ───────
