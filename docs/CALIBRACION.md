@@ -277,6 +277,27 @@ Notas: usar **Previous Runs** (no Historical Forecast "stitched") para tener lea
 
 ---
 
+## 9. Estado de implementación (2026-06-10) — IMPLEMENTADO y EN PRODUCCIÓN
+
+Los peldaños 1-2 (bias + base de blending) están implementados, verificados y en vivo:
+
+- **`ingesta/calibrate.py`** — bias EWMA por celda con gate (N_MIN=7) + shrinkage. Integrado en el cron (`run.py`); publica `bias.json`.
+- **`ingesta/bootstrap_hist.py`** — descarga histórico real (Open-Meteo Previous Runs + Iowa ASOS) y estima el bias HOY para las 5 estaciones METAR.
+- **`verify.py`** extendido a 5 variables continuas + RMSE.
+- **Frontend** — aplica la corrección a las series de los modelos y a la tabla cuando hay estación validada a <35 km; badge "✓ calibrado". Fallback seguro a crudo.
+
+**Resultado verificado en holdout temporal (ene→jun 2026, 95 celdas, sin leakage):**
+
+| Método | Skill medio (↓MAE) | Celdas que mejoran |
+|---|---|---|
+| Media global (naive) | −0.002 | 49% |
+| Bias por hora del día | +0.018 | 52% |
+| **EWMA (implementado)** | **+0.210** | **94%** |
+
+El EWMA gana porque sigue la no-estacionariedad del sesgo. Caso extremo: SCSN/GFS a 96 h pasó de MAE 4.41 a **2.15 (−51%)**. Decisión de método tomada comparando los 3 approaches empíricamente, no por intuición.
+
+**Alcance actual:** calibración activa para las 5 estaciones METAR (validadas con holdout). Las 10 EMA de la DMC usan el mismo método EWMA pero esperan a acumular muestra propia (N_EXPORT=40) antes de servirse, porque no tienen histórico ASOS para validar. **Pendiente** (peldaños siguientes): EMOS para incertidumbre calibrada, blending ponderado servido como pronóstico principal, y calibrar el `best_match` diario.
+
 ## Resumen ejecutivo
 
 1. **El sesgo local es la oportunidad**, no la física del modelo.
