@@ -33,7 +33,7 @@ Todo con APIs **gratuitas y abiertas**, sin claves para el usuario, sin tracking
 ## Características
 
 - 📈 **Banda de ensamble** (10–90 %, 51 miembros) + 5 modelos deterministas superpuestos.
-- 🌫️ **Calidad del aire** con el índice **ICAP oficial chileno** (D.S. 12/2011 MMA): nivel, color y consejo de salud, más el pronóstico de MP2,5 — el contaminante crítico del invierno en Chile central.
+- 🌫️ **Calidad del aire** con la **medición oficial de la red SINCA** (Ministerio del Medio Ambiente) de la estación más cercana y su índice **ICAP** (D.S. 12/2011): nivel, color y consejo de salud, más el pronóstico de MP2,5 a 48 h — el contaminante crítico del invierno en Chile central.
 - 🗺️ **Mapa de observaciones en vivo** con la temperatura medida por 15 estaciones reales.
 - 🔍 **Detalle hora a hora** al tocar cualquier día: temperatura multi-modelo, precipitación, UV, sol, viento.
 - 🎯 **Panel de verificación** con el acierto de cada modelo por plazo (1 a 4 días), actualizado solo.
@@ -86,6 +86,8 @@ El cron archiva observaciones cada hora y pronósticos cada 6 h. Detalle de oper
 | [Open-Meteo](https://open-meteo.com/) | Pronóstico de 5 modelos + ensamble ECMWF | CC BY 4.0 |
 | [Dirección Meteorológica de Chile](https://climatologia.meteochile.gob.cl/) | Observaciones de estaciones automáticas (EMA) | Uso público con atribución |
 | Red OMM / METAR vía [NOAA AWC](https://aviationweather.gov/) | Observaciones horarias de aeropuertos | Dominio público |
+| [SINCA](https://sinca.mma.gob.cl/) (Ministerio del Medio Ambiente) | Calidad del aire oficial (MP2,5, MP10, ICAP) | Uso público con atribución |
+| [CAMS](https://atmosphere.copernicus.eu/) (Copernicus) vía Open-Meteo | Pronóstico de calidad del aire | CC BY 4.0 |
 
 ## Hoja de ruta
 
@@ -94,8 +96,9 @@ El cron archiva observaciones cada hora y pronósticos cada 6 h. Detalle de oper
 - [x] Mapa de observaciones en vivo
 - [x] Verificación pública (MAE/sesgo por modelo y plazo)
 - [x] Calidad del aire con índice ICAP chileno
+- [x] Mediciones oficiales SINCA (estación más cercana como dato real)
 - [ ] **Calibración local**: corrección de sesgo → EMOS → ML cuantílico (requiere ~2 semanas de archivo)
-- [ ] Mediciones oficiales SINCA en el mapa (ground truth de calidad del aire)
+- [ ] Mapa de calidad del aire con todas las estaciones SINCA
 - [ ] Modelo regional chileno WRF de la DMC (4 km) como 6.º modelo
 - [ ] Índice UV y alertas configurables
 
