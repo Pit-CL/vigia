@@ -95,7 +95,9 @@ Convierte los 51 miembros del ensamble en una distribución calibrada:
 N( a + b·ens_mean , c + d·ens_var )    c,d ≥ 0
 ĵ = argmin Σ CRPS(N(μ,σ), obs)         # scipy L-BFGS-B, forma cerrada para Normal
 ```
-Da bandas honestas ("70 % de probabilidad de que la mínima esté entre X e Y") y P(T<0 °C) creíbles. **CRPS −10/−20 %** y **cobertura de ~30-50 % real → ~90 % nominal** (eso es lo valioso). El MAE central casi no mejora sobre un buen EWMA: EMOS aporta *incertidumbre calibrada*, no exactitud puntual. Requiere añadir **scipy** (rompe la pureza stdlib — decisión consciente). Bootstrap parcial por el histórico de ensamble más corto.
+Da bandas honestas ("70 % de probabilidad de que la mínima esté entre X e Y") y P(T<0 °C) creíbles. **CRPS −10/−20 %** y **cobertura de ~30-50 % real → ~90 % nominal** (eso es lo valioso). El MAE central casi no mejora sobre un buen EWMA: EMOS aporta *incertidumbre calibrada*, no exactitud puntual.
+
+> **VERIFICADO 2026-06-10 — EMOS NO es bootstrappeable; debe esperar al archivo propio.** A diferencia del bias y el blending (entrenados HOY con histórico determinista Previous Runs + ASOS), EMOS necesita los 51 miembros del ensamble, y Open-Meteo los entrega **solo en el pronóstico en vivo**: en el histórico vienen todos en `None`. Medido: los miembros existen apenas desde ~2 días atrás (no los ~90 que se asumían). Por tanto EMOS depende exclusivamente del **archivo propio del ensamble** (iniciado 2026-06-09) y requiere ~6-8 semanas de acumulación. El método queda especificado (NGR + min CRPS; **se puede sin scipy** con un optimizador Nelder-Mead en stdlib, evitando la dependencia pesada en Alpine); solo falta el dato. No se implementa ahora: sería código muerto entrenando sobre ruido.
 
 ### Peldaño 4 — Kalman adaptativo (solo si hay no-estacionariedad probada)
 Filtro escalar que deja evolucionar el bias cuando no es constante (inversión térmica estacional). **−2/−8 % RMSE sobre el EWMA ya hecho** — incremental. El EWMA con `w` ajustable ya da el 90 %. Hacer solo si se *mide* no-estacionariedad en celdas concretas (SCEL, valle, costa). ROI bajo.
@@ -295,6 +297,17 @@ Los peldaños 1-2 (bias + base de blending) están implementados, verificados y 
 | **EWMA (implementado)** | **+0.210** | **94%** |
 
 El EWMA gana porque sigue la no-estacionariedad del sesgo. Caso extremo: SCSN/GFS a 96 h pasó de MAE 4.41 a **2.15 (−51%)**. Decisión de método tomada comparando los 3 approaches empíricamente, no por intuición.
+
+**Blending "Sinóptica" (peldaño 2) — IMPLEMENTADO, con corrección de rumbo verificada.** Comparé 5 approaches por MAE en holdout antes de elegir:
+
+| Approach | MAE (test) |
+|---|---|
+| **Blend top-2** (implementado) | **2.222** |
+| ECMWF corregido | 2.238 |
+| Selección del mejor | 2.263 |
+| Blend de los 5 | 2.364 |
+
+El blend ingenuo de los 5 modelos **degradaba** (peor que ECMWF solo): incluir los modelos malos contamina al dominante. El ganador es el **blend de los 2 mejores por celda**, ponderados por 1/mae². Se muestra como la serie destacada "Sinóptica" en el gráfico. Lección: la intuición "promediar todo mejora" es falsa cuando un modelo domina — había que medir.
 
 **Alcance actual:** calibración activa para las 5 estaciones METAR (validadas con holdout). Las 10 EMA de la DMC usan el mismo método EWMA pero esperan a acumular muestra propia (N_EXPORT=40) antes de servirse, porque no tienen histórico ASOS para validar. **Pendiente** (peldaños siguientes): EMOS para incertidumbre calibrada, blending ponderado servido como pronóstico principal, y calibrar el `best_match` diario.
 
