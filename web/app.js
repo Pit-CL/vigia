@@ -443,7 +443,7 @@ function ensembleSeries(ens, times) {
   return { p10, p50, p90, n: members.length };
 }
 
-function buildTempChart(canvasId, labels, { ensS, modelSeries, bestSeries }) {
+function buildTempChart(canvasId, labels, { ensS, modelSeries, bestSeries, bestLabel }) {
   const th = chartTheme();
   const colors = modelColors();
   const ds = [];
@@ -461,8 +461,10 @@ function buildTempChart(canvasId, labels, { ensS, modelSeries, bestSeries }) {
               borderWidth: 1.3, pointRadius: 0, fill: false, tension: 0.35 });
   });
   if (bestSeries) {
-    ds.push({ label: 'síntesis', data: bestSeries, borderColor: th.accent,
-              borderWidth: 2, pointRadius: 0, fill: false, tension: 0.35 });
+    const dest = bestLabel === 'Sinóptica';   // el blend va más destacado
+    ds.push({ label: bestLabel || 'síntesis', data: bestSeries, borderColor: th.accent,
+              borderWidth: dest ? 3 : 2, pointRadius: 0, fill: false, tension: 0.35,
+              order: dest ? -1 : 0 });
   }
   destroyChart(canvasId);
   charts[canvasId] = new Chart($(`#${canvasId}`), {
@@ -532,13 +534,40 @@ function updateBiasStation() {
   if (best && best.dist <= 35) biasStation = best;   // solo si la estación es local
 }
 
-// b_eff de temperatura para un modelo a cierto lead (horas). 0 si no aplica.
-function biasFor(modelId, leadH) {
-  if (!biasStation) return 0;
+// [b_eff, mae] de temperatura para un modelo a cierto lead, o null.
+function biasInfo(modelId, leadH) {
+  if (!biasStation) return null;
   const bk = leadBucketH(leadH);
-  if (!bk) return 0;
-  const b = biasData?.bias?.[biasStation.id]?.[modelId]?.['temperature_2m']?.[bk];
-  return b || 0;
+  if (!bk) return null;
+  return biasData?.bias?.[biasStation.id]?.[modelId]?.['temperature_2m']?.[bk] || null;
+}
+function biasFor(modelId, leadH) { const x = biasInfo(modelId, leadH); return x ? x[0] : 0; }
+
+// Blend de los DOS mejores modelos por celda (verificado en holdout: bate al
+// blend de los 5 y a cualquier modelo individual). Cada modelo se corrige por
+// su sesgo y se pondera por 1/mae²; se promedian solo los 2 de menor error.
+function blendTemp(h, start, window, times) {
+  if (!biasStation) return null;
+  const t0 = new Date(times[0]).getTime();
+  const out = [];
+  for (let j = 0; j < window; j++) {
+    const leadH = Math.round((new Date(times[j]).getTime() - t0) / 3600000);
+    const cand = [];
+    for (const m of MODELS) {
+      const arr = h[`temperature_2m_${m.id}`];
+      const v = arr ? arr[start + j] : null;
+      if (v == null) continue;
+      const info = biasInfo(m.id, leadH);
+      if (!info || info[1] == null) continue;          // sin mae no participa
+      cand.push({ vc: v - info[0], mae: info[1] });
+    }
+    cand.sort((a, b) => a.mae - b.mae);
+    const top = cand.slice(0, 2);                        // los 2 mejores
+    let num = 0, den = 0;
+    for (const c of top) { const w = 1 / (c.mae * c.mae + 0.25); num += w * c.vc; den += w; }
+    out.push(den > 0 ? Math.round((num / den) * 10) / 10 : null);
+  }
+  return out.some((v) => v != null) ? out : null;
 }
 
 // Corrige una serie de temperatura de un modelo restando el bias por lead.
@@ -574,6 +603,8 @@ function renderCharts(best, multi, ens) {
       const raw = arr.slice(start, start + window);
       return { name: m.name, data: corregirTemp(m.id, raw, times), colorIdx: i };
     }).filter(Boolean),
+    bestSeries: blendTemp(h, start, window, times),   // pronóstico Sinóptica (blend calibrado)
+    bestLabel: 'Sinóptica',
   });
   // indicador de calibración en el panel
   const meta = document.querySelector('#ens-title')?.closest('.panel-head')?.querySelector('.panel-meta');

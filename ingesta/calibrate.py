@@ -34,12 +34,20 @@ CREATE TABLE IF NOT EXISTS bias (
   variable TEXT NOT NULL,
   lead     TEXT NOT NULL,          -- bucket "24"/"48"/"72"/"96"
   b        REAL NOT NULL,          -- bias EWMA (fc - obs)
+  mae      REAL,                   -- MAE EWMA (|fc_corr - obs|) para pesos de blending
   n        INTEGER NOT NULL,       -- pares vistos (gate y shrinkage)
   source   TEXT NOT NULL DEFAULT 'online',   -- 'online' | 'bootstrap'
   updated  TEXT NOT NULL,
   PRIMARY KEY (station, model, variable, lead)
 );
 """
+
+
+def _migrate(con):
+    cols = [r[1] for r in con.execute("PRAGMA table_info(bias)")]
+    if "bias" in [t[0] for t in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")] and "mae" not in cols:
+        con.execute("ALTER TABLE bias ADD COLUMN mae REAL")
 
 
 def bucket(lead):
@@ -51,6 +59,7 @@ def bucket(lead):
 
 def ensure_schema(con):
     con.executescript(SCHEMA)
+    _migrate(con)
 
 
 def update(con) -> int:
@@ -83,14 +92,16 @@ def update(con) -> int:
         if key is None:
             continue
         cell = (st, mdl, var, key)
-        b, n = cur.get(cell, (None, 0))
+        b, m, n = cur.get(cell, (None, None, 0))
         err = fc - ob
+        resid = abs(err - (b if b is not None else 0.0))   # error TRAS corregir el bias (causal)
         b = err if b is None else (1 - W) * b + W * err
-        cur[cell] = (b, n + 1)
+        m = resid if m is None else (1 - W) * m + W * resid
+        cur[cell] = (b, m, n + 1)
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M")
     written = 0
-    for (st, mdl, var, key), (b, n) in cur.items():
+    for (st, mdl, var, key), (b, m, n) in cur.items():
         # No pisar un bootstrap con más muestra que el online recién calculado.
         row = con.execute(
             "SELECT n, source FROM bias WHERE station=? AND model=? AND variable=? AND lead=?",
@@ -98,8 +109,9 @@ def update(con) -> int:
         if row and row[1] == "bootstrap" and row[0] > n:
             continue
         con.execute(
-            "INSERT OR REPLACE INTO bias VALUES (?,?,?,?,?,?,?,?)",
-            (st, mdl, var, key, round(b, 3), n, "online", now))
+            "INSERT OR REPLACE INTO bias(station,model,variable,lead,b,mae,n,source,updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (st, mdl, var, key, round(b, 3), round(m, 3), n, "online", now))
         written += 1
     con.commit()
     return written
@@ -131,18 +143,29 @@ def correct(con, station, model, variable, lead_hours, fc_value):
     return round(out, 2)
 
 
+# Umbral de exportación a producción: más estricto que el gate interno.
+# Solo servimos correcciones CONFIABLES: las del bootstrap (validadas con
+# holdout, skill +0.21) o las online ya maduras (n alto). Las celdas online
+# jóvenes (DMC con pocos días) esperan: corregir con bias ruidoso degradaría.
+N_EXPORT = 40
+
 def export_json(con) -> int:
-    """Publica web/bias.json con las correcciones que PASAN el gate, con el
-    shrinkage ya aplicado (b_eff), para que el frontend solo reste. Incluye las
-    coords de las estaciones para mapear la ubicación del usuario a la cercana."""
+    """Publica web/bias.json con las correcciones CONFIABLES (bootstrap o n>=N_EXPORT),
+    con el shrinkage ya aplicado (b_eff), para que el frontend solo reste. Incluye
+    las coords de las estaciones para mapear la ubicación del usuario a la cercana."""
     import json
     estaciones = {s["id"]: {"nombre": s["nombre"], "lat": s["lat"], "lon": s["lon"]}
                   for s in config.STATIONS}
+    # bias[est][modelo][variable][lead] = [b_eff, mae]
+    #   b_eff = sesgo a restar (shrinkage aplicado); mae = error residual para
+    #   ponderar el blending (peso ∝ 1/mae²).
     bias = {}
-    for st, mdl, var, lead, b, n in con.execute(
-            "SELECT station, model, variable, lead, b, n FROM bias WHERE n >= ?", (N_MIN,)):
+    for st, mdl, var, lead, b, mae, n, source in con.execute(
+            "SELECT station, model, variable, lead, b, mae, n, source FROM bias "
+            "WHERE source='bootstrap' OR n >= ?", (N_EXPORT,)):
         b_eff = round(b * n / (n + K_SHRINK), 3)
-        bias.setdefault(st, {}).setdefault(mdl, {}).setdefault(var, {})[lead] = b_eff
+        mae_v = round(mae, 3) if mae is not None else None
+        bias.setdefault(st, {}).setdefault(mdl, {}).setdefault(var, {})[lead] = [b_eff, mae_v]
     payload = {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "n_min": N_MIN,

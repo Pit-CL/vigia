@@ -125,6 +125,17 @@ def _ewma_final(errs, w=W_BOOT):
     return b
 
 
+def _ewma_bias_mae(errs, w=W_BOOT):
+    """EWMA causal del sesgo y del error residual |err - bias| (para pesos de
+    blending). Devuelve (bias_final, mae_residual_final)."""
+    b = m = None
+    for e in errs:
+        resid = abs(e - (b if b is not None else 0.0))
+        b = e if b is None else (1 - w) * b + w * e
+        m = resid if m is None else (1 - w) * m + w * resid
+    return b, m
+
+
 def evaluate(station, lat, lon, model, start, end, split=0.8):
     """Holdout temporal con EWMA causal (el método verificado): mantiene el
     EWMA recorriendo train y, en el tramo de test, corrige cada caso con el
@@ -171,9 +182,9 @@ def estimate_full(station, lat, lon, model, start, end):
     for b, rows in by_bucket.items():
         rows.sort()                         # orden temporal por valid_time
         errs = [e for _, e in rows]
-        bf = _ewma_final(errs)
+        bf, mf = _ewma_bias_mae(errs)
         if bf is not None:
-            out[b] = (round(bf, 3), len(errs))
+            out[b] = (round(bf, 3), round(mf, 3) if mf is not None else None, len(errs))
     return out
 
 
@@ -187,9 +198,9 @@ def _eval_and_estimate(pr, split=0.8):
     for b, rows in by_bucket.items():
         rows.sort()
         errs = [fc - ob for _, fc, ob in rows]
-        bf = _ewma_final(errs)
+        bf, mf = _ewma_bias_mae(errs)
         if bf is not None:
-            est[b] = (round(bf, 3), len(errs))
+            est[b] = (round(bf, 3), round(mf, 3) if mf is not None else None, len(errs))
         k = int(len(rows) * split)
         train, test = rows[:k], rows[k:]
         if len(train) < 10 or len(test) < 5:
@@ -226,8 +237,8 @@ def run(start, end, write=False):
                       f"bias {r['bias']:+5.2f}  MAE {r['mae_crudo']:.2f}→{r['mae_corr']:.2f}  "
                       f"skill {r['skill']:+.3f}  (n_test {r['n_test']})")
                 skills.append(r["skill"])
-            for b, (bias, n) in est.items():
-                rows_to_write.append((st["id"], model, VARIABLE, b, bias, n, "bootstrap", now))
+            for b, (bias, mae, n) in est.items():
+                rows_to_write.append((st["id"], model, VARIABLE, b, bias, mae, n, "bootstrap", now))
     if skills:
         pos = sum(1 for s in skills if s > 0)
         print(f"\nResumen holdout (EWMA): {len(skills)} celdas · "
@@ -237,7 +248,9 @@ def run(start, end, write=False):
         import db
         con = db.connect()
         calibrate.ensure_schema(con)
-        con.executemany("INSERT OR REPLACE INTO bias VALUES (?,?,?,?,?,?,?,?)", rows_to_write)
+        con.executemany(
+            "INSERT OR REPLACE INTO bias(station,model,variable,lead,b,mae,n,source,updated) "
+            "VALUES (?,?,?,?,?,?,?,?,?)", rows_to_write)
         con.commit()
         print(f"\nTabla bias poblada: {len(rows_to_write)} celdas (source=bootstrap)")
     return skills
