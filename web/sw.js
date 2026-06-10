@@ -1,11 +1,11 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'sinoptica-shell-v3';
-const DATA_CACHE = 'sinoptica-data-v3';
+const SHELL_CACHE = 'sinoptica-shell-v4';
+const DATA_CACHE = 'sinoptica-data-v4';
 const SHELL = [
   './',
   'index.html',
-  'app.css?v=13',
-  'app.js?v=13',
+  'app.css?v=14',
+  'app.js?v=14',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -35,9 +35,15 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
 
+  // Solo gestionamos lo nuestro: same-origin y las APIs de Open-Meteo.
+  // Los tiles del mapa (cartocdn) y cualquier otro recurso cross-origin NO
+  // se interceptan — el navegador los maneja directo. Interceptarlos como
+  // respuestas opacas rompía el mapa en algunos navegadores (fondo en blanco).
+  const isOpenMeteo = url.hostname.endsWith('open-meteo.com');
+  if (url.origin !== location.origin && !isOpenMeteo) return;
+
   // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
-  // Los tiles del mapa quedan fuera (los maneja el navegador).
-  const isData = url.hostname.endsWith('open-meteo.com') ||
+  const isData = isOpenMeteo ||
     /\/(status|verificacion|estaciones|aire)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
