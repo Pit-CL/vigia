@@ -30,6 +30,7 @@ services:
       CLIMA_STATUS: /data/status.json
       CLIMA_VERIF: /data/verificacion.json
       CLIMA_ESTACIONES: /data/estaciones.json
+      CLIMA_AIRE: /data/aire.json
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}
