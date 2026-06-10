@@ -872,3 +872,77 @@ dialog::backdrop {
 @media (hover: none) {
   .day:hover { transform: none; }
 }
+
+/* ── Calidad del aire ────────────────────────────────────────── */
+
+.panel:nth-child(8) { animation-delay: 0.42s; }
+
+.aire-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.aire-gauge {
+  flex: 0 0 auto;
+  width: 92px;
+  height: 92px;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+}
+
+.aire-icap {
+  font: 700 1.9rem var(--font-mono);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.aire-icap-label {
+  font: 500 0.6rem var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+}
+
+.aire-nivel {
+  font: 700 1.25rem var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.aire-consejo {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  max-width: 52ch;
+}
+
+.aire-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 8px 16px;
+  margin: 0 0 14px;
+}
+
+.aire-detail div { border-top: 1px dotted var(--border); padding-top: 6px; }
+.aire-detail dt {
+  font: 400 0.64rem var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.aire-detail dd {
+  margin: 2px 0 0;
+  font: 500 0.92rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 560px) {
+  .aire-card { gap: 14px; }
+  .aire-gauge { width: 78px; height: 78px; }
+  .aire-icap { font-size: 1.6rem; }
+  .aire-detail { grid-template-columns: 1fr 1fr; }
+}

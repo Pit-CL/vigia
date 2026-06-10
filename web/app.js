@@ -8,7 +8,31 @@
 const API = 'https://api.open-meteo.com/v1/forecast';
 const API_ENS = 'https://ensemble-api.open-meteo.com/v1/ensemble';
 const API_GEO = 'https://geocoding-api.open-meteo.com/v1/search';
+const API_AIRE = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const TZ = 'America/Santiago';
+
+// ── ICAP: índice de calidad del aire chileno (D.S. 12/2011 MMA) ──
+// La concentración de MP2,5 (promedio móvil 24 h) se mapea a un índice por
+// tramos lineales; los puntos de quiebre 50/80/110/170 µg/m³ son los umbrales
+// oficiales de norma, alerta, preemergencia y emergencia.
+const ICAP_BP = [
+  [0, 50, 0, 100], [50, 80, 100, 200], [80, 110, 200, 300], [110, 170, 300, 500],
+];
+function mp25ToIcap(c) {
+  if (c == null) return null;
+  for (const [cl, ch, il, ih] of ICAP_BP) {
+    if (c <= ch) return Math.round(il + ((c - cl) / (ch - cl)) * (ih - il));
+  }
+  return Math.min(999, Math.round(500 + (c - 170) * 1.5));
+}
+const ICAP_NIVELES = [
+  { max: 100, n: 'Buena',         c: '#2eae00', consejo: 'Aire limpio. Ideal para actividades al aire libre.' },
+  { max: 200, n: 'Regular',       c: '#d6c200', consejo: 'Aceptable. Personas muy sensibles podrían reducir el esfuerzo prolongado al aire libre.' },
+  { max: 300, n: 'Alerta',        c: '#ff7e00', consejo: 'Grupos sensibles (niños, adultos mayores, enfermos respiratorios) deben evitar el esfuerzo al aire libre.' },
+  { max: 500, n: 'Preemergencia', c: '#e3000f', consejo: 'Evita la actividad física al aire libre. Los grupos sensibles deben permanecer en interiores.' },
+  { max: Infinity, n: 'Emergencia', c: '#7e0023', consejo: 'Toda la población debe evitar actividad al aire libre y mantener puertas y ventanas cerradas.' },
+];
+const icapNivel = (icap) => ICAP_NIVELES.find((x) => icap < x.max) || ICAP_NIVELES[ICAP_NIVELES.length - 1];
 
 const MODELS = [
   { id: 'ecmwf_ifs025',         name: 'IFS',    org: 'ECMWF · Europa' },
@@ -84,6 +108,15 @@ const INFO = {
 <p><strong>Viento.</strong> Velocidad y <em>de dónde viene</em> (un viento SO viene desde el suroeste). En la costa de la V Región el viento SO de la tarde es la clásica brisa marina.</p>
 <p><strong>Presión al nivel del mar.</strong> El peso de la atmósfera, normalizado al nivel del mar para poder comparar ciudades a distinta altura. Sobre ~1020 hPa suele dominar el buen tiempo (anticiclón); si cae rápido, se acerca un sistema frontal.</p>
 <p class="info-fine">Este panel muestra la <em>síntesis de modelo</em> para el punto elegido (la mejor estimación interpolada). El mapa de observaciones, en cambio, muestra lo que los sensores físicos están midiendo de verdad.</p>`,
+  },
+  aire: {
+    title: 'Calidad del aire: MP2,5 y el índice ICAP',
+    html: `
+<p><strong>En simple:</strong> el número grande es el <strong>ICAP</strong>, el índice oficial chileno de calidad del aire. Mientras más alto, peor el aire. Bajo 100 es bueno; sobre 300 es preemergencia. El color y el consejo siguen la norma del Ministerio del Medio Ambiente.</p>
+<p><strong>¿Qué es el MP2,5?</strong> Material particulado fino: partículas de 2,5 micrones o menos —30 veces más delgadas que un cabello—. Son tan pequeñas que esquivan las defensas de la nariz, llegan al fondo del pulmón y pasan a la sangre. Es el contaminante más dañino para la salud y el que dispara las emergencias ambientales.</p>
+<p><strong>Por qué importa tanto en Chile central:</strong> en invierno, el aire frío queda atrapado bajo una capa de aire más cálido (inversión térmica) y el humo de la calefacción a leña y los vehículos no logra dispersarse. Por eso Santiago y el valle central tienen episodios críticos de mayo a agosto.</p>
+<p><strong>Los niveles oficiales</strong> (según el ICAP, sobre el promedio de 24 horas de MP2,5):</p>
+<p class="info-fine">Buena 0–99 · Regular 100–199 · Alerta 200–299 · Preemergencia 300–499 · Emergencia 500+. Concentraciones de quiebre: 50 µg/m³ (norma diaria), 80 (alerta), 110 (preemergencia), 170 (emergencia). Pronóstico del modelo CAMS de Copernicus vía Open-Meteo; el ICAP se calcula con la fórmula del D.S. 12/2011 del MMA.</p>`,
   },
   mapa: {
     title: '¿De dónde salen estas mediciones?',
@@ -237,14 +270,22 @@ async function loadAll() {
     forecast_days: '3',
   });
 
-  // El ensamble es opcional: si falla, la app sigue sin banda.
-  const [best, multi, ens] = await Promise.all([
+  const qAire = urlBase({
+    current: 'pm10,pm2_5,nitrogen_dioxide,ozone',
+    hourly: 'pm2_5',
+    past_days: '1',       // necesario para el promedio móvil 24 h del ICAP
+    forecast_days: '2',
+  });
+
+  // Ensamble y aire son opcionales: si fallan, la app sigue sin ellos.
+  const [best, multi, ens, aire] = await Promise.all([
     fetchJSON(`${API}?${qBest}`),
     fetchJSON(`${API}?${qModels}`),
     fetchJSON(`${API_ENS}?${qEns}`).catch(() => null),
+    fetchJSON(`${API_AIRE}?${qAire}`).catch(() => null),
   ]);
 
-  lastData = { best, multi, ens };
+  lastData = { best, multi, ens, aire };
   render();
   app.dataset.state = 'ready';
 }
@@ -254,10 +295,74 @@ async function loadAll() {
 function render() {
   if (!lastData) return;
   renderNow(lastData.best);
+  renderAire(lastData.aire);
   renderCharts(lastData.best, lastData.multi, lastData.ens);
   renderDaily(lastData.best);
   renderModelTable(lastData.multi);
   renderChips();
+}
+
+function renderAire(aire) {
+  const panel = $('.panel-aire');
+  if (!aire || !aire.current) { if (panel) panel.hidden = true; return; }
+  panel.hidden = false;
+  const c = aire.current;
+
+  // ICAP sobre el promedio móvil de las últimas 24 h de MP2,5 (norma chilena)
+  const h = aire.hourly || {};
+  const serie = h.pm2_5 || [];
+  const nowIdx = (h.time || []).indexOf((c.time || '').slice(0, 13) + ':00');
+  const lo = nowIdx >= 23 ? nowIdx - 23 : 0;
+  const ventana = serie.slice(lo, (nowIdx >= 0 ? nowIdx : serie.length - 1) + 1).filter((v) => v != null);
+  const pm25_24h = ventana.length ? ventana.reduce((a, b) => a + b, 0) / ventana.length : c.pm2_5;
+  const icap = mp25ToIcap(pm25_24h);
+  const nivel = icapNivel(icap);
+
+  $('#aire-icap').textContent = icap ?? '—';
+  $('#aire-icap').style.color = nivel.c;
+  const nv = $('#aire-nivel');
+  nv.textContent = nivel.n;
+  nv.style.color = nivel.c;
+  $('#aire-consejo').textContent = nivel.consejo;
+  $('.aire-gauge').style.borderColor = nivel.c;
+
+  const set = (id, v, u) => { $(id).textContent = v == null ? '—' : `${Math.round(v)} ${u}`; };
+  set('#aire-pm25', c.pm2_5, 'µg/m³');
+  set('#aire-pm10', c.pm10, 'µg/m³');
+  set('#aire-no2', c.nitrogen_dioxide, 'µg/m³');
+  set('#aire-o3', c.ozone, 'µg/m³');
+
+  // pronóstico MP2,5 próximas 48 h
+  if (serie.length && h.time) {
+    const start = nowIdx >= 0 ? nowIdx : 0;
+    const win = Math.min(48, h.time.length - start);
+    const labels = h.time.slice(start, start + win).map((t) => {
+      const hh = t.slice(11, 13);
+      return hh === '00' ? `${weekday(t.slice(0, 10))} ${hh}h` : `${hh}h`;
+    });
+    const th = chartTheme();
+    destroyChart('chart-aire');
+    charts['chart-aire'] = new Chart($('#chart-aire'), {
+      data: {
+        labels,
+        datasets: [{
+          type: 'line', label: 'MP2,5 µg/m³ (pronóstico)',
+          data: serie.slice(start, start + win),
+          borderColor: nivel.c, backgroundColor: nivel.c + '22',
+          borderWidth: 1.6, pointRadius: 0, fill: true, tension: 0.3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { labels: { boxWidth: 14, boxHeight: 2 } } },
+        scales: {
+          x: { grid: { color: th.grid }, ticks: { maxTicksLimit: 8, maxRotation: 0 } },
+          y: { grid: { color: th.grid }, beginAtZero: true, title: { display: true, text: 'µg/m³' } },
+        },
+      },
+    });
+  }
 }
 
 function renderNow(best) {

@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=5">
+  <link rel="stylesheet" href="app.css?v=6">
 </head>
 <body>
 
@@ -58,6 +58,33 @@
         <div><dt>Presión</dt><dd id="now-pres">—</dd></div>
       </dl>
     </div>
+  </section>
+
+  <!-- Calidad del aire (ICAP chileno) -->
+  <section class="panel panel-aire" aria-labelledby="aire-title">
+    <header class="panel-head">
+      <h2 id="aire-title">Calidad del aire</h2>
+      <span id="aire-place" class="panel-meta">índice ICAP · norma chilena</span>
+      <button class="info-btn" data-info="aire" aria-label="¿Qué es el ICAP y el material particulado?">?</button>
+    </header>
+    <div id="aire-card" class="aire-card">
+      <div class="aire-gauge">
+        <span id="aire-icap" class="aire-icap">—</span>
+        <span class="aire-icap-label">ICAP</span>
+      </div>
+      <div class="aire-state">
+        <span id="aire-nivel" class="aire-nivel">Cargando…</span>
+        <p id="aire-consejo" class="aire-consejo"></p>
+      </div>
+    </div>
+    <dl class="aire-detail">
+      <div><dt>MP2,5</dt><dd id="aire-pm25">—</dd></div>
+      <div><dt>MP10</dt><dd id="aire-pm10">—</dd></div>
+      <div><dt>NO₂</dt><dd id="aire-no2">—</dd></div>
+      <div><dt>O₃</dt><dd id="aire-o3">—</dd></div>
+    </dl>
+    <div class="chart-box chart-box-low"><canvas id="chart-aire"></canvas></div>
+    <p class="panel-note">El <strong>MP2,5</strong> son partículas finas (≤2,5 micrones) que penetran hasta los pulmones y la sangre; es el contaminante crítico del invierno en Chile central por la inversión térmica. El índice <strong>ICAP</strong> y los niveles son los oficiales del Ministerio del Medio Ambiente.</p>
   </section>
 
   <!-- Mapa de observaciones en vivo -->
@@ -185,6 +212,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
