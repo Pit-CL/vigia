@@ -632,7 +632,19 @@ function renderMapa() {
   if (!estacionesData || typeof L === 'undefined') return;
   const est = estacionesData.estaciones.filter((e) => e.obs && e.obs.temperature_2m != null);
   if (!map) {
-    map = L.map('map', { scrollWheelZoom: false, zoomSnap: 0.5 });
+    // En táctil las 15 estaciones ya caben en la vista, así que apagamos
+    // pan y zoom táctil: el mapa no roba el scroll vertical de la página
+    // y los marcadores siguen siendo tappables.
+    const touch = matchMedia('(hover: none)').matches;
+    map = L.map('map', {
+      scrollWheelZoom: false,
+      zoomSnap: 0.5,
+      dragging: !touch,
+      touchZoom: !touch,
+      doubleClickZoom: !touch,
+      zoomControl: !touch,
+      tap: true,
+    });
     const bounds = L.latLngBounds(estacionesData.estaciones.map((e) => [e.lat, e.lon]));
     map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
   }

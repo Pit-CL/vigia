@@ -40,6 +40,10 @@
 
 html { -webkit-text-size-adjust: 100%; }
 
+/* Defensa contra scroll horizontal en móvil: ningún elemento debe
+   poder ensanchar la página más allá del viewport. */
+html, body { overflow-x: hidden; max-width: 100%; }
+
 body {
   margin: 0;
   font-family: var(--font-display);
@@ -326,8 +330,13 @@ main {
 
 /* ── Gráficos ───────────────────────────────────────────────── */
 
-.chart-box { position: relative; height: 320px; }
+/* El canvas va en position:absolute para que NO pueda forzar el ancho de
+   su contenedor: ese ciclo (canvas ancho → contenedor ancho → canvas se
+   mantiene) era la causa del scroll horizontal en móvil. Así el contenedor
+   toma el ancho del panel y Chart.js mide ese ancho ya restringido. */
+.chart-box { position: relative; height: 320px; width: 100%; }
 .chart-box-low { height: 200px; }
+.chart-box canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
 
 @media (max-width: 640px) {
   .chart-box { height: 260px; }
@@ -346,13 +355,19 @@ main {
 }
 
 @media (max-width: 720px) {
+  /* Scroll horizontal con snap: columnas de ancho fijo que suman más que
+     el viewport, así desliza limpio en vez de comprimir los 7 días. */
   .daily {
     grid-template-columns: none;
     grid-auto-flow: column;
-    grid-auto-columns: minmax(96px, 1fr);
+    grid-auto-columns: 82px;
     overflow-x: auto;
+    scroll-snap-type: x proximity;
     padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
   }
+  .day { scroll-snap-align: start; }
 }
 
 .day {
@@ -498,6 +513,8 @@ dialog {
   padding: 20px 22px 22px;
   max-width: min(720px, calc(100vw - 28px));
   width: 100%;
+  max-height: 90dvh;
+  overflow-y: auto;
 }
 
 dialog::backdrop {
@@ -551,8 +568,11 @@ dialog::backdrop {
   color: var(--ink-soft);
 }
 
-.chart-box-dialog { height: 260px; }
-.chart-box-dialog-low { height: 160px; }
+.chart-box-dialog { height: 260px; position: relative; width: 100%; }
+.chart-box-dialog-low { height: 160px; position: relative; width: 100%; }
+.chart-box-dialog canvas, .chart-box-dialog-low canvas {
+  position: absolute; inset: 0; width: 100% !important; height: 100% !important;
+}
 
 .info-body p { margin: 0 0 12px; font-size: 0.92rem; line-height: 1.55; }
 .info-body strong { color: var(--accent); }
@@ -799,3 +819,47 @@ dialog::backdrop {
 /* stagger para los paneles nuevos */
 .panel:nth-child(6) { animation-delay: 0.3s; }
 .panel:nth-child(7) { animation-delay: 0.36s; }
+
+/* ── Refinamientos para celulares ────────────────────────────── */
+
+/* Área táctil de 44px en botones chicos sin agrandar lo visual
+   (recomendación WCAG / Apple HIG para objetivos tocables). */
+.info-btn, .dialog-close { position: relative; }
+.info-btn::after, .dialog-close::after {
+  content: '';
+  position: absolute;
+  inset: -11px;
+}
+
+@media (max-width: 560px) {
+  .masthead { padding-top: 16px; }
+  .masthead h1 { font-size: 1.5rem; }
+  /* el subtítulo es decorativo: en pantallas chicas estorba */
+  .brand-sub { display: none; }
+
+  main { padding-left: 14px; padding-right: 14px; gap: 16px; }
+  .panel { padding: 14px 14px 16px; box-shadow: 3px 3px 0 var(--shadow); }
+  .panel-head h2 { font-size: 0.96rem; }
+
+  /* la lectura actual se apila para no apretar el número grande */
+  .now-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "desc" "detail";
+    row-gap: 12px;
+  }
+  .now-temp { font-size: clamp(3.2rem, 18vw, 4.4rem); }
+
+  /* tabla: que la primera columna no se aplaste y el resto deslice */
+  .model-table { font-size: 0.8rem; }
+  .model-table th, .model-table td { padding: 7px 8px; }
+
+  dialog { padding: 16px 16px 18px; max-width: calc(100vw - 16px); }
+  .dialog-head h3 { font-size: 1.02rem; }
+  .day-stats { grid-template-columns: 1fr 1fr; }
+}
+
+/* En táctil el hover de Leaflet no aplica; aseguramos que el pan del
+   mapa no robe el scroll vertical de la página sin querer. */
+@media (hover: none) {
+  .day:hover { transform: none; }
+}
