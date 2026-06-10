@@ -26,11 +26,11 @@ function mp25ToIcap(c) {
   return Math.min(999, Math.round(500 + (c - 170) * 1.5));
 }
 const ICAP_NIVELES = [
-  { max: 100, n: 'Buena',         c: '#2eae00', consejo: 'Aire limpio. Ideal para actividades al aire libre.' },
-  { max: 200, n: 'Regular',       c: '#d6c200', consejo: 'Aceptable. Personas muy sensibles podrían reducir el esfuerzo prolongado al aire libre.' },
-  { max: 300, n: 'Alerta',        c: '#ff7e00', consejo: 'Grupos sensibles (niños, adultos mayores, enfermos respiratorios) deben evitar el esfuerzo al aire libre.' },
-  { max: 500, n: 'Preemergencia', c: '#e3000f', consejo: 'Evita la actividad física al aire libre. Los grupos sensibles deben permanecer en interiores.' },
-  { max: Infinity, n: 'Emergencia', c: '#7e0023', consejo: 'Toda la población debe evitar actividad al aire libre y mantener puertas y ventanas cerradas.' },
+  { max: 100, n: 'Buena',         c: '#2eae00', cls: 'icap-0', consejo: 'Aire limpio. Ideal para actividades al aire libre.' },
+  { max: 200, n: 'Regular',       c: '#d6c200', cls: 'icap-1', consejo: 'Aceptable. Personas muy sensibles podrían reducir el esfuerzo prolongado al aire libre.' },
+  { max: 300, n: 'Alerta',        c: '#ff7e00', cls: 'icap-2', consejo: 'Grupos sensibles (niños, adultos mayores, enfermos respiratorios) deben evitar el esfuerzo al aire libre.' },
+  { max: 500, n: 'Preemergencia', c: '#e3000f', cls: 'icap-3', consejo: 'Evita la actividad física al aire libre. Los grupos sensibles deben permanecer en interiores.' },
+  { max: Infinity, n: 'Emergencia', c: '#7e0023', cls: 'icap-4', consejo: 'Toda la población debe evitar actividad al aire libre y mantener puertas y ventanas cerradas.' },
 ];
 const icapNivel = (icap) => ICAP_NIVELES.find((x) => icap < x.max) || ICAP_NIVELES[ICAP_NIVELES.length - 1];
 
@@ -848,7 +848,7 @@ function paintAire() {
     const nivel = icapNivel(e.icap);
     const icon = L.divIcon({
       className: 'stn-icon',
-      html: `<span class="stn-label" style="background:${nivel.c};border-color:${nivel.c};color:#fff">${e.icap}</span>`,
+      html: `<span class="stn-label ${nivel.cls}">${e.icap}</span>`,
       iconSize: [40, 26], iconAnchor: [20, 13],
     });
     const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(map);

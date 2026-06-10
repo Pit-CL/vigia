@@ -756,6 +756,15 @@ dialog::backdrop {
 
 .legend-swatch { width: 22px; height: 10px; display: inline-block; }
 
+/* Niveles ICAP (clases, no estilos inline: la CSP estricta los bloquea) */
+.icap-0 { background-color: #2eae00; }
+.icap-1 { background-color: #d6c200; }
+.icap-2 { background-color: #ff7e00; }
+.icap-3 { background-color: #e3000f; }
+.icap-4 { background-color: #7e0023; }
+.stn-label.icap-0, .stn-label.icap-1, .stn-label.icap-2,
+.stn-label.icap-3, .stn-label.icap-4 { color: #fff; border-color: rgba(0,0,0,0.35); }
+
 .tc0 { background-color: #7aa6ff; }
 .tc1 { background-color: #5b9bd4; }
 .tc2 { background-color: #3fb8c4; }
