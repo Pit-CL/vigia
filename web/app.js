@@ -233,7 +233,7 @@ function tempClass(t) {
 function horaLocal(isoUtc) {
   try {
     return new Date(isoUtc).toLocaleTimeString('es-CL', {
-      hour: '2-digit', minute: '2-digit', timeZone: TZ,
+      hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ,
     });
   } catch (_) { return isoUtc; }
 }
@@ -477,8 +477,9 @@ function renderNow(best) {
 
   const lugar = `${place.name}${place.admin1 ? ' · ' + place.admin1 : ''}`;
   const nombreCorto = est ? est.nombre.split('·').pop().trim().replace(/\s*\(.*\)/, '') : '';
+  const horaObs = est && est.obs_time ? horaLocal(est.obs_time) : null;
   $('#now-place').textContent = est
-    ? `${lugar} · medido en ${nombreCorto} (${Math.round(est.dist)} km)`
+    ? `${lugar} · medido en ${nombreCorto}${horaObs ? ' · ' + horaObs + ' h' : ''}`
     : `${lugar} · estimación de modelo`;
   $('#now-icon').textContent = icon;
   $('#now-temp').textContent = Math.round(temp);
