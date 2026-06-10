@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS observations (
   UNIQUE(station, obs_time, variable, source) ON CONFLICT IGNORE
 );
 
+-- Fenómeno presente observado (wxString del METAR: RA, DZ, TSRA, FG…), el más
+-- reciente por estación. Habilita mostrar el tiempo REAL en vez del weather_code
+-- del modelo (que puede decir "llovizna" mientras la estación reporta lluvia).
+CREATE TABLE IF NOT EXISTS obs_wx (
+  station  TEXT PRIMARY KEY,
+  obs_time TEXT NOT NULL,
+  wx       TEXT NOT NULL,
+  updated  TEXT NOT NULL
+);
+
 -- Payloads crudos: nunca perder datos aunque aún no exista parser (DMC).
 CREATE TABLE IF NOT EXISTS raw_payloads (
   fetched_at TEXT NOT NULL,

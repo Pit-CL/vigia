@@ -401,13 +401,49 @@ function renderAire(aire) {
   }
 }
 
+// Fenómeno METAR observado (wxString) → [descripción, ícono], o null.
+function wxToDesc(wx) {
+  if (!wx) return null;
+  const w = wx.toUpperCase();
+  if (w.includes('TS')) return ['Tormenta eléctrica', '⛈️'];
+  if (w.includes('SN')) return ['Nieve', '🌨️'];
+  if (w.includes('RA')) {
+    if (w.includes('+')) return ['Lluvia fuerte', '🌧️'];
+    if (w.includes('SH')) return ['Chubascos', '🌧️'];
+    if (w.includes('-')) return ['Lluvia débil', '🌦️'];
+    return ['Lluvia', '🌧️'];
+  }
+  if (w.includes('DZ')) return ['Llovizna', '🌦️'];
+  if (w.includes('FG')) return ['Niebla', '🌫️'];
+  if (w.includes('BR')) return ['Neblina', '🌫️'];
+  if (w.includes('HZ') || w.includes('FU')) return ['Calima', '🌫️'];
+  return null;
+}
+
+// Estación de observación más cercana (<35 km) con fenómeno reciente.
+function estacionWxCercana() {
+  if (!estacionesData) return null;
+  let best = null;
+  for (const e of estacionesData.estaciones) {
+    if (!e.wx) continue;
+    const d = haversineKm(place.lat, place.lon, e.lat, e.lon);
+    if (!best || d < best.dist) best = { ...e, dist: d };
+  }
+  return best && best.dist <= 35 ? best : null;
+}
+
 function renderNow(best) {
   const c = best.current;
-  const [desc, icon] = wmo(c.weather_code);
+  let [desc, icon] = wmo(c.weather_code);
+  // El tiempo REAL observado por la estación cercana manda sobre el del modelo
+  // (el modelo puede decir "llovizna" mientras la estación reporta lluvia).
+  const ew = estacionWxCercana();
+  const obs = ew ? wxToDesc(ew.wx) : null;
+  if (obs) { [desc, icon] = obs; }
   $('#now-place').textContent = `${place.name}${place.admin1 ? ' · ' + place.admin1 : ''}`;
   $('#now-icon').textContent = icon;
   $('#now-temp').textContent = Math.round(c.temperature_2m);
-  $('#now-desc').textContent = desc;
+  $('#now-desc').textContent = obs ? `${desc} · observado` : desc;
   $('#now-feels').textContent = `${Math.round(c.apparent_temperature)} °C`;
   $('#now-rh').textContent = `${c.relative_humidity_2m} %`;
   $('#now-wind').textContent = `${Math.round(c.wind_speed_10m)} km/h ${compass(c.wind_direction_10m)}`;
@@ -884,6 +920,7 @@ async function loadMapa() {
     return;
   }
   renderMapa();
+  if (lastData) renderNow(lastData.best);   // re-pintar el "ahora" con fenómeno observado
 }
 
 function ensureMap() {

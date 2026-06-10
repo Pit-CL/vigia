@@ -136,6 +136,14 @@ def ingest_metar(con, fetched_at: str) -> int:
         for var, val in pairs:
             if val is not None:
                 rows.append((st, t_iso, var, val, "metar"))
+        # Fenómeno presente observado (RA, DZ, TSRA, FG…): el tiempo REAL.
+        wx = (ob.get("wxString") or "").strip()
+        if wx:
+            con.execute(
+                "INSERT INTO obs_wx(station, obs_time, wx, updated) VALUES (?,?,?,?) "
+                "ON CONFLICT(station) DO UPDATE SET obs_time=excluded.obs_time, "
+                "wx=excluded.wx, updated=excluded.updated WHERE excluded.obs_time >= obs_wx.obs_time",
+                (st, t_iso, wx, fetched_at))
     con.executemany(
         "INSERT INTO observations(station, obs_time, variable, value, source) VALUES (?,?,?,?,?)",
         rows)

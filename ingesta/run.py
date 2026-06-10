@@ -47,11 +47,16 @@ def write_estaciones(con) -> int:
         d["obs"][variable] = value
         if obs_time > d["obs_time"]:
             d["obs_time"] = obs_time
+    # fenómeno presente reciente (METAR wxString), solo si es de las últimas 2 h
+    wx_cut = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    wx = {st: w for st, w in con.execute(
+        "SELECT station, wx FROM obs_wx WHERE obs_time >= ?", (wx_cut,))}
     estaciones = [{
         "id": s["id"], "nombre": s["nombre"], "lat": s["lat"], "lon": s["lon"],
         "fuente": "metar" if s.get("metar") else "dmc",
         "obs_time": latest[s["id"]]["obs_time"] if s["id"] in latest else None,
         "obs": latest[s["id"]]["obs"] if s["id"] in latest else {},
+        "wx": wx.get(s["id"]),
     } for s in config.STATIONS]
     payload = {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
