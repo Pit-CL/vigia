@@ -1,11 +1,11 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'sinoptica-shell-v2';
-const DATA_CACHE = 'sinoptica-data-v2';
+const SHELL_CACHE = 'sinoptica-shell-v3';
+const DATA_CACHE = 'sinoptica-data-v3';
 const SHELL = [
   './',
   'index.html',
-  'app.css?v=10',
-  'app.js?v=10',
+  'app.css?v=11',
+  'app.js?v=11',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -52,7 +52,23 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Shell y fuentes: caché primero, actualiza en segundo plano
+  // El documento HTML: RED primero. Así el index.html siempre referencia los
+  // assets versionados actuales y nunca queda un HTML viejo cacheado que no
+  // calce con un app.js nuevo (eso rompía el render). Respaldo a caché offline.
+  if (e.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('index.html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(SHELL_CACHE).then((c) => c.put(e.request, copy));
+          return res;
+        })
+        .catch(() => caches.match(e.request).then((hit) => hit || caches.match('index.html')))
+    );
+    return;
+  }
+
+  // Assets versionados (?v=N) y fuentes: caché primero, refresco en segundo plano.
   e.respondWith(
     caches.match(e.request).then((hit) => {
       const refresh = fetch(e.request)
