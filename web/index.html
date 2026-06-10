@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=7">
+  <link rel="stylesheet" href="app.css?v=9">
 </head>
 <body>
 
@@ -91,16 +91,28 @@
   <section class="panel" aria-labelledby="map-title">
     <header class="panel-head">
       <h2 id="map-title">Observaciones en vivo</h2>
-      <span id="map-meta" class="panel-meta">15 estaciones · V Región y RM</span>
+      <span id="map-meta" class="panel-meta">V Región y RM</span>
       <button class="info-btn" data-info="mapa" aria-label="¿De dónde salen estas mediciones?">?</button>
     </header>
-    <div id="map" aria-label="Mapa de estaciones meteorológicas con temperatura observada"></div>
-    <div class="map-legend" aria-hidden="true">
+    <div class="map-modes" role="tablist" aria-label="Capa del mapa">
+      <button class="map-mode" data-mode="temp" role="tab" aria-selected="true">🌡️ Temperatura</button>
+      <button class="map-mode" data-mode="aire" role="tab" aria-selected="false">🌫️ Calidad del aire</button>
+    </div>
+    <div id="map" aria-label="Mapa de estaciones con observaciones reales"></div>
+    <div id="map-legend-temp" class="map-legend" aria-hidden="true">
       <span>frío</span>
       <span class="legend-swatch tc0"></span><span class="legend-swatch tc1"></span><span class="legend-swatch tc2"></span><span class="legend-swatch tc3"></span><span class="legend-swatch tc4"></span><span class="legend-swatch tc5"></span><span class="legend-swatch tc6"></span><span class="legend-swatch tc7"></span>
       <span>cálido</span>
     </div>
-    <p class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
+    <div id="map-legend-aire" class="map-legend" aria-hidden="true" hidden>
+      <span class="legend-swatch" style="background:#2eae00"></span><span>Buena</span>
+      <span class="legend-swatch" style="background:#d6c200"></span><span>Regular</span>
+      <span class="legend-swatch" style="background:#ff7e00"></span><span>Alerta</span>
+      <span class="legend-swatch" style="background:#e3000f"></span><span>Preemerg.</span>
+      <span class="legend-swatch" style="background:#7e0023"></span><span>Emerg.</span>
+    </div>
+    <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
+    <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -212,6 +224,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

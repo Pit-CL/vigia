@@ -38,6 +38,10 @@
 
 * { box-sizing: border-box; }
 
+/* El atributo [hidden] debe ganar a cualquier display de clase
+   (display:flex/grid lo anularía si no). */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 /* Defensa contra scroll horizontal en móvil: ningún elemento debe
@@ -945,4 +949,27 @@ dialog::backdrop {
   .aire-gauge { width: 78px; height: 78px; }
   .aire-icap { font-size: 1.6rem; }
   .aire-detail { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Toggle de capas del mapa ─────────────────────────────────── */
+
+.map-modes {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.map-mode {
+  padding: 5px 12px;
+  font: 500 0.78rem var(--font-mono);
+  color: var(--ink);
+  background: transparent;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+}
+
+.map-mode[aria-selected="true"] {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
 }

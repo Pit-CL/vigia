@@ -177,6 +177,7 @@ let verifData = null;
 let verifBucket = '24';
 let estacionesData = null;
 let aireStations = [];   // estaciones SINCA oficiales (calidad del aire)
+let mapMode = 'temp';    // 'temp' | 'aire'
 let map = null;
 let tileLayer = null;
 
@@ -766,69 +767,114 @@ async function loadMapa() {
   renderMapa();
 }
 
+function ensureMap() {
+  if (map || typeof L === 'undefined' || !estacionesData) return map;
+  // En táctil las estaciones ya caben en la vista, así que apagamos pan y
+  // zoom táctil: el mapa no roba el scroll vertical y los marcadores siguen
+  // siendo tappables.
+  const touch = matchMedia('(hover: none)').matches;
+  map = L.map('map', {
+    scrollWheelZoom: false, zoomSnap: 0.5,
+    dragging: !touch, touchZoom: !touch, doubleClickZoom: !touch,
+    zoomControl: !touch, tap: true,
+  });
+  const bounds = L.latLngBounds(estacionesData.estaciones.map((e) => [e.lat, e.lon]));
+  map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
+  return map;
+}
+
+function popupRows(pairs) {
+  const dl = document.createElement('dl');
+  pairs.forEach(([label, value]) => {
+    if (value == null) return;
+    const dt = document.createElement('dt'); dt.textContent = label;
+    const dd = document.createElement('dd'); dd.textContent = value;
+    dl.append(dt, dd);
+  });
+  return dl;
+}
+
 function renderMapa() {
-  if (!estacionesData || typeof L === 'undefined') return;
-  const est = estacionesData.estaciones.filter((e) => e.obs && e.obs.temperature_2m != null);
-  if (!map) {
-    // En táctil las 15 estaciones ya caben en la vista, así que apagamos
-    // pan y zoom táctil: el mapa no roba el scroll vertical de la página
-    // y los marcadores siguen siendo tappables.
-    const touch = matchMedia('(hover: none)').matches;
-    map = L.map('map', {
-      scrollWheelZoom: false,
-      zoomSnap: 0.5,
-      dragging: !touch,
-      touchZoom: !touch,
-      doubleClickZoom: !touch,
-      zoomControl: !touch,
-      tap: true,
-    });
-    const bounds = L.latLngBounds(estacionesData.estaciones.map((e) => [e.lat, e.lon]));
-    map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
-  }
+  if (!ensureMap()) return;
   if (tileLayer) map.removeLayer(tileLayer);
   tileLayer = L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
     attribution: TILES_ATTR, maxZoom: 13, subdomains: 'abcd',
   }).addTo(map);
-
-  // limpiar marcadores previos
   map.eachLayer((layer) => { if (layer instanceof L.Marker) map.removeLayer(layer); });
 
+  const aire = mapMode === 'aire';
+  document.getElementById('map-legend-temp').hidden = aire;
+  document.getElementById('map-legend-aire').hidden = !aire;
+  document.getElementById('map-note-temp').hidden = aire;
+  document.getElementById('map-note-aire').hidden = !aire;
+  document.querySelectorAll('.map-mode').forEach((b) =>
+    b.setAttribute('aria-selected', String(b.dataset.mode === mapMode)));
+
+  if (aire) paintAire(); else paintTemp();
+}
+
+function paintTemp() {
+  const est = estacionesData.estaciones.filter((e) => e.obs && e.obs.temperature_2m != null);
   est.forEach((e) => {
     const t = e.obs.temperature_2m;
     const icon = L.divIcon({
       className: 'stn-icon',
       html: `<span class="stn-label ${tempClass(t)}">${Math.round(t)}°</span>`,
-      iconSize: [44, 26],
-      iconAnchor: [22, 13],
+      iconSize: [44, 26], iconAnchor: [22, 13],
     });
     const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(map);
-
     const box = document.createElement('div');
     box.className = 'stn-popup';
-    const h = document.createElement('strong');
-    h.textContent = e.nombre;
-    box.appendChild(h);
+    const h = document.createElement('strong'); h.textContent = e.nombre; box.appendChild(h);
     const meta = document.createElement('small');
     meta.textContent = `${e.fuente === 'metar' ? 'Aeropuerto · red OMM' : 'EMA · Dirección Meteorológica de Chile'} · ${horaLocal(e.obs_time)} h`;
     box.appendChild(meta);
-    const dl = document.createElement('dl');
-    Object.entries(OBS_LABELS).forEach(([key, [label, unit]]) => {
-      if (e.obs[key] == null) return;
-      const dt = document.createElement('dt');
-      dt.textContent = label;
-      const dd = document.createElement('dd');
-      dd.textContent = key === 'wind_direction_10m'
-        ? `${Math.round(e.obs[key])}° (${compass(e.obs[key])})`
-        : `${r1(e.obs[key])} ${unit}`;
-      dl.append(dt, dd);
-    });
-    box.appendChild(dl);
+    box.appendChild(popupRows(Object.entries(OBS_LABELS).map(([key, [label, unit]]) =>
+      e.obs[key] == null ? [label, null]
+        : [label, key === 'wind_direction_10m'
+            ? `${Math.round(e.obs[key])}° (${compass(e.obs[key])})`
+            : `${r1(e.obs[key])} ${unit}`])));
     marker.bindPopup(box, { maxWidth: 280 });
   });
+  $('#map-meta').textContent = estacionesData.updated
+    ? `${est.length} estaciones · ${horaLocal(estacionesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${est.length} estaciones`;
+}
 
-  $('#map-meta').textContent =
-    `${est.length} estaciones reportando · actualizado ${horaLocal(estacionesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`;
+function paintAire() {
+  const est = aireStations.filter((e) => e.icap != null);
+  if (!est.length) { $('#map-meta').textContent = 'sin datos SINCA'; return; }
+  est.forEach((e) => {
+    const nivel = icapNivel(e.icap);
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="stn-label" style="background:${nivel.c};border-color:${nivel.c};color:#fff">${e.icap}</span>`,
+      iconSize: [40, 26], iconAnchor: [20, 13],
+    });
+    const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(map);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = e.nombre; box.appendChild(h);
+    const meta = document.createElement('small');
+    meta.textContent = `${e.comuna || ''} · SINCA · ICAP ${e.icap} (${nivel.n})`;
+    box.appendChild(meta);
+    box.appendChild(popupRows([
+      ['MP2,5', e.pm2_5 != null ? `${Math.round(e.pm2_5)} µg/m³` : null],
+      ['MP10', e.pm10 != null ? `${Math.round(e.pm10)} µg/m³` : null],
+    ]));
+    marker.bindPopup(box, { maxWidth: 260 });
+  });
+  $('#map-meta').textContent = `${est.length} estaciones SINCA · MP2,5`;
+}
+
+function setupMapModes() {
+  document.querySelectorAll('.map-mode').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (mapMode === btn.dataset.mode) return;
+      mapMode = btn.dataset.mode;
+      renderMapa();
+    });
+  });
 }
 
 // ── Ubicaciones: chips y búsqueda ──────────────────────────────
@@ -988,12 +1034,14 @@ async function loadAireSinca() {
     const data = await res.json();
     aireStations = data.estaciones || [];
     if (lastData) renderAire(lastData.aire);   // re-render con dato oficial
+    if (mapMode === 'aire') renderMapa();       // repinta el mapa de aire
   } catch (_) { /* sin SINCA: el panel usa el pronóstico CAMS */ }
 }
 
 setupSearch();
 setupDialogs();
 setupVerifTabs();
+setupMapModes();
 renderChips();
 loadAll().catch(showError);
 loadArchiveStatus();
