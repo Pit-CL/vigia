@@ -253,9 +253,9 @@ function urlBase(extra) {
   }).toString();
 }
 
-async function loadAll() {
+async function loadAll({ silent = false } = {}) {
   const app = $('#app');
-  app.dataset.state = 'loading';
+  if (!silent) app.dataset.state = 'loading';
   $('#error').hidden = true;
 
   const qBest = urlBase({
@@ -292,7 +292,7 @@ async function loadAll() {
 
   lastData = { best, multi, ens, aire };
   render();
-  app.dataset.state = 'ready';
+  if (!silent) app.dataset.state = 'ready';
 }
 
 // ── Render principal ───────────────────────────────────────────
@@ -1259,3 +1259,36 @@ loadVerif();
 loadMapa();
 loadAireSinca();
 loadBias();
+
+// ── Refresco en vivo ───────────────────────────────────────────
+// Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
+// volver a la pestaña y cada ~10 min volvemos a traer los datos en segundo
+// plano (sin parpadeo de "cargando"): así "Condiciones actuales" refleja la
+// última medición sin que el usuario recargue. El backend ingesta cada hora,
+// así que refrescar más seguido solo adelanta la aparición del dato nuevo.
+const REFRESH_MS = 10 * 60 * 1000;     // refresco periódico con pestaña visible
+const REFRESH_MIN_GAP_MS = 60 * 1000;  // ignora rebotes de foco < 60 s
+let lastRefreshAt = Date.now();
+let refreshing = false;
+
+async function refreshAll() {
+  if (refreshing || Date.now() - lastRefreshAt < REFRESH_MIN_GAP_MS) return;
+  refreshing = true;
+  lastRefreshAt = Date.now();
+  try {
+    await loadAll({ silent: true });   // Open-Meteo (current + modelos)
+  } catch (_) { /* sin red: la pantalla conserva el último dato bueno */ }
+  loadMapa();          // estaciones.json → medición real de la central cercana
+  loadAireSinca();     // aire.json (SINCA)
+  loadBias();          // bias.json (calibración)
+  loadVerif();         // verificacion.json
+  loadArchiveStatus(); // status.json
+  refreshing = false;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refreshAll();
+});
+setInterval(() => {
+  if (document.visibilityState === 'visible') refreshAll();
+}, REFRESH_MS);
