@@ -23,7 +23,7 @@ Estado real de `data/clima.db` consultado en vivo:
 | Pares fc/obs con `lead>0` | 210, todos en lead 1-2 h; **0 con lead>24 h** |
 | Estaciones con par útil | 3 METAR; las 10 DMC aún sin pares |
 
-**Conclusión:** el archivo propio aún no tiene señal estadística. El JOIN ya funciona (`verify.py:19-30`) y el bias ya se calcula (`verify.py:39`) pero **nunca se aplica**. Si dependiéramos solo de este archivo, habría que esperar. Por eso entra el acelerador histórico (§2).
+**Conclusión:** el archivo propio aún no tiene señal estadística. El JOIN fc/obs y el cálculo de bias ya funcionan en `verify.py` (snapshot de esa fecha: el bias no se aplicaba aún; hoy lo aplica `calibrate.py`, ver §9). Si dependiéramos solo de este archivo, habría que esperar. Por eso entra el acelerador histórico (§2).
 
 ---
 
@@ -121,7 +121,7 @@ Métricas a añadir a `verify.py` (hoy solo MAE/bias de temperatura):
 **Evitar data leakage:**
 - **Rolling-origin / walk-forward:** entrena con `[inicio, t)`, evalúa en `t`, avanza. El k-fold aleatorio mete futuro en el pasado → prohibido en series temporales. **Esto vale también para el bootstrap histórico:** el holdout debe ser temporal (entrenar con años previos, validar en el periodo más reciente).
 - **Gate de muestra mínima:** no corregir si `n < 7-10`; caer a crudo. Con `n` bajo, **shrinkage** `b_aplicado = b·n/(n+k)` (k≈5-10).
-- Mantener el descarte de `lead≤0` (`verify.py:33`): es nowcast/asimilación, infla la exactitud artificialmente (los "4940 pares" eran 96 % lead≤0; solo 210 son pronóstico real).
+- Mantener el descarte de `lead≤0` (en `verify.py`): es nowcast/asimilación, infla la exactitud artificialmente (los "4940 pares" eran 96 % lead≤0; solo 210 son pronóstico real).
 
 ---
 

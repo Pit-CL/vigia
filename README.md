@@ -52,7 +52,8 @@ Todo con APIs **gratuitas y abiertas**, sin claves para el usuario, sin tracking
             │ lee JSON                   │  • observaciones (METAR+DMC) │
             ▼                            │  • verificación (MAE/sesgo)  │
    status / verificacion /  ◄────────────│  → SQLite + JSON públicos    │
-   estaciones .json                      └──────────────────────────────┘
+   estaciones / aire /                   └──────────────────────────────┘
+   bias .json
 ```
 
 - **Frontend** (`web/`): HTML/CSS/JS sin framework. Pinta el pronóstico consumiendo Open-Meteo desde el navegador, y enriquece con los JSON que genera la ingesta.
@@ -98,7 +99,8 @@ El cron archiva observaciones cada hora y pronósticos cada 6 h. Detalle de oper
 - [x] Calidad del aire con índice ICAP chileno
 - [x] Mediciones oficiales SINCA (estación más cercana como dato real)
 - [x] Mapa de calidad del aire con todas las estaciones SINCA por ICAP
-- [ ] **Calibración local**: corrección de sesgo → EMOS → ML cuantílico (requiere ~2 semanas de archivo)
+- [x] **Calibración local, fase 1**: corrección de sesgo por estación/variable (EWMA + gate de muestra + shrinkage → `bias.json`)
+- [ ] **Calibración local, fases siguientes**: EMOS → ML cuantílico (requiere más archivo histórico)
 - [ ] Modelo regional chileno WRF de la DMC (4 km) como 6.º modelo
 - [ ] Índice UV y alertas configurables
 
