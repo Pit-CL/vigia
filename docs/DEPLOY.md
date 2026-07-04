@@ -43,8 +43,10 @@ Cloudflare aporta el TLS y la CDN del borde; el origen nunca queda expuesto dire
 | Tarea | Frecuencia | Qué archiva |
 |---|---|---|
 | Observaciones | cada hora | METAR (NOAA) + estaciones DMC |
+| Calidad del aire | cada hora (con las observaciones) | SINCA → `aire.json` |
 | Pronósticos | cada 6 h | 5 modelos deterministas + ensamble (51 miembros) |
 | Verificación + estaciones | cada corrida | recomputa `verificacion.json` y `estaciones.json` |
+| Calibración | cada corrida | recalcula bias por estación/variable → `bias.json` |
 
 Definición en [`deploy/crontab`](../deploy/crontab).
 
@@ -56,11 +58,14 @@ Sube los archivos al servidor y reinicia el contenedor web:
 rsync -a --delete \
   --exclude data/ --exclude .git/ --exclude .env \
   --exclude 'web/status.json' --exclude 'web/verificacion.json' --exclude 'web/estaciones.json' \
+  --exclude 'web/aire.json' --exclude 'web/bias.json' \
   ./ servidor:/ruta/clima/
 docker compose restart web
 ```
 
 > **Importante:** si cambiaste `app.js` o `app.css`, sube el sufijo `?v=N` en `index.html` (y en `sw.js`). Cloudflare cachea JS/CSS por extensión; sin el bump seguiría sirviendo la versión anterior. Los JSON de datos y `sw.js` se sirven con `no-cache` para evitar justamente eso.
+
+> Los cinco JSON (`status`, `verificacion`, `estaciones`, `aire`, `bias`) se excluyen porque son **generados**: en dev la ingesta los escribe en `web/` (defaults de `ingesta/config.py`); en prod van a `/data` (envs del compose) y nginx los sirve por `alias`.
 
 ## Verificar estado
 
