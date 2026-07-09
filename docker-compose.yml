@@ -32,9 +32,15 @@ services:
       CLIMA_ESTACIONES: /data/estaciones.json
       CLIMA_AIRE: /data/aire.json
       CLIMA_BIAS: /data/bias.json
+      CLIMA_SISMOS: /data/sismos.json
+      CLIMA_INCENDIOS: /data/incendios.json
+      CLIMA_ALERTAS: /data/alertas.json
+      CLIMA_VOLCANES: /data/volcanes.json
+      CLIMA_EMERGENCIA: /data/emergencia.json
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}
+      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
     volumes:
       - ./ingesta:/app/ingesta:ro
       - ./deploy/crontab:/crontab-src:ro
