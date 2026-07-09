@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=24">
+  <link rel="stylesheet" href="app.css?v=25">
 </head>
 <body>
 
@@ -99,6 +99,7 @@
       <button class="map-mode" data-capa="aire" aria-pressed="false">🌫️ Aire</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode" data-capa="sismos" aria-pressed="false">〰️ Sismos</button>
+      <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
     </div>
@@ -122,9 +123,16 @@
       <span class="sq-old"></span><span>más antiguo</span>
       <span>· círculo más grande = mayor magnitud</span>
     </div>
+    <div id="map-legend-incendios" class="map-legend" aria-hidden="true" hidden>
+      <span class="fk-h"></span><span>confianza alta</span>
+      <span class="fk-n"></span><span>nominal</span>
+      <span class="fk-l"></span><span>baja</span>
+      <span>· 🔥 N = grupo de focos</span>
+    </div>
     <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
     <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
     <p id="map-note-sismos" class="panel-note" hidden>Fuente: <strong>CSN</strong> (sismologia.cl) + <strong>USGS</strong> · magnitudes Mlv/Mw.</p>
+    <p id="map-note-incendios" class="panel-note" hidden>Focos de calor satelitales (VIIRS 375 m, últimas 48 h) · <strong>NASA FIRMS</strong> · no todo foco es incendio.</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -236,6 +244,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

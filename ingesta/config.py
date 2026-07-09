@@ -61,3 +61,7 @@ SISMOS_PATH = Path(os.environ.get("CLIMA_SISMOS", ROOT / "web" / "sismos.json"))
 API_SISMOS_CSN = "https://api.xor.cl/sismo/recent"
 API_SISMOS_USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 CHILE_BBOX = (-76.0, -56.5, -66.0, -17.0)   # O, S, E, N (continental)
+
+INCENDIOS_PATH = Path(os.environ.get("CLIMA_INCENDIOS", ROOT / "web" / "incendios.json"))
+FIRMS_MAP_KEY = os.environ.get("FIRMS_MAP_KEY", "")
+API_FIRMS = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"

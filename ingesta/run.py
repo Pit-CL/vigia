@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import config
 import db
+import incendios
 import sismos
 import sources
 import verify
@@ -103,12 +104,15 @@ def main() -> int:
     ap.add_argument("--forecasts", action="store_true", help="archiva pronósticos (det + ensamble)")
     ap.add_argument("--obs", action="store_true", help="archiva observaciones (METAR, DMC)")
     ap.add_argument("--sismos", action="store_true", help="archiva catálogo sísmico (CSN + USGS)")
-    ap.add_argument("--hazards", action="store_true", help="peligros naturales (por ahora: sismos)")
+    ap.add_argument("--incendios", action="store_true", help="archiva focos de calor (NASA FIRMS)")
+    ap.add_argument("--hazards", action="store_true", help="peligros naturales (sismos + incendios)")
     ap.add_argument("--all", action="store_true")
     args = ap.parse_args()
     do_forecasts = args.forecasts or args.all
-    do_obs = args.obs or args.all or not (args.forecasts or args.all or args.sismos or args.hazards)
+    do_obs = args.obs or args.all or not (
+        args.forecasts or args.all or args.sismos or args.incendios or args.hazards)
     do_sismos = args.sismos or args.hazards or args.all
+    do_incendios = args.incendios or args.hazards or args.all
 
     now = datetime.now(timezone.utc)
     run_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -126,6 +130,8 @@ def main() -> int:
         ok &= step(con, run_at, "prune", lambda: db.prune(con))
     if do_sismos:
         ok &= step(con, run_at, "sismos", lambda: sismos.update(con, run_at))
+    if do_incendios:
+        ok &= step(con, run_at, "incendios", lambda: incendios.update(con, run_at))
     if do_obs or do_forecasts:
         ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
         ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))

@@ -182,6 +182,7 @@ let verifBucket = '24';
 let estacionesData = null;
 let aireStations = [];   // estaciones SINCA oficiales (calidad del aire)
 let sismosData = null;   // catálogo sísmico CSN + USGS
+let incendiosData = null; // focos de calor VIIRS (NASA FIRMS)
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -976,16 +977,27 @@ async function loadSismos() {
   } catch (_) { /* sin catálogo sísmico: la capa queda vacía */ }
 }
 
+async function loadIncendios() {
+  try {
+    const res = await fetch('incendios.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    incendiosData = await res.json();
+    if (capasActivas.has('incendios')) renderMapa();
+  } catch (_) { /* sin foco de calor: la capa queda vacía */ }
+}
+
 // Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
-// una a la vez); 'sismos' es independiente y puede combinarse con cualquiera.
+// una a la vez); 'sismos' e 'incendios' son independientes y se pueden
+// combinar con cualquiera.
 const CAPAS = {
-  temp:   { grupo: 'medicion', paint: paintTemp },
-  aire:   { grupo: 'medicion', paint: paintAire },
-  sismos: { paint: paintSismos },
+  temp:      { grupo: 'medicion', paint: paintTemp },
+  aire:      { grupo: 'medicion', paint: paintAire },
+  sismos:    { paint: paintSismos },
+  incendios: { paint: paintIncendios },
 };
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
-// pinta al final para que su texto en #map-meta prevalezca sobre el de sismos.
-const ORDEN_PINTADO = ['sismos', 'temp', 'aire'];
+// pinta al final para que su texto en #map-meta prevalezca sobre las demás.
+const ORDEN_PINTADO = ['sismos', 'incendios', 'temp', 'aire'];
 
 function capasGuardadas() {
   try {
@@ -1034,10 +1046,10 @@ function ensureMap() {
   // crearse (queda fondo sin tiles); recalcular asegura que se llenen.
   setTimeout(() => map.invalidateSize(), 200);
   for (const k of Object.keys(CAPAS)) layerGroups[k] = L.layerGroup().addTo(map);
-  // Al cambiar de zoom, el dedup por celda de paintTemp/paintAire depende
-  // del zoom actual: hay que re-pintar la capa de medición activa.
+  // Al cambiar de zoom, el dedup/agrupado por celda de paintTemp/paintAire/
+  // paintIncendios depende del zoom actual: hay que re-pintar la capa activa.
   map.on('zoomend', () => {
-    if (['temp', 'aire'].some((k) => capasActivas.has(k))) renderMapa();
+    if (['temp', 'aire', 'incendios'].some((k) => capasActivas.has(k))) renderMapa();
   });
   return map;
 }
@@ -1069,9 +1081,11 @@ function renderMapa() {
   document.getElementById('map-legend-temp').hidden = medicion !== 'temp';
   document.getElementById('map-legend-aire').hidden = medicion !== 'aire';
   document.getElementById('map-legend-sismos').hidden = !capasActivas.has('sismos');
+  document.getElementById('map-legend-incendios').hidden = !capasActivas.has('incendios');
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
   document.getElementById('map-note-aire').hidden = medicion !== 'aire';
   document.getElementById('map-note-sismos').hidden = !capasActivas.has('sismos');
+  document.getElementById('map-note-incendios').hidden = !capasActivas.has('incendios');
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
 
@@ -1201,6 +1215,56 @@ function paintSismos(group) {
   $('#map-meta').textContent = sismosData.updated
     ? `${eventos.length} sismos · ${horaLocal(sismosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
     : `${eventos.length} sismos`;
+}
+
+const CONF_LABEL = { h: 'Alta', n: 'Nominal', l: 'Baja' };
+
+function paintIncendios(group) {
+  const focos = (incendiosData && incendiosData.focos) || [];
+  if (!focos.length) {
+    // Solo pisa #map-meta si incendios es la única capa activa: si hay otra
+    // capa pintada antes o después en ORDEN_PINTADO, su texto debe prevalecer.
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'sin focos activos';
+    return;
+  }
+  // Grupos con menos focos primero: los grupos grandes quedan pintados
+  // encima cuando varias celdas se superponen visualmente.
+  const grupos = agruparPorCelda(focos, 48).sort((a, b) => a.length - b.length);
+  grupos.forEach((grupo) => {
+    if (grupo.length === 1) {
+      const f = grupo[0];
+      const icon = L.divIcon({
+        className: `foco foco-${f.conf || 'n'}`,
+        iconSize: [10, 10], iconAnchor: [5, 5],
+      });
+      const marker = L.marker([f.lat, f.lon], { icon }).addTo(group);
+      const box = document.createElement('div');
+      box.className = 'stn-popup';
+      const h = document.createElement('strong'); h.textContent = 'Foco de calor'; box.appendChild(h);
+      box.appendChild(popupRows([
+        ['FRP', f.frp != null ? `${f.frp} MW` : null],
+        ['Confianza', CONF_LABEL[f.conf] || f.conf],
+        ['Satélite', f.sat],
+        ['Hora local', `${horaLocal(f.utc)} h`],
+      ]));
+      marker.bindPopup(box, { maxWidth: 260 });
+    } else {
+      const lat = grupo.reduce((s, f) => s + f.lat, 0) / grupo.length;
+      const lon = grupo.reduce((s, f) => s + f.lon, 0) / grupo.length;
+      const icon = L.divIcon({
+        className: 'stn-icon',
+        html: `<span class="stn-label foco-grupo">🔥<b>${grupo.length}</b></span>`,
+        iconSize: [40, 26], iconAnchor: [20, 13],
+      });
+      // Sin popup: el clic acerca el mapa al grupo en vez de mostrar detalle.
+      L.marker([lat, lon], { icon })
+        .on('click', () => map.setView([lat, lon], map.getZoom() + 2))
+        .addTo(group);
+    }
+  });
+  $('#map-meta').textContent = incendiosData.updated
+    ? `${focos.length} focos · ${horaLocal(incendiosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${focos.length} focos`;
 }
 
 function setupCapas() {
@@ -1406,6 +1470,7 @@ loadMapa();
 loadAireSinca();
 loadBias();
 loadSismos();
+loadIncendios();
 
 // ── Refresco en vivo ───────────────────────────────────────────
 // Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
@@ -1431,6 +1496,7 @@ async function refreshAll() {
   loadVerif();         // verificacion.json
   loadArchiveStatus(); // status.json
   loadSismos();        // sismos.json (CSN + USGS)
+  loadIncendios();     // incendios.json (NASA FIRMS)
   refreshing = false;
 }
 

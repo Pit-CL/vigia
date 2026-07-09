@@ -19,6 +19,9 @@
   --sismo-h1: #d81e2c;
   --sismo-h6: #e0791b;
   --sismo-h24: #b8932a;
+  --foco-h: #ff5400;
+  --foco-n: #ff8f1f;
+  --foco-l: #ffc857;
   --font-display: "Bricolage Grotesque", "Avenir Next", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
 }
@@ -39,6 +42,9 @@
     --sismo-h1: #ff4d5e;
     --sismo-h6: #ff9d3d;
     --sismo-h24: #e0c14f;
+    --foco-h: #ff6a33;
+    --foco-n: #ffab52;
+    --foco-l: #ffd873;
   }
 }
 
@@ -1013,3 +1019,40 @@ dialog::backdrop {
 .sq-h6 { background-color: var(--sismo-h6); }
 .sq-h24 { background-color: var(--sismo-h24); }
 .sq-old { background-color: var(--ink-soft); }
+
+/* ── Incendios: focos de calor VIIRS (NASA FIRMS) ────────────── */
+
+/* Foco individual: cuadrado plano, sin el fondo/borde por defecto de Leaflet
+   (mismo reset que .stn-icon, aplicado directo porque no lleva label interno). */
+.foco { background: none; border: none; }
+.foco-h, .foco-n, .foco-l {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #0b111d;
+  box-shadow: 1px 1px 0 rgba(8, 12, 22, 0.35);
+}
+.foco-h { background-color: var(--foco-h); }
+.foco-n { background-color: var(--foco-n); }
+.foco-l { background-color: var(--foco-l); }
+
+/* Grupo de focos: reutiliza .stn-label (borde/sombra/tipografía) y solo
+   cambia el color de fondo, igual que .icap-0..4. */
+.foco-grupo {
+  background-color: var(--foco-h);
+  color: #0b111d;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.foco-grupo b { font-variant-numeric: tabular-nums; }
+
+.fk-h, .fk-n, .fk-l {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--ink);
+}
+.fk-h { background-color: var(--foco-h); }
+.fk-n { background-color: var(--foco-n); }
+.fk-l { background-color: var(--foco-l); }

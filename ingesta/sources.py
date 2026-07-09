@@ -11,7 +11,7 @@ import config
 UA = "sinoptica-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
 
 
-def http_get_json(url: str, params: dict | None = None, retries: int = 2):
+def _get(url: str, params: dict | None, retries: int, parse_json: bool):
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
     last_err = None
@@ -19,12 +19,22 @@ def http_get_json(url: str, params: dict | None = None, retries: int = 2):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=45) as res:
-                return json.loads(res.read().decode("utf-8")), url
+                text = res.read().decode("utf-8")
+                return (json.loads(text) if parse_json else text), url
         except Exception as err:  # red o JSON inválido: reintentar con pausa
             last_err = err
             if attempt < retries:
                 time.sleep(5 * (attempt + 1))
     raise RuntimeError(f"GET {url} falló tras {retries + 1} intentos: {last_err}")
+
+
+def http_get_json(url: str, params: dict | None = None, retries: int = 2):
+    return _get(url, params, retries, parse_json=True)
+
+
+def http_get_text(url: str, params: dict | None = None, retries: int = 2) -> tuple[str, str]:
+    """Calco de http_get_json pero sin parsear: para fuentes que devuelven CSV."""
+    return _get(url, params, retries, parse_json=False)
 
 
 # ── Open-Meteo: batching de coordenadas (hasta 50 por llamada) ──
