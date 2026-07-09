@@ -22,6 +22,7 @@ web/sismos.json
 web/incendios.json
 web/alertas.json
 web/volcanes.json
+web/emergencia.json
 
 # Secretos: jamás al repo
 .env

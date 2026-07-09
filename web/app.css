@@ -1150,6 +1150,26 @@ dialog::backdrop {
 .vk-naranja { border-bottom-color: var(--vol-naranja); }
 .vk-roja { border-bottom-color: var(--vol-roja); }
 
+/* ── Emergencia comunitaria (SENAPRED, visor Chile Preparado) ────── */
+
+/* Ícono individual: solo el emoji de la categoría, sin caja propia. */
+.emg {
+  display: inline-block;
+  font-size: 1.15rem;
+  line-height: 1;
+  filter: drop-shadow(1px 1px 0 rgba(8, 12, 22, 0.35));
+}
+
+/* Grupo: mismo patrón que .foco-grupo (reutiliza .stn-label), pero con un
+   fondo neutro en vez del naranja de incendios. */
+.emg-grupo {
+  background-color: var(--bg-panel);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.emg-grupo b { font-variant-numeric: tabular-nums; }
+
 /* ── Centro de riesgos ────────────────────────────────────────── */
 
 .riesgo-tiles {

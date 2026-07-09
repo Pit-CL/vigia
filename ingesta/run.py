@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 import alertas
 import config
 import db
+import emergencia
 import incendios
 import sismos
 import sources
@@ -111,16 +112,19 @@ def main() -> int:
     ap.add_argument("--volcanes", action="store_true", help="alerta técnica volcánica (SERNAGEOMIN RNVV)")
     ap.add_argument("--hazards", action="store_true",
                      help="peligros naturales (sismos + incendios + alertas + volcanes)")
+    ap.add_argument("--emergencia", action="store_true",
+                     help="infraestructura de emergencia comunitaria (SENAPRED, cuasi-estático semanal)")
     ap.add_argument("--all", action="store_true")
     args = ap.parse_args()
     do_forecasts = args.forecasts or args.all
     do_obs = args.obs or args.all or not (
         args.forecasts or args.all or args.sismos or args.incendios
-        or args.alertas or args.volcanes or args.hazards)
+        or args.alertas or args.volcanes or args.hazards or args.emergencia)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
     do_volcanes = args.volcanes or args.hazards or args.all
+    do_emergencia = args.emergencia or args.all
 
     now = datetime.now(timezone.utc)
     run_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -144,6 +148,8 @@ def main() -> int:
         ok &= step(con, run_at, "alertas", lambda: alertas.update(con, run_at))
     if do_volcanes:
         ok &= step(con, run_at, "volcanes", lambda: volcanes.update(con, run_at))
+    if do_emergencia:
+        ok &= step(con, run_at, "emergencia", lambda: emergencia.update(con, run_at))
     if do_obs or do_forecasts:
         ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
         ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))

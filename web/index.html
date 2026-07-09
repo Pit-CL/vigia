@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=27">
+  <link rel="stylesheet" href="app.css?v=28">
 </head>
 <body>
 
@@ -119,6 +119,7 @@
       <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
       <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
       <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
+      <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
     </div>
@@ -159,12 +160,19 @@
       <span class="vk-naranja"></span><span>Naranja</span>
       <span class="vk-roja"></span><span>Roja</span>
     </div>
+    <div id="map-legend-emergencia" class="map-legend" aria-hidden="true" hidden>
+      <span>🏥</span><span>Salud</span>
+      <span>🚒</span><span>Bomberos</span>
+      <span>🚓</span><span>Carabineros</span>
+      <span>🟢</span><span>Punto de encuentro tsunami</span>
+    </div>
     <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
     <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
     <p id="map-note-sismos" class="panel-note" hidden>Fuente: <strong>CSN</strong> (sismologia.cl) + <strong>USGS</strong> · magnitudes Mlv/Mw.</p>
     <p id="map-note-incendios" class="panel-note" hidden>Focos de calor satelitales (VIIRS 375 m, últimas 48 h) · <strong>NASA FIRMS</strong> · no todo foco es incendio.</p>
     <p id="map-note-alertas" class="panel-note" hidden>Alertas vigentes SENAPRED · punto = centroide del área alertada.</p>
     <p id="map-note-volcanes" class="panel-note" hidden>Alerta técnica volcánica · SERNAGEOMIN RNVV.</p>
+    <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami · SENAPRED (Visor Chile Preparado) · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -276,6 +284,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 </body>
 </html>
