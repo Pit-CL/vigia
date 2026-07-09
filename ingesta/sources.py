@@ -27,28 +27,37 @@ def http_get_json(url: str, params: dict | None = None, retries: int = 2):
     raise RuntimeError(f"GET {url} falló tras {retries + 1} intentos: {last_err}")
 
 
+# ── Open-Meteo: batching de coordenadas (hasta 50 por llamada) ──
+
+def _om_chunks(stations, size=50):
+    for i in range(0, len(stations), size):
+        yield stations[i:i + size]
+
+
 # ── Open-Meteo: pronósticos deterministas multi-modelo ──────────
 
 def ingest_openmeteo_det(con, run_tag: str) -> int:
     rows = []
-    for st in config.STATIONS:
+    for chunk in _om_chunks(config.STATIONS):
         data, _ = http_get_json(config.API_FORECAST, {
-            "latitude": f"{st['lat']:.4f}",
-            "longitude": f"{st['lon']:.4f}",
+            "latitude": ",".join(f"{s['lat']:.4f}" for s in chunk),
+            "longitude": ",".join(f"{s['lon']:.4f}" for s in chunk),
             "hourly": ",".join(config.HOURLY_VARS),
             "models": ",".join(config.MODELS),
             "forecast_days": math.ceil(config.HORIZON_HOURS / 24),
             "timezone": "UTC",
         })
-        hourly = data.get("hourly", {})
-        times = hourly.get("time", [])[: config.HORIZON_HOURS]
-        for var in config.HOURLY_VARS:
-            for model in config.MODELS:
-                series = hourly.get(f"{var}_{model}")
-                if series is None:
-                    continue
-                for t, v in zip(times, series):
-                    rows.append((st["id"], model, run_tag, t, var, -1, v))
+        results = data if isinstance(data, list) else [data]
+        for st, res in zip(chunk, results):
+            hourly = res.get("hourly", {})
+            times = hourly.get("time", [])[: config.HORIZON_HOURS]
+            for var in config.HOURLY_VARS:
+                for model in config.MODELS:
+                    series = hourly.get(f"{var}_{model}")
+                    if series is None:
+                        continue
+                    for t, v in zip(times, series):
+                        rows.append((st["id"], model, run_tag, t, var, -1, v))
     con.executemany(
         "INSERT INTO forecasts(station, model, run_tag, valid_time, variable, member, value)"
         " VALUES (?,?,?,?,?,?,?)", rows)
@@ -60,31 +69,34 @@ def ingest_openmeteo_det(con, run_tag: str) -> int:
 
 def ingest_openmeteo_ens(con, run_tag: str) -> int:
     rows = []
-    for st in config.STATIONS:
+    ens_stations = [s for s in config.STATIONS if s.get("ens")]
+    for chunk in _om_chunks(ens_stations):
         data, _ = http_get_json(config.API_ENSEMBLE, {
-            "latitude": f"{st['lat']:.4f}",
-            "longitude": f"{st['lon']:.4f}",
+            "latitude": ",".join(f"{s['lat']:.4f}" for s in chunk),
+            "longitude": ",".join(f"{s['lon']:.4f}" for s in chunk),
             "hourly": ",".join(config.ENSEMBLE_VARS),
             "models": config.ENSEMBLE_MODEL,
             "forecast_days": math.ceil(config.HORIZON_HOURS / 24),
             "timezone": "UTC",
         })
-        hourly = data.get("hourly", {})
-        times = hourly.get("time", [])[: config.HORIZON_HOURS]
-        for var in config.ENSEMBLE_VARS:
-            for key, series in hourly.items():
-                if not key.startswith(var) or key == "time":
-                    continue
-                # 'temperature_2m' = control (miembro 0); 'temperature_2m_memberNN'
-                suffix = key[len(var):]
-                if suffix == "":
-                    member = 0
-                elif suffix.startswith("_member"):
-                    member = int(suffix[len("_member"):])
-                else:
-                    continue
-                for t, v in zip(times, series):
-                    rows.append((st["id"], config.ENSEMBLE_MODEL, run_tag, t, var, member, v))
+        results = data if isinstance(data, list) else [data]
+        for st, res in zip(chunk, results):
+            hourly = res.get("hourly", {})
+            times = hourly.get("time", [])[: config.HORIZON_HOURS]
+            for var in config.ENSEMBLE_VARS:
+                for key, series in hourly.items():
+                    if not key.startswith(var) or key == "time":
+                        continue
+                    # 'temperature_2m' = control (miembro 0); 'temperature_2m_memberNN'
+                    suffix = key[len(var):]
+                    if suffix == "":
+                        member = 0
+                    elif suffix.startswith("_member"):
+                        member = int(suffix[len("_member"):])
+                    else:
+                        continue
+                    for t, v in zip(times, series):
+                        rows.append((st["id"], config.ENSEMBLE_MODEL, run_tag, t, var, member, v))
     con.executemany(
         "INSERT INTO forecasts(station, model, run_tag, valid_time, variable, member, value)"
         " VALUES (?,?,?,?,?,?,?)", rows)
