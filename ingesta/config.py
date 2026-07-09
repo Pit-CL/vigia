@@ -30,6 +30,9 @@ MODELS = [
     "icon_seamless",
     "gem_seamless",
     "meteofrance_seamless",
+    # Modelo de IA de ECMWF (AIFS Single v2): la verificación pública
+    # MAE/RMSE dirá si supera a IFS en Chile.
+    "ecmwf_aifs025_single",
 ]
 
 HOURLY_VARS = [
