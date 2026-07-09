@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import config
 import db
+import sismos
 import sources
 import verify
 import calibrate
@@ -101,10 +102,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--forecasts", action="store_true", help="archiva pronósticos (det + ensamble)")
     ap.add_argument("--obs", action="store_true", help="archiva observaciones (METAR, DMC)")
+    ap.add_argument("--sismos", action="store_true", help="archiva catálogo sísmico (CSN + USGS)")
+    ap.add_argument("--hazards", action="store_true", help="peligros naturales (por ahora: sismos)")
     ap.add_argument("--all", action="store_true")
     args = ap.parse_args()
     do_forecasts = args.forecasts or args.all
-    do_obs = args.obs or args.all or not (args.forecasts or args.all)
+    do_obs = args.obs or args.all or not (args.forecasts or args.all or args.sismos or args.hazards)
+    do_sismos = args.sismos or args.hazards or args.all
 
     now = datetime.now(timezone.utc)
     run_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -120,10 +124,13 @@ def main() -> int:
         ok &= step(con, run_at, "openmeteo_det", lambda: sources.ingest_openmeteo_det(con, run_tag))
         ok &= step(con, run_at, "openmeteo_ens", lambda: sources.ingest_openmeteo_ens(con, run_tag))
         ok &= step(con, run_at, "prune", lambda: db.prune(con))
-    ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
-    ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))
-    ok &= step(con, run_at, "bias_json", lambda: calibrate.export_json(con))
-    ok &= step(con, run_at, "estaciones", lambda: write_estaciones(con))
+    if do_sismos:
+        ok &= step(con, run_at, "sismos", lambda: sismos.update(con, run_at))
+    if do_obs or do_forecasts:
+        ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
+        ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))
+        ok &= step(con, run_at, "bias_json", lambda: calibrate.export_json(con))
+        ok &= step(con, run_at, "estaciones", lambda: write_estaciones(con))
     write_status(con)
     con.close()
     return 0 if ok else 1

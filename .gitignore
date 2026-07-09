@@ -18,6 +18,7 @@ web/verificacion.json
 web/estaciones.json
 web/aire.json
 web/bias.json
+web/sismos.json
 
 # Secretos: jamás al repo
 .env

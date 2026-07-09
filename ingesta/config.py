@@ -55,3 +55,9 @@ API_METAR = "https://aviationweather.gov/api/data/metar"
 DMC_USUARIO = os.environ.get("DMC_USUARIO", "")
 DMC_TOKEN = os.environ.get("DMC_TOKEN", "")
 API_DMC = "https://climatologia.meteochile.gob.cl/application/servicios/getDatosRecientesEma"
+
+# ── Peligros naturales ──────────────────────────────────────────
+SISMOS_PATH = Path(os.environ.get("CLIMA_SISMOS", ROOT / "web" / "sismos.json"))
+API_SISMOS_CSN = "https://api.xor.cl/sismo/recent"
+API_SISMOS_USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+CHILE_BBOX = (-76.0, -56.5, -66.0, -17.0)   # O, S, E, N (continental)
