@@ -177,7 +177,7 @@ let verifData = null;
 let verifBucket = '24';
 let estacionesData = null;
 let aireStations = [];   // estaciones SINCA oficiales (calidad del aire)
-let mapMode = 'temp';    // 'temp' | 'aire'
+let sismosData = null;   // catálogo sísmico CSN + USGS
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -963,6 +963,55 @@ async function loadMapa() {
   if (lastData) renderNow(lastData.best);   // re-pintar el "ahora" con fenómeno observado
 }
 
+async function loadSismos() {
+  try {
+    const res = await fetch('sismos.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    sismosData = await res.json();
+    if (capasActivas.has('sismos')) renderMapa();
+  } catch (_) { /* sin catálogo sísmico: la capa queda vacía */ }
+}
+
+// Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
+// una a la vez); 'sismos' es independiente y puede combinarse con cualquiera.
+const CAPAS = {
+  temp:   { grupo: 'medicion', paint: paintTemp },
+  aire:   { grupo: 'medicion', paint: paintAire },
+  sismos: { paint: paintSismos },
+};
+// Orden de pintado (no el de declaración de CAPAS): la capa de medición se
+// pinta al final para que su texto en #map-meta prevalezca sobre el de sismos.
+const ORDEN_PINTADO = ['sismos', 'temp', 'aire'];
+
+function capasGuardadas() {
+  try {
+    const raw = localStorage.getItem('sinoptica.capas');
+    if (raw) {
+      const arr = JSON.parse(raw).filter((k) => Object.keys(CAPAS).includes(k));
+      if (arr.length) return new Set(arr);
+    }
+  } catch (_) { /* localStorage puede no estar disponible */ }
+  return new Set(['temp']);
+}
+
+let capasActivas = capasGuardadas();
+const layerGroups = {};
+
+function toggleCapa(k) {
+  if (capasActivas.has(k)) {
+    capasActivas.delete(k);
+  } else {
+    if (CAPAS[k].grupo === 'medicion') {
+      for (const otra of Object.keys(CAPAS)) {
+        if (otra !== k && CAPAS[otra].grupo === 'medicion') capasActivas.delete(otra);
+      }
+    }
+    capasActivas.add(k);
+  }
+  try { localStorage.setItem('sinoptica.capas', JSON.stringify([...capasActivas])); } catch (_) { /* opcional */ }
+  renderMapa();
+}
+
 function ensureMap() {
   if (map || typeof L === 'undefined' || !estacionesData) return map;
   // Interacción completa: arrastrar, pinch-zoom y botones +/− en todos los
@@ -978,6 +1027,7 @@ function ensureMap() {
   // Leaflet calcula mal los tiles si el contenedor aún estaba animándose al
   // crearse (queda fondo sin tiles); recalcular asegura que se llenen.
   setTimeout(() => map.invalidateSize(), 200);
+  for (const k of Object.keys(CAPAS)) layerGroups[k] = L.layerGroup().addTo(map);
   return map;
 }
 
@@ -998,21 +1048,26 @@ function renderMapa() {
   tileLayer = L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
     attribution: TILES_ATTR, maxZoom: 13, subdomains: 'abcd',
   }).addTo(map);
-  map.eachLayer((layer) => { if (layer instanceof L.Marker) map.removeLayer(layer); });
 
-  const aire = mapMode === 'aire';
-  document.getElementById('map-legend-temp').hidden = aire;
-  document.getElementById('map-legend-aire').hidden = !aire;
-  document.getElementById('map-note-temp').hidden = aire;
-  document.getElementById('map-note-aire').hidden = !aire;
+  for (const k of ORDEN_PINTADO) {
+    layerGroups[k].clearLayers();
+    if (capasActivas.has(k)) CAPAS[k].paint(layerGroups[k]);
+  }
+
+  const medicion = ['temp', 'aire'].find((k) => capasActivas.has(k));
+  document.getElementById('map-legend-temp').hidden = medicion !== 'temp';
+  document.getElementById('map-legend-aire').hidden = medicion !== 'aire';
+  document.getElementById('map-legend-sismos').hidden = !capasActivas.has('sismos');
+  document.getElementById('map-note-temp').hidden = medicion !== 'temp';
+  document.getElementById('map-note-aire').hidden = medicion !== 'aire';
+  document.getElementById('map-note-sismos').hidden = !capasActivas.has('sismos');
   document.querySelectorAll('.map-mode').forEach((b) =>
-    b.setAttribute('aria-selected', String(b.dataset.mode === mapMode)));
+    b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
 
-  if (aire) paintAire(); else paintTemp();
   map.invalidateSize();   // por si el panel cambió de tamaño desde el último render
 }
 
-function paintTemp() {
+function paintTemp(group) {
   const est = estacionesData.estaciones.filter((e) => e.obs && e.obs.temperature_2m != null);
   est.forEach((e) => {
     const t = e.obs.temperature_2m;
@@ -1021,7 +1076,7 @@ function paintTemp() {
       html: `<span class="stn-label ${tempClass(t)}">${Math.round(t)}°</span>`,
       iconSize: [44, 26], iconAnchor: [22, 13],
     });
-    const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(map);
+    const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(group);
     const box = document.createElement('div');
     box.className = 'stn-popup';
     const h = document.createElement('strong'); h.textContent = e.nombre; box.appendChild(h);
@@ -1040,7 +1095,7 @@ function paintTemp() {
     : `${est.length} estaciones`;
 }
 
-function paintAire() {
+function paintAire(group) {
   const est = aireStations.filter((e) => e.icap != null);
   if (!est.length) { $('#map-meta').textContent = 'sin datos SINCA'; return; }
   est.forEach((e) => {
@@ -1050,7 +1105,7 @@ function paintAire() {
       html: `<span class="stn-label ${nivel.cls}">${e.icap}</span>`,
       iconSize: [40, 26], iconAnchor: [20, 13],
     });
-    const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(map);
+    const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(group);
     const box = document.createElement('div');
     box.className = 'stn-popup';
     const h = document.createElement('strong'); h.textContent = e.nombre; box.appendChild(h);
@@ -1066,13 +1121,55 @@ function paintAire() {
   $('#map-meta').textContent = `${est.length} estaciones SINCA · MP2,5`;
 }
 
-function setupMapModes() {
+// Color por antigüedad del evento (valores en --sismo-* de app.css, ya
+// ajustados para verse bien en claro y oscuro); "old" reutiliza --ink-soft.
+function colorSismo(edadMs) {
+  if (edadMs < 3600e3) return css('--sismo-h1');
+  if (edadMs < 6 * 3600e3) return css('--sismo-h6');
+  if (edadMs < 24 * 3600e3) return css('--sismo-h24');
+  return css('--ink-soft');
+}
+
+function paintSismos(group) {
+  const eventos = (sismosData && sismosData.eventos) || [];
+  if (!eventos.length) { $('#map-meta').textContent = 'sin datos sísmicos'; return; }
+  const ahora = Date.now();
+  const replicas = sismosData.replicas;
+  // El JSON viene del más reciente al más antiguo; pintamos al revés para
+  // que los eventos recientes queden por encima en el mapa.
+  [...eventos].reverse().forEach((e) => {
+    const color = colorSismo(ahora - new Date(e.utc_time).getTime());
+    const marker = L.circleMarker([e.lat, e.lon], {
+      radius: 4 + e.mag * 1.8, color, fillColor: color, fillOpacity: 0.55, weight: 1.5,
+    }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = `M ${e.mag} · ${e.ref}`; box.appendChild(h);
+    const filas = [
+      ['Profundidad', e.prof_km != null ? `${e.prof_km} km` : null],
+      ['Magnitud', `${e.mag} ${e.mag_tipo}`],
+      ['Hora local', `${horaLocal(e.utc_time)} h`],
+      ['Fuente', e.fuente === 'csn' ? 'CSN' : 'USGS'],
+    ];
+    if (replicas && replicas.mainshock_id === e.id) {
+      filas.push(['Réplicas esperadas 24 h', String(replicas.esperadas_24h)]);
+    }
+    box.appendChild(popupRows(filas));
+    if (replicas && replicas.mainshock_id === e.id) {
+      const small = document.createElement('small');
+      small.textContent = replicas.nota;
+      box.appendChild(small);
+    }
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+  $('#map-meta').textContent = sismosData.updated
+    ? `${eventos.length} sismos · ${horaLocal(sismosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${eventos.length} sismos`;
+}
+
+function setupCapas() {
   document.querySelectorAll('.map-mode').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (mapMode === btn.dataset.mode) return;
-      mapMode = btn.dataset.mode;
-      renderMapa();
-    });
+    btn.addEventListener('click', () => toggleCapa(btn.dataset.capa));
   });
 }
 
@@ -1234,7 +1331,7 @@ async function loadAireSinca() {
     const data = await res.json();
     aireStations = data.estaciones || [];
     if (lastData) renderAire(lastData.aire);   // re-render con dato oficial
-    if (mapMode === 'aire') renderMapa();       // repinta el mapa de aire
+    if (capasActivas.has('aire')) renderMapa(); // repinta el mapa de aire
   } catch (_) { /* sin SINCA: el panel usa el pronóstico CAMS */ }
 }
 
@@ -1251,7 +1348,7 @@ async function loadBias() {
 setupSearch();
 setupDialogs();
 setupVerifTabs();
-setupMapModes();
+setupCapas();
 renderChips();
 loadAll().catch(showError);
 loadArchiveStatus();
@@ -1259,6 +1356,7 @@ loadVerif();
 loadMapa();
 loadAireSinca();
 loadBias();
+loadSismos();
 
 // ── Refresco en vivo ───────────────────────────────────────────
 // Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
@@ -1283,6 +1381,7 @@ async function refreshAll() {
   loadBias();          // bias.json (calibración)
   loadVerif();         // verificacion.json
   loadArchiveStatus(); // status.json
+  loadSismos();        // sismos.json (CSN + USGS)
   refreshing = false;
 }
 
@@ -1292,3 +1391,14 @@ document.addEventListener('visibilitychange', () => {
 setInterval(() => {
   if (document.visibilityState === 'visible') refreshAll();
 }, REFRESH_MS);
+
+// Carril rápido para sismos: un evento nuevo importa apenas ocurre, no en
+// 10 min. Refresca solo esta capa cada 5 min mientras el panel del mapa
+// exista (siempre que haya estaciones.json) o la capa sismos esté encendida.
+const SISMOS_REFRESH_MS = 5 * 60 * 1000;
+setInterval(() => {
+  const panelMapaVisible = !$('#map').closest('.panel').hidden;
+  if (document.visibilityState === 'visible' && (capasActivas.has('sismos') || panelMapaVisible)) {
+    loadSismos();
+  }
+}, SISMOS_REFRESH_MS);

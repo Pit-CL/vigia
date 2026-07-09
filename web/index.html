@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=22">
+  <link rel="stylesheet" href="app.css?v=23">
 </head>
 <body>
 
@@ -94,9 +94,11 @@
       <span id="map-meta" class="panel-meta">V Región y RM</span>
       <button class="info-btn" data-info="mapa" aria-label="¿De dónde salen estas mediciones?">?</button>
     </header>
-    <div class="map-modes" role="tablist" aria-label="Capa del mapa">
-      <button class="map-mode" data-mode="temp" role="tab" aria-selected="true">🌡️ Temperatura</button>
-      <button class="map-mode" data-mode="aire" role="tab" aria-selected="false">🌫️ Calidad del aire</button>
+    <div class="map-modes" role="group" aria-label="Capas del mapa">
+      <button class="map-mode" data-capa="temp" aria-pressed="true">🌡️ Temperatura</button>
+      <button class="map-mode" data-capa="aire" aria-pressed="false">🌫️ Aire</button>
+      <span class="map-sep" aria-hidden="true"></span>
+      <button class="map-mode" data-capa="sismos" aria-pressed="false">〰️ Sismos</button>
     </div>
     <div id="map" aria-label="Mapa de estaciones con observaciones reales"></div>
     <div id="map-legend-temp" class="map-legend" aria-hidden="true">
@@ -111,8 +113,16 @@
       <span class="legend-swatch icap-3"></span><span>Preemerg.</span>
       <span class="legend-swatch icap-4"></span><span>Emerg.</span>
     </div>
+    <div id="map-legend-sismos" class="map-legend" aria-hidden="true" hidden>
+      <span class="sq-h1"></span><span>&lt; 1 h</span>
+      <span class="sq-h6"></span><span>&lt; 6 h</span>
+      <span class="sq-h24"></span><span>&lt; 24 h</span>
+      <span class="sq-old"></span><span>más antiguo</span>
+      <span>· círculo más grande = mayor magnitud</span>
+    </div>
     <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
     <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
+    <p id="map-note-sismos" class="panel-note" hidden>Fuente: <strong>CSN</strong> (sismologia.cl) + <strong>USGS</strong> · magnitudes Mlv/Mw.</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -224,6 +234,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
