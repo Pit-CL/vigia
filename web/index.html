@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=26">
+  <link rel="stylesheet" href="app.css?v=27">
 </head>
 <body>
 
@@ -24,6 +24,7 @@
     <span class="brand-mark">▞</span>
     <h1>Sinóptica</h1>
     <span class="brand-sub">pronóstico multi-modelo · todo Chile</span>
+    <button id="risk-badge" class="risk-badge" hidden></button>
   </div>
   <nav class="locbar" aria-label="Ubicación">
     <div class="search-wrap">
@@ -85,6 +86,22 @@
     </dl>
     <div class="chart-box chart-box-low"><canvas id="chart-aire"></canvas></div>
     <p class="panel-note">El <strong>MP2,5</strong> son partículas finas (≤2,5 micrones) que penetran hasta los pulmones y la sangre; es el contaminante crítico del invierno en Chile central por la inversión térmica. El índice <strong>ICAP</strong> y los niveles son los oficiales del Ministerio del Medio Ambiente.</p>
+  </section>
+
+  <!-- Centro de riesgos: sismos, incendios, alertas y volcanes en un vistazo -->
+  <section class="panel panel-riesgos" aria-labelledby="riesgos-title" hidden>
+    <header class="panel-head">
+      <h2 id="riesgos-title">Centro de riesgos · Chile</h2>
+      <span id="riesgos-meta" class="panel-meta"></span>
+      <button class="info-btn" data-info="riesgos" aria-label="¿De dónde salen estos datos?">?</button>
+    </header>
+    <div class="riesgo-tiles">
+      <button class="riesgo-tile" data-capa="sismos" hidden><span class="rt-emoji">〰️</span><b id="rt-sismos">–</b><small>sismos M≥4 · 24 h</small></button>
+      <button class="riesgo-tile" data-capa="incendios" hidden><span class="rt-emoji">🔥</span><b id="rt-incendios">–</b><small>focos activos 48 h</small></button>
+      <button class="riesgo-tile" data-capa="alertas" hidden><span class="rt-emoji">⚠️</span><b id="rt-alertas">–</b><small>alertas SENAPRED</small></button>
+      <button class="riesgo-tile" data-capa="volcanes" hidden><span class="rt-emoji">🌋</span><b id="rt-volcanes">–</b><small>volcanes en alerta</small></button>
+    </div>
+    <ol id="riesgo-eventos" class="riesgo-eventos"></ol>
   </section>
 
   <!-- Mapa de observaciones en vivo -->
@@ -259,6 +276,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>

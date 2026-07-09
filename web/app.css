@@ -133,6 +133,24 @@ a { color: var(--accent2); text-underline-offset: 2px; }
   color: var(--ink-soft);
 }
 
+/* Badge de severidad: solo aparece si hay una condición grave vigente */
+.risk-badge {
+  margin-left: auto;
+  padding: 5px 12px;
+  font: 600 0.76rem var(--font-mono);
+  color: var(--alerta-roja);
+  background: var(--bg-panel);
+  border: 1.5px solid var(--alerta-roja);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.risk-badge:hover, .risk-badge:focus-visible {
+  background: var(--alerta-roja);
+  color: var(--bg-panel);
+  outline: none;
+}
+
 /* ── Ubicación: búsqueda + chips ────────────────────────────── */
 
 .locbar {
@@ -920,6 +938,7 @@ dialog::backdrop {
 /* ── Calidad del aire ────────────────────────────────────────── */
 
 .panel:nth-child(8) { animation-delay: 0.42s; }
+.panel:nth-child(9) { animation-delay: 0.48s; }
 
 .aire-card {
   display: flex;
@@ -1130,3 +1149,98 @@ dialog::backdrop {
 .vk-amarilla { border-bottom-color: var(--vol-amarilla); }
 .vk-naranja { border-bottom-color: var(--vol-naranja); }
 .vk-roja { border-bottom-color: var(--vol-roja); }
+
+/* ── Centro de riesgos ────────────────────────────────────────── */
+
+.riesgo-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.riesgo-tile {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  font-family: var(--font-display);
+  color: var(--ink);
+  transition: border-color 0.15s, transform 0.1s;
+}
+
+.riesgo-tile:hover, .riesgo-tile:focus-visible {
+  border-color: var(--ink);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.rt-emoji { font-size: 1.1rem; }
+
+.riesgo-tile b {
+  font: 700 1.5rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.riesgo-tile small {
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Severidad codificada en color Y en el texto de cada tile (WCAG AA). */
+.rt-alto { color: var(--alerta-roja); }
+.rt-medio { color: var(--alerta-amarilla); }
+.rt-cero { color: var(--ink-soft); }
+
+.riesgo-eventos {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.riesgo-eventos li { border-bottom: 1px solid var(--border); }
+.riesgo-eventos li:last-child { border-bottom: 0; }
+
+.riesgo-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 2px;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font: 500 0.86rem var(--font-display);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.riesgo-item:hover, .riesgo-item:focus-visible { color: var(--accent); outline: none; }
+
+.riesgo-item .ri-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.riesgo-item time {
+  flex: 0 0 auto;
+  font: 400 0.7rem var(--font-mono);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.riesgo-vacio {
+  padding: 14px 2px;
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+}

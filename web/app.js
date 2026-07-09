@@ -170,6 +170,15 @@ const INFO = {
 <p><strong>Los plazos:</strong> «a 1 día» evalúa pronósticos emitidos 24 h antes; «a 4 días», 96 h antes. El error crece con el plazo — eso también lo puedes ver aquí, transparente.</p>
 <p class="info-fine">Ventana móvil: últimos 14 días, todas las estaciones, todas las horas. El número «n» son los pares pronóstico-observación evaluados: con n chico las cifras bailan; con miles, se estabilizan. Este archivo partió el 9 de junio de 2026 y mejora solo con cada hora que pasa.</p>`,
   },
+  riesgos: {
+    title: '¿De dónde salen estos datos?',
+    html: `
+<p><strong>Sismos (CSN).</strong> El Centro Sismológico Nacional de la Universidad de Chile es la autoridad oficial en sismología del país: publica cada evento con magnitud, profundidad y ubicación apenas queda procesado. Se complementa con el catálogo de USGS para eventos recientes que el CSN todavía no ha revisado.</p>
+<p><strong>Alertas (SENAPRED).</strong> El Servicio Nacional de Prevención y Respuesta ante Desastres declara las alertas oficiales —roja, amarilla o temprana preventiva— por evento meteorológico, aluvión, incendio forestal u otro riesgo, con las comunas exactas bajo alerta.</p>
+<p><strong>Volcanes (SERNAGEOMIN).</strong> El Servicio Nacional de Geología y Minería opera la Red Nacional de Vigilancia Volcánica (RNVV) y publica el semáforo técnico de cada volcán activo: verde, amarilla, naranja o roja.</p>
+<p><strong>Incendios (NASA FIRMS).</strong> Focos de calor detectados por satélite (sensor VIIRS, 375 m de resolución) en las últimas 48 horas — no todo foco es un incendio confirmado en terreno.</p>
+<p class="info-fine">Los sismos no se pueden predecir: mostramos lo ya ocurrido y, tras un sismo mayor, la tasa estadística esperada de réplicas (ley de Omori) — nunca una proyección de cuándo o dónde ocurrirá el próximo.</p>`,
+  },
 };
 
 // ── Estado ─────────────────────────────────────────────────────
@@ -243,6 +252,17 @@ function horaLocal(isoUtc) {
       hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ,
     });
   } catch (_) { return isoUtc; }
+}
+
+// Hora relativa compacta para eventos de riesgo ("ahora" / "hace 2 h" / "hace 3 d").
+function haceCuanto(fecha) {
+  const d = fecha instanceof Date ? fecha : new Date(fecha);
+  const ms = Date.now() - d.getTime();
+  if (ms < 5 * 60000) return 'ahora';
+  const horas = ms / 3600000;
+  if (horas < 1) return `hace ${Math.round(ms / 60000)} min`;
+  if (horas < 24) return `hace ${Math.round(horas)} h`;
+  return `hace ${Math.round(horas / 24)} d`;
 }
 
 function destroyChart(id) {
@@ -976,6 +996,7 @@ async function loadSismos() {
     if (!res.ok) return;
     sismosData = await res.json();
     if (capasActivas.has('sismos')) renderMapa();
+    renderRiesgos();
   } catch (_) { /* sin catálogo sísmico: la capa queda vacía */ }
 }
 
@@ -985,6 +1006,7 @@ async function loadIncendios() {
     if (!res.ok) return;
     incendiosData = await res.json();
     if (capasActivas.has('incendios')) renderMapa();
+    renderRiesgos();
   } catch (_) { /* sin foco de calor: la capa queda vacía */ }
 }
 
@@ -994,6 +1016,7 @@ async function loadAlertas() {
     if (!res.ok) return;
     alertasData = await res.json();
     if (capasActivas.has('alertas')) renderMapa();
+    renderRiesgos();
   } catch (_) { /* sin alertas: la capa queda vacía */ }
 }
 
@@ -1003,6 +1026,7 @@ async function loadVolcanes() {
     if (!res.ok) return;
     volcanesData = await res.json();
     if (capasActivas.has('volcanes')) renderMapa();
+    renderRiesgos();
   } catch (_) { /* sin RNVV: la capa queda vacía */ }
 }
 
@@ -1382,6 +1406,177 @@ function setupCapas() {
   }
 }
 
+// ── Centro de riesgos: badge + panel resumen ───────────────────
+// Junta en un solo lugar lo que ya cargan loadSismos/loadIncendios/
+// loadAlertas/loadVolcanes; no vuelve a pedir datos, solo los resume.
+
+const VOL_RANK = { amarilla: 1, naranja: 2, roja: 3 };
+
+function riesgoCounts() {
+  const ahora = Date.now();
+  const sismos24 = sismosData
+    ? sismosData.eventos.filter((e) => e.mag >= 4 && ahora - new Date(e.utc_time).getTime() <= 24 * 3600e3)
+    : [];
+  const sismoMax6 = sismos24.filter((e) => e.mag >= 6).sort((a, b) => b.mag - a.mag)[0] || null;
+  const alertas = alertasData ? alertasData.alertas : [];
+  const rojas = alertas.filter((a) => a.nivel === 'roja').length;
+  const amarillas = alertas.filter((a) => a.nivel === 'amarilla').length;
+  const volcanesAlerta = volcanesData ? volcanesData.volcanes.filter((v) => v.nivel !== 'verde') : [];
+  const volPeor = volcanesAlerta.reduce((peor, v) => (VOL_RANK[v.nivel] > (VOL_RANK[peor] || 0) ? v.nivel : peor), null);
+  return {
+    sismos24, sismoMax6, rojas, amarillas, volcanesAlerta, volPeor,
+    incendiosN: incendiosData ? incendiosData.n : 0,
+  };
+}
+
+function renderRiesgoTiles(c) {
+  const set = (id, val, cls) => {
+    const el = $(id);
+    el.textContent = val;
+    el.classList.remove('rt-alto', 'rt-medio', 'rt-cero');
+    el.classList.add(cls);
+  };
+  const sismoAlto = c.sismos24.some((e) => e.mag >= 5);
+  set('#rt-sismos', c.sismos24.length, sismoAlto ? 'rt-alto' : c.sismos24.length > 0 ? 'rt-medio' : 'rt-cero');
+  set('#rt-incendios', c.incendiosN, c.incendiosN > 0 ? 'rt-medio' : 'rt-cero');
+  const alertasTxt = c.rojas > 0 ? `${c.rojas}R ${c.amarillas}A` : c.amarillas > 0 ? `${c.amarillas}A` : '0';
+  set('#rt-alertas', alertasTxt, c.rojas > 0 ? 'rt-alto' : c.amarillas > 0 ? 'rt-medio' : 'rt-cero');
+  const volAlto = c.volPeor === 'naranja' || c.volPeor === 'roja';
+  set('#rt-volcanes', c.volcanesAlerta.length, volAlto ? 'rt-alto' : c.volPeor === 'amarilla' ? 'rt-medio' : 'rt-cero');
+}
+
+// DD-MM-AAAA (formato de SENAPRED) → Date; null si no calza.
+function parseFechaAlerta(desde) {
+  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(desde || '');
+  return m ? new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1])) : null;
+}
+
+// Top de eventos por severidad: alertas SENAPRED, volcanes fuera de verde y
+// sismos M≥4.5 de las últimas 48 h. Cada rama ya produce solo scores ≥ 30.
+function riesgoEventos() {
+  const ahora = Date.now();
+  const items = [];
+
+  for (const a of alertasData ? alertasData.alertas : []) {
+    const score = a.nivel === 'roja' ? 100 : a.nivel === 'amarilla' ? 60 : a.nivel === 'temprana_preventiva' ? 30 : 0;
+    if (!score) continue;
+    items.push({
+      score, fecha: parseFechaAlerta(a.desde), capa: 'alertas', lat: a.lat, lon: a.lon,
+      emoji: emojiEvento(a.evento),
+      texto: `${NIVEL_ALERTA_LABEL[a.nivel] || a.nivel} · ${a.evento} · ${a.region} (${a.n_comunas} comuna${a.n_comunas === 1 ? '' : 's'})`,
+    });
+  }
+
+  for (const v of volcanesData ? volcanesData.volcanes : []) {
+    if (v.nivel === 'verde') continue;
+    const score = v.nivel === 'roja' ? 95 : v.nivel === 'naranja' ? 80 : v.nivel === 'amarilla' ? 55 : 0;
+    if (!score) continue;
+    items.push({
+      score, fecha: null, capa: 'volcanes', lat: v.lat, lon: v.lon,
+      emoji: '🌋', texto: `Volcán ${v.nombre} · alerta ${v.nivel}`,
+    });
+  }
+
+  for (const e of sismosData ? sismosData.eventos : []) {
+    if (e.mag < 4.5) continue;
+    const edadMs = ahora - new Date(e.utc_time).getTime();
+    if (edadMs > 48 * 3600e3) continue;
+    const score = 20 + e.mag * 5 + (edadMs < 6 * 3600e3 ? 20 : 0);
+    items.push({
+      score, fecha: new Date(e.utc_time), capa: 'sismos', lat: e.lat, lon: e.lon,
+      emoji: '〰️', texto: `M ${e.mag} · ${e.ref}`,
+    });
+  }
+
+  items.sort((a, b) => b.score - a.score || (b.fecha?.getTime() || 0) - (a.fecha?.getTime() || 0));
+  return items.slice(0, 10);
+}
+
+function renderRiesgoEventos() {
+  const ol = $('#riesgo-eventos');
+  ol.innerHTML = '';
+  const items = riesgoEventos();
+  if (!items.length) {
+    const li = document.createElement('li');
+    li.className = 'riesgo-vacio';
+    li.textContent = 'Sin alertas ni eventos significativos ahora. 🟢';
+    ol.appendChild(li);
+    return;
+  }
+  items.forEach((it) => {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.className = 'riesgo-item';
+    const texto = document.createElement('span');
+    texto.className = 'ri-text';
+    texto.textContent = `${it.emoji} ${it.texto}`;
+    btn.appendChild(texto);
+    if (it.fecha) {
+      const time = document.createElement('time');
+      time.textContent = haceCuanto(it.fecha);
+      btn.appendChild(time);
+    }
+    btn.addEventListener('click', () => {
+      if (!capasActivas.has(it.capa)) toggleCapa(it.capa);
+      if (it.lat != null && it.lon != null && ensureMap()) map.setView([it.lat, it.lon], 8);
+      document.querySelector('#map').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    li.appendChild(btn);
+    ol.appendChild(li);
+  });
+}
+
+function renderRiskBadge(c) {
+  const badge = $('#risk-badge');
+  let texto = null, aria = null;
+  if (c.rojas > 0) {
+    texto = `⚠ ${c.rojas} alerta${c.rojas > 1 ? 's' : ''} roja${c.rojas > 1 ? 's' : ''}`;
+    aria = `${c.rojas} alerta(s) roja(s) de SENAPRED vigentes`;
+  } else if (c.volPeor === 'naranja' || c.volPeor === 'roja') {
+    texto = `🌋 volcán en ${c.volPeor}`;
+    aria = `Volcán en alerta técnica ${c.volPeor}`;
+  } else if (c.sismoMax6) {
+    texto = `〰️ sismo M${c.sismoMax6.mag} hoy`;
+    aria = `Sismo de magnitud ${c.sismoMax6.mag} en las últimas 24 horas`;
+  }
+  badge.hidden = !texto;
+  if (texto) { badge.textContent = texto; badge.setAttribute('aria-label', aria); }
+}
+
+function renderRiesgos() {
+  const panel = document.querySelector('.panel-riesgos');
+  if (!panel) return;
+  const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData);
+  panel.hidden = !hayAlgo;
+  if (!hayAlgo) { $('#risk-badge').hidden = true; return; }
+
+  panel.querySelector('[data-capa="sismos"]').hidden = !sismosData;
+  panel.querySelector('[data-capa="incendios"]').hidden = !incendiosData;
+  panel.querySelector('[data-capa="alertas"]').hidden = !alertasData;
+  panel.querySelector('[data-capa="volcanes"]').hidden = !volcanesData;
+
+  $('#riesgos-meta').textContent = [
+    ['CSN', sismosData], ['SENAPRED', alertasData], ['SERNAGEOMIN', volcanesData], ['NASA FIRMS', incendiosData],
+  ].filter(([, ok]) => ok).map(([nombre]) => nombre).join(' · ');
+
+  const c = riesgoCounts();
+  renderRiesgoTiles(c);
+  renderRiesgoEventos();
+  renderRiskBadge(c);
+}
+
+function setupRiesgos() {
+  document.querySelectorAll('.riesgo-tile[data-capa]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!capasActivas.has(btn.dataset.capa)) toggleCapa(btn.dataset.capa);
+      document.querySelector('#map').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+  $('#risk-badge').addEventListener('click', () => {
+    document.querySelector('.panel-riesgos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+}
+
 // ── Ubicaciones: chips y búsqueda ──────────────────────────────
 
 function setPlace(p) {
@@ -1559,6 +1754,7 @@ setupSearch();
 setupDialogs();
 setupVerifTabs();
 setupCapas();
+setupRiesgos();
 renderChips();
 loadAll().catch(showError);
 loadArchiveStatus();
