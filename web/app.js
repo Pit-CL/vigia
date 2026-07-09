@@ -183,6 +183,8 @@ let estacionesData = null;
 let aireStations = [];   // estaciones SINCA oficiales (calidad del aire)
 let sismosData = null;   // catálogo sísmico CSN + USGS
 let incendiosData = null; // focos de calor VIIRS (NASA FIRMS)
+let alertasData = null;   // alertas naturales vigentes (SENAPRED)
+let volcanesData = null;  // alerta técnica volcánica (SERNAGEOMIN RNVV)
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -986,18 +988,39 @@ async function loadIncendios() {
   } catch (_) { /* sin foco de calor: la capa queda vacía */ }
 }
 
+async function loadAlertas() {
+  try {
+    const res = await fetch('alertas.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    alertasData = await res.json();
+    if (capasActivas.has('alertas')) renderMapa();
+  } catch (_) { /* sin alertas: la capa queda vacía */ }
+}
+
+async function loadVolcanes() {
+  try {
+    const res = await fetch('volcanes.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    volcanesData = await res.json();
+    if (capasActivas.has('volcanes')) renderMapa();
+  } catch (_) { /* sin RNVV: la capa queda vacía */ }
+}
+
 // Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
-// una a la vez); 'sismos' e 'incendios' son independientes y se pueden
-// combinar con cualquiera.
+// una a la vez); 'sismos', 'incendios', 'alertas' y 'volcanes' son
+// independientes y se pueden combinar con cualquiera.
 const CAPAS = {
   temp:      { grupo: 'medicion', paint: paintTemp },
   aire:      { grupo: 'medicion', paint: paintAire },
   sismos:    { paint: paintSismos },
   incendios: { paint: paintIncendios },
+  alertas:   { paint: paintAlertas },
+  volcanes:  { paint: paintVolcanes },
 };
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
 // pinta al final para que su texto en #map-meta prevalezca sobre las demás.
-const ORDEN_PINTADO = ['sismos', 'incendios', 'temp', 'aire'];
+// Los puntos de alerta van encima de los focos/eventos que resumen.
+const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'temp', 'aire'];
 
 function capasGuardadas() {
   try {
@@ -1082,10 +1105,14 @@ function renderMapa() {
   document.getElementById('map-legend-aire').hidden = medicion !== 'aire';
   document.getElementById('map-legend-sismos').hidden = !capasActivas.has('sismos');
   document.getElementById('map-legend-incendios').hidden = !capasActivas.has('incendios');
+  document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
+  document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
   document.getElementById('map-note-aire').hidden = medicion !== 'aire';
   document.getElementById('map-note-sismos').hidden = !capasActivas.has('sismos');
   document.getElementById('map-note-incendios').hidden = !capasActivas.has('incendios');
+  document.getElementById('map-note-alertas').hidden = !capasActivas.has('alertas');
+  document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
 
@@ -1265,6 +1292,76 @@ function paintIncendios(group) {
   $('#map-meta').textContent = incendiosData.updated
     ? `${focos.length} focos · ${horaLocal(incendiosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
     : `${focos.length} focos`;
+}
+
+const NIVEL_ALERTA_LABEL = {
+  roja: 'Alerta Roja', amarilla: 'Alerta Amarilla', temprana_preventiva: 'Alerta Temprana Preventiva',
+};
+
+// Emoji por texto del evento (case-insensitive); ⚠️ si no matchea ninguno.
+function emojiEvento(evento) {
+  const e = (evento || '').toLowerCase();
+  if (/aluvi|remoci|lahar/.test(e)) return '🌊';
+  if (/meteo|frontal|lluvia|viento|nieve/.test(e)) return '🌧️';
+  if (/incendio|forestal/.test(e)) return '🔥';
+  if (/volc/.test(e)) return '🌋';
+  if (/marea|biol/.test(e)) return '🦠';
+  return '⚠️';
+}
+
+function paintAlertas(group) {
+  const todas = (alertasData && alertasData.alertas) || [];
+  const conCoords = todas.filter((a) => a.lat != null && a.lon != null);
+  if (!conCoords.length) { $('#map-meta').textContent = 'sin alertas vigentes'; return; }
+  conCoords.forEach((a) => {
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="alerta alerta-${a.nivel}">${emojiEvento(a.evento)}</span>`,
+      iconSize: [30, 30], iconAnchor: [15, 15],
+    });
+    const marker = L.marker([a.lat, a.lon], { icon, title: a.evento }).addTo(group);
+    const comunas = a.comunas.slice(0, 5).join(', ') + (a.comunas.length > 5 ? ` y ${a.comunas.length - 5} más` : '');
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = a.evento; box.appendChild(h);
+    box.appendChild(popupRows([
+      ['Nivel', NIVEL_ALERTA_LABEL[a.nivel] || a.nivel],
+      ['Región', a.region],
+      ['Comunas', `${a.n_comunas} (${comunas})`],
+      ['Desde', a.desde],
+    ]));
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+  $('#map-meta').textContent = alertasData.updated
+    ? `${conCoords.length} alertas · ${horaLocal(alertasData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${conCoords.length} alertas`;
+}
+
+function paintVolcanes(group) {
+  const volcanes = (volcanesData && volcanesData.volcanes) || [];
+  if (!volcanes.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin datos RNVV'; return; }
+  const TAMANO = { verde: 12, amarilla: 16, naranja: 18, roja: 20 };
+  volcanes.forEach((v) => {
+    const size = TAMANO[v.nivel] || 12;
+    const icon = L.divIcon({
+      className: 'volcan-icon',
+      html: `<span class="volcan vol-${v.nivel}"></span>`,
+      iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+    });
+    const marker = L.marker([v.lat, v.lon], { icon, title: v.nombre }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = v.nombre; box.appendChild(h);
+    box.appendChild(popupRows([
+      ['Alerta técnica', v.nivel],
+      ['Región', v.region],
+      ['Peligrosidad geológica', v.peligrosidad],
+    ]));
+    marker.bindPopup(box, { maxWidth: 260 });
+  });
+  $('#map-meta').textContent = volcanesData.updated
+    ? `${volcanes.length} volcanes · ${horaLocal(volcanesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${volcanes.length} volcanes`;
 }
 
 function setupCapas() {
@@ -1471,6 +1568,8 @@ loadAireSinca();
 loadBias();
 loadSismos();
 loadIncendios();
+loadAlertas();
+loadVolcanes();
 
 // ── Refresco en vivo ───────────────────────────────────────────
 // Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
@@ -1497,6 +1596,8 @@ async function refreshAll() {
   loadArchiveStatus(); // status.json
   loadSismos();        // sismos.json (CSN + USGS)
   loadIncendios();     // incendios.json (NASA FIRMS)
+  loadAlertas();       // alertas.json (SENAPRED)
+  loadVolcanes();      // volcanes.json (SERNAGEOMIN RNVV)
   refreshing = false;
 }
 

@@ -65,3 +65,13 @@ CHILE_BBOX = (-76.0, -56.5, -66.0, -17.0)   # O, S, E, N (continental)
 INCENDIOS_PATH = Path(os.environ.get("CLIMA_INCENDIOS", ROOT / "web" / "incendios.json"))
 FIRMS_MAP_KEY = os.environ.get("FIRMS_MAP_KEY", "")
 API_FIRMS = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+
+ALERTAS_PATH = Path(os.environ.get("CLIMA_ALERTAS", ROOT / "web" / "alertas.json"))
+VOLCANES_PATH = Path(os.environ.get("CLIMA_VOLCANES", ROOT / "web" / "volcanes.json"))
+# FeatureServers del dashboard oficial de alertas SENAPRED (ArcGIS).
+# Si SENAPRED mueve el servicio, se corrige por env sin tocar código.
+ALERTAS_ARCGIS_BASE = os.environ.get(
+    "ALERTAS_ARCGIS_BASE",
+    "https://services3.arcgis.com/CNzkI2T3GmfwkaAR/arcgis/rest/services")
+API_RNVV = "https://rnvv.sernageomin.cl/"
+API_RNVV_FALLBACK = "https://www.sernageomin.cl/alertas-volcanicas/"

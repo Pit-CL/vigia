@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=25">
+  <link rel="stylesheet" href="app.css?v=26">
 </head>
 <body>
 
@@ -100,6 +100,8 @@
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode" data-capa="sismos" aria-pressed="false">〰️ Sismos</button>
       <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
+      <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
+      <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
     </div>
@@ -129,10 +131,23 @@
       <span class="fk-l"></span><span>baja</span>
       <span>· 🔥 N = grupo de focos</span>
     </div>
+    <div id="map-legend-alertas" class="map-legend" aria-hidden="true" hidden>
+      <span class="al-roja"></span><span>Roja</span>
+      <span class="al-amarilla"></span><span>Amarilla</span>
+      <span class="al-temprana_preventiva"></span><span>Temprana preventiva</span>
+    </div>
+    <div id="map-legend-volcanes" class="map-legend" aria-hidden="true" hidden>
+      <span class="vk-verde"></span><span>Verde</span>
+      <span class="vk-amarilla"></span><span>Amarilla</span>
+      <span class="vk-naranja"></span><span>Naranja</span>
+      <span class="vk-roja"></span><span>Roja</span>
+    </div>
     <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
     <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
     <p id="map-note-sismos" class="panel-note" hidden>Fuente: <strong>CSN</strong> (sismologia.cl) + <strong>USGS</strong> · magnitudes Mlv/Mw.</p>
     <p id="map-note-incendios" class="panel-note" hidden>Focos de calor satelitales (VIIRS 375 m, últimas 48 h) · <strong>NASA FIRMS</strong> · no todo foco es incendio.</p>
+    <p id="map-note-alertas" class="panel-note" hidden>Alertas vigentes SENAPRED · punto = centroide del área alertada.</p>
+    <p id="map-note-volcanes" class="panel-note" hidden>Alerta técnica volcánica · SERNAGEOMIN RNVV.</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -244,6 +259,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
