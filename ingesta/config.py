@@ -20,22 +20,22 @@ BIAS_PATH = Path(os.environ.get("CLIMA_BIAS", ROOT / "web" / "bias.json"))
 # En TODAS se archivan pronósticos (det + ensamble) para calibración.
 STATIONS = [
     # METAR — aeropuertos (observaciones oficiales vía red WMO). alt en metros.
-    {"id": "SCEL", "metar": True, "nombre": "Santiago · Pudahuel (A. Merino Benítez)", "lat": -33.393, "lon": -70.785, "alt": 476},
-    {"id": "SCTB", "metar": True, "nombre": "Santiago · Tobalaba (E. Sánchez)",        "lat": -33.456, "lon": -70.547, "alt": 649},
-    {"id": "SCVM", "metar": True, "nombre": "Viña del Mar · Torquemada",               "lat": -32.949, "lon": -71.474, "alt": 141},
-    {"id": "SCRD", "metar": True, "nombre": "Valparaíso · Rodelillo",                  "lat": -33.068, "lon": -71.557, "alt": 336},
-    {"id": "SCSN", "metar": True, "nombre": "San Antonio · Santo Domingo",             "lat": -33.656, "lon": -71.615, "alt": 75},
+    {"id": "SCEL", "metar": True, "nombre": "Santiago · Pudahuel (A. Merino Benítez)", "lat": -33.393, "lon": -70.785, "alt": 476, "ens": True},
+    {"id": "SCTB", "metar": True, "nombre": "Santiago · Tobalaba (E. Sánchez)",        "lat": -33.456, "lon": -70.547, "alt": 649, "ens": True},
+    {"id": "SCVM", "metar": True, "nombre": "Viña del Mar · Torquemada",               "lat": -32.949, "lon": -71.474, "alt": 141, "ens": True},
+    {"id": "SCRD", "metar": True, "nombre": "Valparaíso · Rodelillo",                  "lat": -33.068, "lon": -71.557, "alt": 336, "ens": True},
+    {"id": "SCSN", "metar": True, "nombre": "San Antonio · Santo Domingo",             "lat": -33.656, "lon": -71.615, "alt": 75, "ens": True},
     # DMC EMA — lugares sin METAR (coords y altitud del catálogo getEstacionesRedEma)
-    {"id": "330020", "dmc": True, "nombre": "Santiago · Quinta Normal",      "lat": -33.44500, "lon": -70.68278, "alt": 520},
-    {"id": "330006", "dmc": True, "nombre": "Viña del Mar · Jardín Botánico","lat": -33.04500, "lon": -71.50194, "alt": 50},
-    {"id": "320124", "dmc": True, "nombre": "Quillota · Liceo Agrícola",     "lat": -32.90722, "lon": -71.27139, "alt": 123},
-    {"id": "320019", "dmc": True, "nombre": "San Felipe · Escuela Agrícola", "lat": -32.75528, "lon": -70.70694, "alt": 662},
-    {"id": "320056", "dmc": True, "nombre": "Quintero · Climatológica",      "lat": -32.78417, "lon": -71.52278, "alt": 5},
-    {"id": "330162", "dmc": True, "nombre": "Colina",                        "lat": -33.16222, "lon": -70.64306, "alt": 755},
-    {"id": "330071", "dmc": True, "nombre": "Talagante",                     "lat": -33.67028, "lon": -70.84944, "alt": 390},
-    {"id": "330122", "dmc": True, "nombre": "Santiago · La Florida",         "lat": -33.54500, "lon": -70.54833, "alt": 670},
-    {"id": "330112", "dmc": True, "nombre": "San José de Maipo · Guayacán",  "lat": -33.61528, "lon": -70.35055, "alt": 928},
-    {"id": "320051", "dmc": True, "nombre": "Los Libertadores",              "lat": -32.84555, "lon": -70.11917, "alt": 2955},
+    {"id": "330020", "dmc": True, "nombre": "Santiago · Quinta Normal",      "lat": -33.44500, "lon": -70.68278, "alt": 520, "ens": True},
+    {"id": "330006", "dmc": True, "nombre": "Viña del Mar · Jardín Botánico","lat": -33.04500, "lon": -71.50194, "alt": 50, "ens": True},
+    {"id": "320124", "dmc": True, "nombre": "Quillota · Liceo Agrícola",     "lat": -32.90722, "lon": -71.27139, "alt": 123, "ens": True},
+    {"id": "320019", "dmc": True, "nombre": "San Felipe · Escuela Agrícola", "lat": -32.75528, "lon": -70.70694, "alt": 662, "ens": True},
+    {"id": "320056", "dmc": True, "nombre": "Quintero · Climatológica",      "lat": -32.78417, "lon": -71.52278, "alt": 5, "ens": True},
+    {"id": "330162", "dmc": True, "nombre": "Colina",                        "lat": -33.16222, "lon": -70.64306, "alt": 755, "ens": True},
+    {"id": "330071", "dmc": True, "nombre": "Talagante",                     "lat": -33.67028, "lon": -70.84944, "alt": 390, "ens": True},
+    {"id": "330122", "dmc": True, "nombre": "Santiago · La Florida",         "lat": -33.54500, "lon": -70.54833, "alt": 670, "ens": True},
+    {"id": "330112", "dmc": True, "nombre": "San José de Maipo · Guayacán",  "lat": -33.61528, "lon": -70.35055, "alt": 928, "ens": True},
+    {"id": "320051", "dmc": True, "nombre": "Los Libertadores",              "lat": -32.84555, "lon": -70.11917, "alt": 2955, "ens": True},
 ]
 
 # Variables continuas calibrables (sesgo aditivo). Excluidas a propósito:
