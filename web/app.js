@@ -194,6 +194,8 @@ let sismosData = null;   // catálogo sísmico CSN + USGS
 let incendiosData = null; // focos de calor VIIRS (NASA FIRMS)
 let alertasData = null;   // alertas naturales vigentes (SENAPRED)
 let volcanesData = null;  // alerta técnica volcánica (SERNAGEOMIN RNVV)
+let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
+let emergenciaCargando = false;
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -1030,21 +1032,40 @@ async function loadVolcanes() {
   } catch (_) { /* sin RNVV: la capa queda vacía */ }
 }
 
+// emergencia.json es cuasi-estático (~9.000 puntos, se refresca 1x/semana):
+// un solo fetch por sesión, disparado por toggleCapa al encender la capa, no
+// en la carga inicial ni en el refresco periódico de 10 min.
+async function loadEmergencia() {
+  if (emergenciaData || emergenciaCargando) return;
+  emergenciaCargando = true;
+  try {
+    const res = await fetch('emergencia.json', { cache: 'no-store' });
+    if (res.ok) emergenciaData = await res.json();
+  } catch (_) { /* sin datos: la capa queda vacía */ }
+  emergenciaCargando = false;
+  if (capasActivas.has('emergencia')) renderMapa();
+}
+
 // Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
-// una a la vez); 'sismos', 'incendios', 'alertas' y 'volcanes' son
-// independientes y se pueden combinar con cualquiera.
+// una a la vez); 'sismos', 'incendios', 'alertas', 'volcanes' y 'emergencia'
+// son independientes y se pueden combinar con cualquiera.
+// 'emergencia' es lazy: ~9.000 puntos cuasi-estáticos que no se cargan salvo
+// que el usuario encienda la capa (ni en la carga inicial ni en el refresco).
 const CAPAS = {
-  temp:      { grupo: 'medicion', paint: paintTemp },
-  aire:      { grupo: 'medicion', paint: paintAire },
-  sismos:    { paint: paintSismos },
-  incendios: { paint: paintIncendios },
-  alertas:   { paint: paintAlertas },
-  volcanes:  { paint: paintVolcanes },
+  temp:       { grupo: 'medicion', paint: paintTemp },
+  aire:       { grupo: 'medicion', paint: paintAire },
+  sismos:     { paint: paintSismos },
+  incendios:  { paint: paintIncendios },
+  alertas:    { paint: paintAlertas },
+  volcanes:   { paint: paintVolcanes },
+  emergencia: { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
 };
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
 // pinta al final para que su texto en #map-meta prevalezca sobre las demás.
 // Los puntos de alerta van encima de los focos/eventos que resumen.
-const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'temp', 'aire'];
+// 'emergencia' va al final de todo: en una emergencia real es lo que se
+// busca, así que su texto y sus íconos deben quedar encima de cualquier otra capa.
+const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'temp', 'aire', 'emergencia'];
 
 function capasGuardadas() {
   try {
@@ -1070,6 +1091,10 @@ function toggleCapa(k) {
       }
     }
     capasActivas.add(k);
+    // Mecanismo lazy genérico: si la capa recién encendida declara `lazy` y
+    // todavía no tiene datos, dispara la carga (async, re-pinta sola al terminar).
+    const capa = CAPAS[k];
+    if (capa.lazy && !(capa.tieneData && capa.tieneData())) capa.lazy();
   }
   try { localStorage.setItem('sinoptica.capas', JSON.stringify([...capasActivas])); } catch (_) { /* opcional */ }
   renderMapa();
@@ -1096,7 +1121,7 @@ function ensureMap() {
   // Al cambiar de zoom, el dedup/agrupado por celda de paintTemp/paintAire/
   // paintIncendios depende del zoom actual: hay que re-pintar la capa activa.
   map.on('zoomend', () => {
-    if (['temp', 'aire', 'incendios'].some((k) => capasActivas.has(k))) renderMapa();
+    if (['temp', 'aire', 'incendios', 'emergencia'].some((k) => capasActivas.has(k))) renderMapa();
   });
   return map;
 }
@@ -1131,12 +1156,14 @@ function renderMapa() {
   document.getElementById('map-legend-incendios').hidden = !capasActivas.has('incendios');
   document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
+  document.getElementById('map-legend-emergencia').hidden = !capasActivas.has('emergencia');
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
   document.getElementById('map-note-aire').hidden = medicion !== 'aire';
   document.getElementById('map-note-sismos').hidden = !capasActivas.has('sismos');
   document.getElementById('map-note-incendios').hidden = !capasActivas.has('incendios');
   document.getElementById('map-note-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
+  document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
 
@@ -1386,6 +1413,64 @@ function paintVolcanes(group) {
   $('#map-meta').textContent = volcanesData.updated
     ? `${volcanes.length} volcanes · ${horaLocal(volcanesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
     : `${volcanes.length} volcanes`;
+}
+
+const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', encuentro_tsunami: '🟢' };
+
+function paintEmergencia(group) {
+  if (!emergenciaData) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'cargando infraestructura de emergencia…';
+    return;
+  }
+  const categorias = emergenciaData.categorias || {};
+  const todos = [];
+  for (const [cat, emoji] of Object.entries(EMG_EMOJI)) {
+    for (const it of (categorias[cat] || [])) todos.push({ ...it, cat, emoji });
+  }
+  if (!todos.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin datos de emergencia'; return; }
+  // Con ~9.000 puntos el clustering es obligatorio salvo con el mapa muy
+  // acercado (zoom ≥ 13), donde cada punto se pinta individual.
+  const grupos = map.getZoom() >= 13
+    ? todos.map((it) => [it])
+    : agruparPorCelda(todos, 44).sort((a, b) => a.length - b.length);
+  grupos.forEach((grupo) => {
+    if (grupo.length === 1) {
+      const it = grupo[0];
+      const icon = L.divIcon({
+        className: 'stn-icon',
+        html: `<span class="emg">${it.emoji}</span>`,
+        iconSize: [26, 26], iconAnchor: [13, 13],
+      });
+      const marker = L.marker([it.lat, it.lon], { icon, title: it.n }).addTo(group);
+      const box = document.createElement('div');
+      box.className = 'stn-popup';
+      const h = document.createElement('strong'); h.textContent = it.n; box.appendChild(h);
+      if (it.d) { const small = document.createElement('small'); small.textContent = it.d; box.appendChild(small); }
+      if (it.cat === 'encuentro_tsunami') {
+        const a = document.createElement('a');
+        a.href = 'https://senapred.cl/visor-chile-preparado/';
+        a.rel = 'noopener'; a.target = '_blank';
+        a.textContent = 'ver vías de evacuación oficiales';
+        box.appendChild(a);
+      }
+      marker.bindPopup(box, { maxWidth: 260 });
+    } else {
+      const lat = grupo.reduce((s, it) => s + it.lat, 0) / grupo.length;
+      const lon = grupo.reduce((s, it) => s + it.lon, 0) / grupo.length;
+      const icon = L.divIcon({
+        className: 'stn-icon',
+        html: `<span class="stn-label emg-grupo">🚑<b>${grupo.length}</b></span>`,
+        iconSize: [40, 26], iconAnchor: [20, 13],
+      });
+      // Sin popup: el clic acerca el mapa al grupo en vez de mostrar detalle.
+      L.marker([lat, lon], { icon })
+        .on('click', () => map.setView([lat, lon], map.getZoom() + 2))
+        .addTo(group);
+    }
+  });
+  $('#map-meta').textContent = emergenciaData.updated
+    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${todos.length} puntos de emergencia`;
 }
 
 function setupCapas() {
