@@ -101,3 +101,34 @@ def log(con: sqlite3.Connection, run_at: str, kind: str, ok: bool, rows: int, de
         (run_at, kind, int(ok), rows, detail[:500]),
     )
     con.commit()
+
+
+RETENTION_DAYS = {
+    "forecasts": 60,       # ≥ WINDOW_DAYS de calibración (45)
+    "observations": 180,
+    "obs_wx": 180,
+    "raw_payloads": 14,
+    "ingest_log": 90,
+}
+
+_RETENTION_COL = {
+    "forecasts": "valid_time",
+    "observations": "obs_time",
+    "obs_wx": "obs_time",
+    "raw_payloads": "fetched_at",
+    "ingest_log": "run_at",
+}
+
+
+def prune(con: sqlite3.Connection) -> int:
+    """Borra filas fuera de la ventana de retención. SQLite reutiliza las
+    páginas liberadas, así que el archivo llega a un plateau sin VACUUM."""
+    borradas = 0
+    for tabla, dias in RETENTION_DAYS.items():
+        col = _RETENTION_COL[tabla]
+        cur = con.execute(
+            f"DELETE FROM {tabla} WHERE {col} < datetime('now', ?)", (f"-{dias} days",)
+        )
+        borradas += cur.rowcount
+    con.commit()
+    return borradas

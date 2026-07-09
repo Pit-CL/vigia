@@ -22,7 +22,7 @@ import config
 W = 0.15                 # decay (peso de aprendizaje); bajar a ~0.05 al madurar
 N_MIN = 7                # gate: por debajo, pronóstico crudo
 K_SHRINK = 8             # shrinkage: b_aplicado = b * n/(n+K)
-WINDOW_DAYS = 90         # ventana de pares considerada (acota cómputo)
+WINDOW_DAYS = 45         # ventana de pares considerada (la memoria efectiva del EWMA no llega a 90 días)
 BUCKETS = [(0, 24, "24"), (24, 48, "48"), (48, 72, "72"), (72, 96, "96")]
 ADDITIVE_VARS = config.CALIBRABLE_VARS
 CLIP = {"relative_humidity_2m": (0.0, 100.0), "wind_speed_10m": (0.0, None)}

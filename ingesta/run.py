@@ -53,6 +53,7 @@ def write_estaciones(con) -> int:
         "SELECT station, wx FROM obs_wx WHERE obs_time >= ?", (wx_cut,))}
     estaciones = [{
         "id": s["id"], "nombre": s["nombre"], "lat": s["lat"], "lon": s["lon"],
+        "region": s.get("region"),
         "fuente": "metar" if s.get("metar") else "dmc",
         "obs_time": latest[s["id"]]["obs_time"] if s["id"] in latest else None,
         "obs": latest[s["id"]]["obs"] if s["id"] in latest else {},
@@ -118,6 +119,7 @@ def main() -> int:
     if do_forecasts:
         ok &= step(con, run_at, "openmeteo_det", lambda: sources.ingest_openmeteo_det(con, run_tag))
         ok &= step(con, run_at, "openmeteo_ens", lambda: sources.ingest_openmeteo_ens(con, run_tag))
+        ok &= step(con, run_at, "prune", lambda: db.prune(con))
     ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
     ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))
     ok &= step(con, run_at, "bias_json", lambda: calibrate.export_json(con))

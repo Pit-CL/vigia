@@ -280,6 +280,7 @@ def ingest_dmc(con, fetched_at: str) -> int:
         except RuntimeError as err:
             errores.append(f"{st['id']}: {err}")
             continue
+        time.sleep(0.3)  # cortesía: no saturar la API de DMC (~124 estaciones/hora)
         registros = ((data.get("datosEstaciones") or {}).get("datos")) or []
         for reg in registros:
             momento = reg.get("momento") or ""        # "YYYY-MM-DD HH:MM:SS" UTC
