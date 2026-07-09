@@ -22,6 +22,13 @@
   --foco-h: #ff5400;
   --foco-n: #ff8f1f;
   --foco-l: #ffc857;
+  --alerta-roja: #d81e2c;
+  --alerta-amarilla: #e0a71b;
+  --alerta-preventiva: #2f9e44;
+  --vol-verde: #2f9e44;
+  --vol-amarilla: #e0a71b;
+  --vol-naranja: #ff7a1a;
+  --vol-roja: #d81e2c;
   --font-display: "Bricolage Grotesque", "Avenir Next", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
 }
@@ -45,6 +52,13 @@
     --foco-h: #ff6a33;
     --foco-n: #ffab52;
     --foco-l: #ffd873;
+    --alerta-roja: #ff4d5e;
+    --alerta-amarilla: #f0c14f;
+    --alerta-preventiva: #4bc76b;
+    --vol-verde: #4bc76b;
+    --vol-amarilla: #f0c14f;
+    --vol-naranja: #ff9648;
+    --vol-roja: #ff4d5e;
   }
 }
 
@@ -1056,3 +1070,63 @@ dialog::backdrop {
 .fk-h { background-color: var(--foco-h); }
 .fk-n { background-color: var(--foco-n); }
 .fk-l { background-color: var(--foco-l); }
+
+/* ── Alertas naturales vigentes (SENAPRED) ───────────────────── */
+
+.alerta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  border: 3px solid;
+  box-shadow: 1px 1px 3px var(--shadow);
+  font-size: 15px;
+}
+.alerta-roja { border-color: var(--alerta-roja); }
+.alerta-amarilla { border-color: var(--alerta-amarilla); }
+.alerta-temprana_preventiva { border-color: var(--alerta-preventiva); }
+
+.al-roja, .al-amarilla, .al-temprana_preventiva {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid;
+  background: var(--bg-panel);
+}
+.al-roja { border-color: var(--alerta-roja); }
+.al-amarilla { border-color: var(--alerta-amarilla); }
+.al-temprana_preventiva { border-color: var(--alerta-preventiva); }
+
+/* ── Volcanes: alerta técnica (SERNAGEOMIN RNVV) ─────────────── */
+
+/* Reset del ícono contenedor de Leaflet, igual que .stn-icon/.foco. */
+.volcan-icon { background: none; border: none; }
+
+.volcan {
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+}
+.vol-verde { border-width: 0 6px 12px 6px; border-bottom-color: var(--vol-verde); opacity: .45; }
+.vol-amarilla { border-width: 0 8px 16px 8px; border-bottom-color: var(--vol-amarilla); opacity: .7; }
+.vol-naranja { border-width: 0 9px 18px 9px; border-bottom-color: var(--vol-naranja); opacity: .85; }
+.vol-roja { border-width: 0 10px 20px 10px; border-bottom-color: var(--vol-roja); opacity: 1; }
+
+.vk-verde, .vk-amarilla, .vk-naranja, .vk-roja {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 0 6px 10px 6px;
+}
+.vk-verde { border-bottom-color: var(--vol-verde); }
+.vk-amarilla { border-bottom-color: var(--vol-amarilla); }
+.vk-naranja { border-bottom-color: var(--vol-naranja); }
+.vk-roja { border-bottom-color: var(--vol-roja); }
