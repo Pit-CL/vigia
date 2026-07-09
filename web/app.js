@@ -1,4 +1,4 @@
-/* Sinóptica — pronóstico multi-modelo para la V Región y la RM (Chile).
+/* Sinóptica — pronóstico multi-modelo para todo Chile (Arica a la Antártica).
    Datos: Open-Meteo (CC BY 4.0). Observaciones: DMC + red OMM (NOAA).
    Sin claves, sin tracking, sin CDNs. */
 'use strict';
@@ -48,21 +48,25 @@ const MODEL_COLORS = {
 };
 
 const PLACES = [
-  { region: 'V Región', items: [
+  { region: 'Chile', items: [
+    { name: 'Arica',        lat: -18.478, lon: -70.321 },
+    { name: 'Iquique',      lat: -20.214, lon: -70.152 },
+    { name: 'Antofagasta',  lat: -23.650, lon: -70.400 },
+    { name: 'Calama',       lat: -22.456, lon: -68.924 },
+    { name: 'Copiapó',      lat: -27.366, lon: -70.332 },
+    { name: 'La Serena',    lat: -29.904, lon: -71.249 },
     { name: 'Valparaíso',   lat: -33.046, lon: -71.620 },
     { name: 'Viña del Mar', lat: -33.024, lon: -71.552 },
-    { name: 'Quilpué',      lat: -33.047, lon: -71.443 },
-    { name: 'Quillota',     lat: -32.883, lon: -71.249 },
-    { name: 'San Antonio',  lat: -33.593, lon: -71.607 },
-    { name: 'Los Andes',    lat: -32.834, lon: -70.598 },
-  ]},
-  { region: 'RM', items: [
-    { name: 'Santiago',     lat: -33.456, lon: -70.648 },
-    { name: 'Pudahuel',     lat: -33.393, lon: -70.785 },
-    { name: 'Las Condes',   lat: -33.408, lon: -70.567 },
-    { name: 'Puente Alto',  lat: -33.610, lon: -70.575 },
-    { name: 'Melipilla',    lat: -33.689, lon: -71.213 },
-    { name: 'Colina',       lat: -33.202, lon: -70.674 },
+    { name: 'Santiago',     lat: -33.437, lon: -70.650 },
+    { name: 'Rancagua',     lat: -34.171, lon: -70.744 },
+    { name: 'Talca',        lat: -35.427, lon: -71.655 },
+    { name: 'Chillán',      lat: -36.606, lon: -72.104 },
+    { name: 'Concepción',   lat: -36.827, lon: -73.050 },
+    { name: 'Temuco',       lat: -38.736, lon: -72.590 },
+    { name: 'Valdivia',     lat: -39.814, lon: -73.246 },
+    { name: 'Puerto Montt', lat: -41.469, lon: -72.943 },
+    { name: 'Coyhaique',    lat: -45.571, lon: -72.068 },
+    { name: 'Punta Arenas', lat: -53.163, lon: -70.917 },
   ]},
 ];
 
@@ -123,8 +127,8 @@ const INFO = {
     title: '¿De dónde salen estas mediciones?',
     html: `
 <p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico:</p>
-<p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación: Pudahuel, Tobalaba, Torquemada, Rodelillo y Santo Domingo.</p>
-<p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto: Quinta Normal (la estación de referencia histórica de Santiago), Jardín Botánico de Viña, Quillota, San Felipe, Quintero, Colina, Talagante, La Florida, San José de Maipo y Los Libertadores a 2.955 m en plena cordillera.</p>
+<p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación: desde Chacalluta en Arica hasta Teniente Marsh en la Antártica.</p>
+<p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto a lo largo de todo el país, de cordillera a costa: cerca de 150 estaciones en total entre ambas redes.</p>
 <p class="info-fine">¿Por qué una estación puede diferir del «ahora» del panel superior? Porque el panel es un modelo interpolado a tu punto exacto y la estación es un sensor físico en SU punto exacto — comparar ambos es justamente cómo medimos la calidad del pronóstico (ver «¿Cuánto acierta cada modelo?»).</p>`,
   },
   ensamble: {
@@ -160,7 +164,7 @@ const INFO = {
   verificacion: {
     title: '¿Cómo medimos el acierto?',
     html: `
-<p><strong>El método:</strong> guardamos cada pronóstico en el momento en que se emite. Cuando llega la hora pronosticada, lo comparamos con lo que <em>realmente midieron</em> las 15 estaciones (aeropuertos + DMC). Nadie puede retocar el pronóstico después: queda archivado.</p>
+<p><strong>El método:</strong> guardamos cada pronóstico en el momento en que se emite. Cuando llega la hora pronosticada, lo comparamos con lo que <em>realmente midieron</em> las cerca de 150 estaciones de la red nacional (aeropuertos + DMC). Nadie puede retocar el pronóstico después: queda archivado.</p>
 <p><strong>MAE (error absoluto medio):</strong> el tamaño típico del error, en grados. «MAE 1,5 °C a 1 día» significa que, en promedio, la temperatura pronosticada para el día siguiente difirió 1,5 °C de la observada. Mientras más chico, mejor.</p>
 <p><strong>Sesgo:</strong> el error <em>con signo</em>. Un sesgo de +1 °C significa que el modelo tiende a pronosticar más calor del que llega; −1 °C, más frío. Conocer el sesgo de cada modelo en cada lugar es la base para corregirlo — exactamente lo que hará nuestro modelo de calibración local.</p>
 <p><strong>Los plazos:</strong> «a 1 día» evalúa pronósticos emitidos 24 h antes; «a 4 días», 96 h antes. El error crece con el plazo — eso también lo puedes ver aquí, transparente.</p>
@@ -191,7 +195,7 @@ function savedPlace() {
       if (p && typeof p.lat === 'number' && typeof p.lon === 'number' && p.name) return p;
     }
   } catch (_) { /* localStorage puede no estar disponible */ }
-  return PLACES[1].items[0]; // Santiago
+  return PLACES[0].items.find((p) => p.name === 'Santiago') || PLACES[0].items[0]; // Santiago
 }
 
 let place = savedPlace();
@@ -1022,12 +1026,19 @@ function ensureMap() {
     zoomControl: true,
     tap: true,
   });
-  const bounds = L.latLngBounds(estacionesData.estaciones.map((e) => [e.lat, e.lon]));
-  map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
+  // Con red nacional (Arica a la Antártica) un fitBounds a todas las
+  // estaciones da un zoom país ilegible; se parte centrado en el lugar
+  // elegido y el botón "Chile" ofrece la vista país bajo demanda.
+  map.setView([place.lat, place.lon], 8);
   // Leaflet calcula mal los tiles si el contenedor aún estaba animándose al
   // crearse (queda fondo sin tiles); recalcular asegura que se llenen.
   setTimeout(() => map.invalidateSize(), 200);
   for (const k of Object.keys(CAPAS)) layerGroups[k] = L.layerGroup().addTo(map);
+  // Al cambiar de zoom, el dedup por celda de paintTemp/paintAire depende
+  // del zoom actual: hay que re-pintar la capa de medición activa.
+  map.on('zoomend', () => {
+    if (['temp', 'aire'].some((k) => capasActivas.has(k))) renderMapa();
+  });
   return map;
 }
 
@@ -1061,14 +1072,32 @@ function renderMapa() {
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
   document.getElementById('map-note-aire').hidden = medicion !== 'aire';
   document.getElementById('map-note-sismos').hidden = !capasActivas.has('sismos');
-  document.querySelectorAll('.map-mode').forEach((b) =>
+  document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
 
   map.invalidateSize();   // por si el panel cambió de tamaño desde el último render
 }
 
+// Agrupa items {lat, lon} por celdas de pantalla de `px` píxeles al zoom
+// actual, para no apilar decenas de estaciones en el mismo punto cuando el
+// mapa está alejado (red nacional de ~150 estaciones).
+function agruparPorCelda(items, px) {
+  const z = map.getZoom();
+  const celdas = new Map();
+  for (const it of items) {
+    const p = map.project([it.lat, it.lon], z);
+    const k = `${Math.floor(p.x / px)}:${Math.floor(p.y / px)}`;
+    if (!celdas.has(k)) celdas.set(k, []);
+    celdas.get(k).push(it);
+  }
+  return [...celdas.values()];
+}
+
 function paintTemp(group) {
-  const est = estacionesData.estaciones.filter((e) => e.obs && e.obs.temperature_2m != null);
+  const todas = estacionesData.estaciones.filter((e) => e.obs && e.obs.temperature_2m != null);
+  const est = map.getZoom() < 9
+    ? agruparPorCelda(todas, 56).map((celda) => celda.find((e) => e.fuente === 'metar') || celda[0])
+    : todas;
   est.forEach((e) => {
     const t = e.obs.temperature_2m;
     const icon = L.divIcon({
@@ -1090,14 +1119,19 @@ function paintTemp(group) {
             : `${r1(e.obs[key])} ${unit}`])));
     marker.bindPopup(box, { maxWidth: 280 });
   });
+  const resumen = est.length < todas.length ? `${est.length} de ${todas.length} estaciones` : `${est.length} estaciones`;
+  const acerca = est.length < todas.length ? ' (acerca el mapa para ver más)' : '';
   $('#map-meta').textContent = estacionesData.updated
-    ? `${est.length} estaciones · ${horaLocal(estacionesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${est.length} estaciones`;
+    ? `${resumen} · ${horaLocal(estacionesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${acerca}`
+    : `${resumen}${acerca}`;
 }
 
 function paintAire(group) {
-  const est = aireStations.filter((e) => e.icap != null);
-  if (!est.length) { $('#map-meta').textContent = 'sin datos SINCA'; return; }
+  const todas = aireStations.filter((e) => e.icap != null);
+  if (!todas.length) { $('#map-meta').textContent = 'sin datos SINCA'; return; }
+  const est = map.getZoom() < 9
+    ? agruparPorCelda(todas, 56).map((celda) => celda.find((e) => e.fuente === 'metar') || celda[0])
+    : todas;
   est.forEach((e) => {
     const nivel = icapNivel(e.icap);
     const icon = L.divIcon({
@@ -1118,7 +1152,9 @@ function paintAire(group) {
     ]));
     marker.bindPopup(box, { maxWidth: 260 });
   });
-  $('#map-meta').textContent = `${est.length} estaciones SINCA · MP2,5`;
+  const resumen = est.length < todas.length ? `${est.length} de ${todas.length} estaciones SINCA` : `${est.length} estaciones SINCA`;
+  const acerca = est.length < todas.length ? ' (acerca el mapa para ver más)' : '';
+  $('#map-meta').textContent = `${resumen} · MP2,5${acerca}`;
 }
 
 // Color por antigüedad del evento (valores en --sismo-* de app.css, ya
@@ -1168,9 +1204,21 @@ function paintSismos(group) {
 }
 
 function setupCapas() {
-  document.querySelectorAll('.map-mode').forEach((btn) => {
+  document.querySelectorAll('.map-mode[data-capa]').forEach((btn) => {
     btn.addEventListener('click', () => toggleCapa(btn.dataset.capa));
   });
+  // "Chile": no es una capa que se prende/apaga, es una acción de encuadre —
+  // ajusta el zoom a las estaciones continentales y no toca capasActivas.
+  const chileBtn = document.querySelector('.map-chile');
+  if (chileBtn) {
+    chileBtn.addEventListener('click', () => {
+      if (!ensureMap() || !estacionesData) return;
+      const continental = estacionesData.estaciones.filter((e) => e.lon > -80 && e.lat > -57);
+      if (!continental.length) return;
+      const bounds = L.latLngBounds(continental.map((e) => [e.lat, e.lon]));
+      map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
+    });
+  }
 }
 
 // ── Ubicaciones: chips y búsqueda ──────────────────────────────
@@ -1178,6 +1226,7 @@ function setupCapas() {
 function setPlace(p) {
   place = p;
   try { localStorage.setItem('sinoptica.place', JSON.stringify(p)); } catch (_) { /* opcional */ }
+  if (map) map.setView([p.lat, p.lon], Math.max(map.getZoom(), 7));
   updateBiasStation();   // recalcular la estación de calibración cercana
   loadAll().catch(showError);
 }
