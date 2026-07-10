@@ -2001,22 +2001,45 @@ function setupPuntoCercano() {
       },
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
+          // Guía por plataforma, la del usuario primero (Android + Chrome es
+          // por lejos lo más común en Chile). Rutas según la ayuda oficial
+          // de Google Chrome y Apple, verificadas 2026-07.
+          const ua = navigator.userAgent;
+          const esAndroid = /android/i.test(ua);
+          const esIOS = /iphone|ipad|ipod/i.test(ua);
+          const guias = [];
+          if (esAndroid) {
+            guias.push(
+              'En Chrome: toca el ícono junto a la dirección del sitio (arriba, el candado o los controles) → Permisos → Ubicación → Permitir, y vuelve a tocar el botón.',
+              'Si no aparece la opción: menú ⋮ (arriba a la derecha) → Configuración → Configuración de sitios → Ubicación → busca clima.cavara.cl y permítelo.',
+              'Revisa también que la Ubicación del teléfono esté encendida (desliza desde arriba y busca el ícono 📍 Ubicación).',
+              'En Samsung Internet: menú ☰ → Ajustes → Sitios y descargas → Permisos de sitios → Ubicación.',
+            );
+          } else if (esIOS) {
+            guias.push(
+              'En Safari: toca "AA" o el ícono junto a la dirección → Configuración del sitio web → Ubicación → Permitir.',
+              'Si no aparece: Ajustes del iPhone → Apps → Safari → Ubicación → «Preguntar» o «Permitir».',
+              'Revisa también: Ajustes → Privacidad y seguridad → Localización (debe estar activada).',
+            );
+          } else {
+            guias.push(
+              'En Chrome: haz clic en el candado (o el ícono de controles) a la izquierda de la dirección → Configuración del sitio → Ubicación → Permitir, y recarga la página.',
+              'En Firefox: clic en el candado → Permisos → Ubicación → quita el bloqueo, y recarga.',
+            );
+          }
           out.textContent = '';
           const p = document.createElement('p');
-          p.textContent = 'Sin permiso de ubicación. Para activarlo:';
+          p.textContent = 'Sin permiso de ubicación. Actívalo así:';
           const ul = document.createElement('ul');
-          [
-            'En el celular: toca el candado o el ícono ⓘ junto a la dirección (arriba) → Permisos → Ubicación → Permitir, y vuelve a intentar.',
-            'En iPhone, si no aparece: Ajustes → Apps → Safari → Ubicación → Preguntar o Permitir.',
-            'En computador: haz clic en el candado de la barra de direcciones → Ubicación → Permitir, y recarga la página.',
-          ].forEach((t) => {
+          guias.forEach((t) => {
             const li = document.createElement('li');
             li.textContent = t;
             ul.appendChild(li);
           });
           out.append(p, ul);
         } else {
-          out.textContent = 'No se pudo obtener tu ubicación (sin señal de GPS o tardó demasiado). Inténtalo de nuevo.';
+          out.textContent = 'No se pudo obtener tu ubicación (sin señal de GPS o tardó demasiado). '
+            + 'Revisa que la Ubicación del equipo esté encendida e inténtalo de nuevo.';
         }
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
