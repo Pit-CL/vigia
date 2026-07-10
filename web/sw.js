@@ -1,11 +1,11 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'sinoptica-shell-v11';
-const DATA_CACHE = 'sinoptica-data-v11';
+const SHELL_CACHE = 'sinoptica-shell-v12';
+const DATA_CACHE = 'sinoptica-data-v12';
 const SHELL = [
   './',
   'index.html',
-  'app.css?v=28',
-  'app.js?v=28',
+  'app.css?v=29',
+  'app.js?v=29',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',

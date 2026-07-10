@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=28">
+  <link rel="stylesheet" href="app.css?v=29">
 </head>
 <body>
 
@@ -92,6 +92,10 @@
   <section class="panel panel-riesgos" aria-labelledby="riesgos-title" hidden>
     <header class="panel-head">
       <h2 id="riesgos-title">Centro de riesgos · Chile</h2>
+      <div class="riesgo-filtro" role="group" aria-label="Ámbito">
+        <button class="rf-btn" data-ambito="chile" aria-pressed="true">Chile</button>
+        <button class="rf-btn" data-ambito="cerca" aria-pressed="false" id="rf-cerca">Cerca de Santiago</button>
+      </div>
       <span id="riesgos-meta" class="panel-meta"></span>
       <button class="info-btn" data-info="riesgos" aria-label="¿De dónde salen estos datos?">?</button>
     </header>
@@ -284,6 +288,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>
