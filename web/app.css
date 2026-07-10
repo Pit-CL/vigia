@@ -1316,7 +1316,7 @@ dialog::backdrop {
 
 /* Foco individual: cuadrado plano, sin el fondo/borde por defecto de Leaflet
    (mismo reset que .stn-icon, aplicado directo porque no lleva label interno). */
-.foco { background: none; border: none; }
+.foco { background: none; border: none; position: relative; }
 .foco-h, .foco-n, .foco-l {
   display: block;
   width: 10px;
@@ -1328,6 +1328,34 @@ dialog::backdrop {
 .foco-h { background-color: var(--foco-h); }
 .foco-n { background-color: var(--foco-n); }
 .foco-l { background-color: var(--foco-l); }
+
+/* Flecha de avance probable (viento ≥ 15 km/h en la estación más cercana):
+   al costado del punto, nunca sobre él; la rotación en línea (ver app.js,
+   vientoEnFoco) es lo único que indica el rumbo. */
+.foco-flecha {
+  position: absolute;
+  top: -2px;
+  left: 11px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--foco-h);
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+
+/* Aviso de avance en el popup del foco individual (mismo patrón que
+   .pager-chip): naranja normal, rojo si el viento es fuerte (≥ 30 km/h). */
+.viento-avance {
+  display: block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  font: 600 0.72rem var(--font-mono);
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-full);
+  color: var(--foco-n);
+}
+.viento-avance-fuerte { color: var(--alerta-roja); }
+.viento-debil { margin-top: 6px; font-size: 0.8rem; color: var(--ink-soft); }
 
 /* Grupo de focos: reutiliza .stn-label (borde/sombra/tipografía) y solo
    cambia el color de fondo, igual que .icap-0..4. Píldora, no círculo fijo:

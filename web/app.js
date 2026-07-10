@@ -1519,6 +1519,22 @@ function paintSismos(group) {
 
 const CONF_LABEL = { h: 'Alta', n: 'Nominal', l: 'Baja' };
 
+// Estación con viento medido más cercana a un foco (<60 km): base para
+// estimar la dirección de avance del fuego. wind_direction_10m es la
+// convención meteorológica (de dónde viene el viento), así que el fuego
+// avanza hacia el lado opuesto: (dir + 180) % 360.
+function vientoEnFoco(lat, lon) {
+  if (!estacionesData) return null;
+  let best = null;
+  for (const e of estacionesData.estaciones) {
+    if (!e.obs || e.obs.wind_speed_10m == null || e.obs.wind_direction_10m == null) continue;
+    const d = haversineKm(lat, lon, e.lat, e.lon);
+    if (!best || d < best.dist) best = { e, dist: d };
+  }
+  if (!best || best.dist > 60) return null;
+  return { v: best.e.obs.wind_speed_10m, dir: best.e.obs.wind_direction_10m, nombre: best.e.nombre, km: best.dist };
+}
+
 function paintIncendios(group) {
   const focos = (incendiosData && incendiosData.focos) || [];
   if (!focos.length) {
@@ -1533,8 +1549,18 @@ function paintIncendios(group) {
   grupos.forEach((grupo) => {
     if (grupo.length === 1) {
       const f = grupo[0];
+      const viento = vientoEnFoco(f.lat, f.lon);
+      const avance = viento && viento.v >= 15 ? (viento.dir + 180) % 360 : null;
+      // Flecha discreta al costado del punto (no lo tapa); solo la rotación
+      // indica el rumbo de avance. rotate(avance - 90) porque el glifo ➤
+      // apunta al Este (90°) por defecto: rotarlo (avance - 90)° alinea su
+      // punta con el rumbo compás (0°=N arriba, 90°=E derecha, sentido horario).
+      const flecha = avance != null
+        ? `<span class="foco-flecha" style="transform: rotate(${avance - 90}deg)">➤</span>`
+        : '';
       const icon = L.divIcon({
         className: `foco foco-${f.conf || 'n'}`,
+        html: flecha,
         iconSize: [10, 10], iconAnchor: [5, 5],
       });
       const marker = L.marker([f.lat, f.lon], { icon }).addTo(group);
@@ -1547,6 +1573,24 @@ function paintIncendios(group) {
         ['Satélite', f.sat],
         ['Hora local', `${horaLocal(f.utc)} h`],
       ]));
+      if (viento) {
+        if (viento.v >= 15) {
+          const chip = document.createElement('div');
+          chip.className = `viento-avance${viento.v >= 30 ? ' viento-avance-fuerte' : ''}`;
+          chip.textContent = `Viento ${Math.round(viento.v)} km/h desde el ${compass(viento.dir)} ` +
+            `(${viento.nombre}, a ${Math.round(viento.km)} km) → avance probable hacia el ${compass(avance)}`;
+          box.appendChild(chip);
+        } else {
+          const debil = document.createElement('div');
+          debil.className = 'viento-debil';
+          debil.textContent = `Viento débil (${Math.round(viento.v)} km/h) — propagación lenta o errática`;
+          box.appendChild(debil);
+        }
+        const nota = document.createElement('small');
+        nota.textContent = 'Aproximación con el viento de la estación más cercana; el viento local en el ' +
+          'foco puede diferir. Ante fuego cercano evacúa temprano, no esperes confirmación.';
+        box.appendChild(nota);
+      }
       marker.bindPopup(box, { maxWidth: 260 });
     } else {
       const lat = grupo.reduce((s, f) => s + f.lat, 0) / grupo.length;
