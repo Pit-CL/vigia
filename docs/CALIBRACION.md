@@ -1,4 +1,4 @@
-# Sinóptica — Plan definitivo de calibración científica
+# Vigía — Plan definitivo de calibración científica
 
 > Escrito el 2026-06-10. Combina (a) el análisis multi-agente verificado contra `ingesta/*.py` y el estado real de `data/clima.db`, y (b) la verificación empírica de las fuentes de datos históricos. Objetivo: meter más ciencia y maximizar la exactitud del pronóstico, para 1 dev sin GPU, sin sobre-ingeniería y sin prometer mejoras que los datos no sostienen.
 
@@ -298,7 +298,7 @@ Los peldaños 1-2 (bias + base de blending) están implementados, verificados y 
 
 El EWMA gana porque sigue la no-estacionariedad del sesgo. Caso extremo: SCSN/GFS a 96 h pasó de MAE 4.41 a **2.15 (−51%)**. Decisión de método tomada comparando los 3 approaches empíricamente, no por intuición.
 
-**Blending "Sinóptica" (peldaño 2) — IMPLEMENTADO, con corrección de rumbo verificada.** Comparé 5 approaches por MAE en holdout antes de elegir:
+**Blending "Vigía" (peldaño 2) — IMPLEMENTADO, con corrección de rumbo verificada.** Comparé 5 approaches por MAE en holdout antes de elegir:
 
 | Approach | MAE (test) |
 |---|---|
@@ -307,7 +307,7 @@ El EWMA gana porque sigue la no-estacionariedad del sesgo. Caso extremo: SCSN/GF
 | Selección del mejor | 2.263 |
 | Blend de los 5 | 2.364 |
 
-El blend ingenuo de los 5 modelos **degradaba** (peor que ECMWF solo): incluir los modelos malos contamina al dominante. El ganador es el **blend de los 2 mejores por celda**, ponderados por 1/mae². Se muestra como la serie destacada "Sinóptica" en el gráfico. Lección: la intuición "promediar todo mejora" es falsa cuando un modelo domina — había que medir.
+El blend ingenuo de los 5 modelos **degradaba** (peor que ECMWF solo): incluir los modelos malos contamina al dominante. El ganador es el **blend de los 2 mejores por celda**, ponderados por 1/mae². Se muestra como la serie destacada "Vigía" en el gráfico. Lección: la intuición "promediar todo mejora" es falsa cuando un modelo domina — había que medir.
 
 **Alcance actual:** calibración activa para las 5 estaciones METAR (validadas con holdout). Las 10 EMA de la DMC usan el mismo método EWMA pero esperan a acumular muestra propia (N_EXPORT=40) antes de servirse, porque no tienen histórico ASOS para validar. **Pendiente** (peldaños siguientes): EMOS para incertidumbre calibrada, blending ponderado servido como pronóstico principal, y calibrar el `best_match` diario.
 

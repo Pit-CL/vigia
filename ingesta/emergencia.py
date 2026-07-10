@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 
 import config
 
-UA = "sinoptica-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
+UA = "vigia-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
 PAGE_SIZE = 2000
 
 # categoría -> (path del FeatureServer, campo OID real, campos a pedir).

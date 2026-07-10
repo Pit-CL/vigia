@@ -1,4 +1,4 @@
-"""Configuración de la ingesta de Sinóptica.
+"""Configuración de la ingesta de Vigía.
 
 Todo punto de archivo de pronóstico ES una estación con observaciones:
 calibrar donde no hay ground truth no aporta ciencia.

@@ -1,4 +1,4 @@
-"""Red curada nacional de Sinóptica (~150 estaciones, Arica a la Antártica).
+"""Red curada nacional de Vigía (~150 estaciones, Arica a la Antártica).
 
 Invariante: todo punto tiene observación pareada (METAR vía NOAA AWC o EMA DMC).
 ens: True marca la troncal que archiva ensamble ECMWF (aeropuertos + capitales).

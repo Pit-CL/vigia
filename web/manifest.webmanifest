@@ -1,7 +1,7 @@
 {
-  "name": "Sinóptica — clima multi-modelo Chile",
-  "short_name": "Sinóptica",
-  "description": "Pronóstico multi-modelo con incertidumbre honesta para la V Región y la RM",
+  "name": "Vigía — clima y riesgos naturales de Chile",
+  "short_name": "Vigía",
+  "description": "Pronóstico multi-modelo verificable y centro de riesgos naturales de Chile: sismos, incendios, alertas y emergencias",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

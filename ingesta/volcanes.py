@@ -18,7 +18,7 @@ from html.parser import HTMLParser
 import config
 from volcanes_cl import VOLCANES
 
-UA = "sinoptica-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
+UA = "vigia-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
 NIVELES_VALIDOS = {"verde", "amarilla", "naranja", "roja"}
 VENTANA_BUSQUEDA = 200   # caracteres tras el nombre del volcán donde se busca el nivel
 MIN_VOLCANES_OK = 15

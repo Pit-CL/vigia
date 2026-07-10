@@ -1,6 +1,6 @@
 # Despliegue y operación
 
-Sinóptica corre con dos contenedores (ver [`docker-compose.yml`](../docker-compose.yml)):
+Vigía corre con dos contenedores (ver [`docker-compose.yml`](../docker-compose.yml)):
 
 - **`web`** — nginx Alpine sirviendo `web/` como sitio estático, endurecido, escuchando solo en `127.0.0.1`.
 - **`ingesta`** — Python + cron que archiva datos en `data/clima.db` y publica los JSON que lee la PWA.
