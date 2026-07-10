@@ -24,7 +24,7 @@ LLUVIA_AMARILLO, LLUVIA_NARANJA = 30.0, 60.0     # mm, máx suma móvil 24 h
 CALOR_AMARILLO, CALOR_NARANJA = 34.0, 37.0       # °C, máx mediana horaria
 
 VENTANA_H = 48
-VARS = ["wind_speed_10m", "temperature_2m", "precipitation"]
+VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall"]
 
 
 def _hourly_medians(con, station_id: str, run_tag: str, desde: str, hasta: str) -> dict:
@@ -84,8 +84,31 @@ def _aviso(st: dict, tipo: str, nivel: str, valor: float, unidad: str, valid_tim
     }
 
 
-def _avisos_estacion(con, st: dict, run_tag: str, desde: str, hasta: str) -> list:
-    series = _hourly_medians(con, st["id"], run_tag, desde, hasta)
+def _suma_ventana(serie: list, n_horas: int) -> float | None:
+    """Suma de los primeros n_horas puntos horarios de la serie (mediana entre
+    modelos), o None si la variable no tiene ningún dato en la ventana (p.ej.
+    snowfall recién agregado, sin filas hasta la próxima corrida de forecasts).
+    0.0 es información válida (no llueve/no nieva), por eso no se confunde con
+    la ausencia de datos."""
+    if not serie:
+        return None
+    return round(sum(v for _, v in serie[:n_horas]), 1)
+
+
+def _acumulado_estacion(st: dict, series: dict) -> dict:
+    precip = series.get("precipitation") or []
+    nieve = series.get("snowfall") or []
+    return {
+        "id": st["id"], "nombre": st["nombre"], "region": st.get("region"),
+        "lat": st["lat"], "lon": st["lon"],
+        "lluvia_24h": _suma_ventana(precip, 24),
+        "lluvia_48h": _suma_ventana(precip, 48),
+        "nieve_24h": _suma_ventana(nieve, 24),
+        "nieve_48h": _suma_ventana(nieve, 48),
+    }
+
+
+def _avisos_estacion(series: dict, st: dict) -> list:
     avisos = []
 
     viento = series.get("wind_speed_10m") or []
@@ -124,19 +147,25 @@ def update(con, fetched_at: str) -> int:
     hasta = (ahora + timedelta(hours=VENTANA_H)).strftime("%Y-%m-%dT%H:%M")
 
     avisos = []
+    acumulados = []
     for st in config.STATIONS:
         run_tag = con.execute(
             "SELECT MAX(run_tag) FROM forecasts WHERE station=? AND member=-1",
             (st["id"],)).fetchone()[0]
         if not run_tag:
             continue
-        avisos.extend(_avisos_estacion(con, st, run_tag, desde, hasta))
+        # Una sola consulta de series por estación: avisos y acumulados
+        # comparten la misma mediana horaria multi-modelo.
+        series = _hourly_medians(con, st["id"], run_tag, desde, hasta)
+        avisos.extend(_avisos_estacion(series, st))
+        acumulados.append(_acumulado_estacion(st, series))
 
     payload = {
         "updated": ahora.strftime("%Y-%m-%d %H:%M UTC"),
         "fuente": "Derivado del pronóstico multi-modelo de Vigía (mediana de 6 modelos, 48 h)",
         "nota": "Aviso derivado de modelos, no es un aviso oficial de la DMC",
         "avisos": avisos,
+        "acumulados": acumulados,
     }
     config.AVISOS_PATH.parent.mkdir(parents=True, exist_ok=True)
     config.AVISOS_PATH.write_text(json.dumps(payload, ensure_ascii=False) + "\n")
