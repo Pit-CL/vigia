@@ -1,11 +1,12 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v1';
-const DATA_CACHE = 'vigia-data-v1';
+const SHELL_CACHE = 'vigia-shell-v2';
+const DATA_CACHE = 'vigia-data-v2';
 const SHELL = [
   './',
   'index.html',
-  'app.css?v=31',
-  'app.js?v=31',
+  'emergencia.html',
+  'app.css?v=32',
+  'app.js?v=32',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
