@@ -23,8 +23,16 @@ HELADA_AMARILLO, HELADA_NARANJA = 0.0, -4.0      # °C, mín mediana horaria
 LLUVIA_AMARILLO, LLUVIA_NARANJA = 30.0, 60.0     # mm, máx suma móvil 24 h
 CALOR_AMARILLO, CALOR_NARANJA = 34.0, 37.0       # °C, máx mediana horaria
 
+# Aviso aluvional: lluvia intensa + isoterma 0° alta significa que la cuenca
+# recibe agua líquida en vez de nieve, con riesgo de crecidas repentinas y
+# aluviones en quebradas y laderas. Requiere AMBAS condiciones a la vez sobre
+# la misma ventana de 24 h del pico de lluvia (derivación propia, sin
+# relación operativa con la DMC, igual que el resto del módulo).
+ALUVION_LLUVIA_AMARILLO, ALUVION_LLUVIA_NARANJA = 20.0, 40.0     # mm, suma móvil 24 h
+ALUVION_ISOTERMA_AMARILLO, ALUVION_ISOTERMA_NARANJA = 2900.0, 3400.0  # m, mediana en la ventana
+
 VENTANA_H = 48
-VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall"]
+VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall", "freezing_level_height"]
 
 
 def _hourly_medians(con, station_id: str, run_tag: str, desde: str, hasta: str) -> dict:
@@ -137,6 +145,28 @@ def _avisos_estacion(series: dict, st: dict) -> list:
         nivel = _nivel(val, LLUVIA_AMARILLO, LLUVIA_NARANJA, mayor_es_peor=True)
         if nivel:
             avisos.append(_aviso(st, "lluvia", nivel, val, "mm", vt))
+
+        # Isoterma 0° mediana durante la misma ventana de 24 h del pico de
+        # lluvia. Null-safe: si freezing_level_height aún no tiene filas
+        # (primera corrida antes del próximo --forecasts), no evalúa.
+        iso_serie = series.get("freezing_level_height") or []
+        if iso_serie:
+            idx = next(i for i, (t, _) in enumerate(precip) if t == vt)
+            ventana_times = [t for t, _ in precip[idx - 23:idx + 1]]
+            iso_por_hora = dict(iso_serie)
+            iso_vals = [iso_por_hora[t] for t in ventana_times if t in iso_por_hora]
+            if iso_vals:
+                iso_mediana = statistics.median(iso_vals)
+                if val >= ALUVION_LLUVIA_NARANJA and iso_mediana >= ALUVION_ISOTERMA_NARANJA:
+                    nivel_aluv = "naranja"
+                elif val >= ALUVION_LLUVIA_AMARILLO and iso_mediana >= ALUVION_ISOTERMA_AMARILLO:
+                    nivel_aluv = "amarillo"
+                else:
+                    nivel_aluv = None
+                if nivel_aluv:
+                    aviso_aluv = _aviso(st, "aluvional", nivel_aluv, val, "mm", vt)
+                    aviso_aluv["isoterma_m"] = round(iso_mediana / 100) * 100
+                    avisos.append(aviso_aluv)
 
     return avisos
 
