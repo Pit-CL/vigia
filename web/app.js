@@ -1814,6 +1814,15 @@ function paintEmergencia(group) {
     : `${todos.length} puntos de emergencia`;
 }
 
+// Bounding box de una geometría (área o vía), cacheado en el propio objeto
+// tras el primer cálculo: con ~2.940 vías y un repintado en cada moveend/
+// zoomend, recorrer todos los vértices de todas las geometrías en cada
+// pintado sería costoso — el bounding box no cambia entre repintados.
+function geomBounds(geom) {
+  if (!geom._bb) geom._bb = L.latLngBounds(geom.p);
+  return geom._bb;
+}
+
 // Vías y áreas de evacuación ante tsunami/volcán: comparten loader con
 // 'emergencia' (loadEmergencia) pero son su propia capa — el usuario no las
 // encontraba mezcladas con los ~9.000 puntos de infraestructura.
@@ -1830,7 +1839,7 @@ function paintEvacuacion(group) {
     const bounds = map.getBounds();
     const color = css('--alerta-roja');
     for (const area of tsunamiAreasData.areas || []) {
-      if (!bounds.contains(area.p[0])) continue;
+      if (!bounds.intersects(geomBounds(area))) continue;
       L.polygon(area.p, { color, weight: 1, opacity: 0.3, fillColor: color, fillOpacity: 0.12 })
         .bindPopup('Zona de evacuación ante tsunami — si sientes un sismo fuerte, abandona esta zona hacia terreno alto')
         .addTo(group);
@@ -1847,7 +1856,7 @@ function paintEvacuacion(group) {
     const colorTsunami = css('--evac');
     const colorVolcan = css('--evac-volcan');
     for (const via of tsunamiViasData.vias || []) {
-      if (!bounds.contains(via.p[0])) continue;
+      if (!bounds.intersects(geomBounds(via))) continue;
       const esVolcan = via.t === 'volcan';
       L.polyline(via.p, { color: esVolcan ? colorVolcan : colorTsunami, weight: 3, opacity: 0.85, dashArray: '6 4' })
         .bindPopup(esVolcan ? `Vía de evacuación volcánica · ${via.c}` : `Vía de evacuación · ${via.c}`)
