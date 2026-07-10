@@ -205,7 +205,6 @@ def _dmc_num(raw):
 
 import html as _html
 
-_SINCA_REGIONES = {"Región de Valparaíso", "Región Metropolitana de Santiago"}
 _SINCA_CONTAM = {"PM25": "pm2_5", "PM10": "pm10"}
 _TIP_CONC = re.compile(r"<strong>\s*([\d.]+)")
 _TIP_ICAP = re.compile(r"(\d+)\s*ICAP", re.I)
@@ -235,14 +234,12 @@ def _sinca_parse_medicion(m: dict):
 
 
 def ingest_sinca(con, fetched_at: str):
-    """Archiva observaciones SINCA y devuelve la lista de estaciones de V/RM
-    con su última lectura de MP2,5/MP10 (para aire.json)."""
+    """Archiva observaciones SINCA y devuelve la lista de estaciones de la red
+    nacional con su última lectura de MP2,5/MP10 (para aire.json)."""
     data, _ = http_get_json("https://sinca.mma.gob.cl/index.php/json/listadomapa2k19/")
     rows, estaciones = [], []
     for st in data:
         region = (st.get("region") or "").strip()
-        if region not in _SINCA_REGIONES:
-            continue
         try:
             lat, lon = float(st["latitud"]), float(st["longitud"])
         except (KeyError, TypeError, ValueError):
