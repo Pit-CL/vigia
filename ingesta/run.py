@@ -11,6 +11,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import alertas
+import avisos
 import config
 import db
 import emergencia
@@ -106,6 +107,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--forecasts", action="store_true", help="archiva pronósticos (det + ensamble)")
     ap.add_argument("--obs", action="store_true", help="archiva observaciones (METAR, DMC)")
+    ap.add_argument("--avisos", action="store_true",
+                     help="avisos meteorológicos derivados del pronóstico propio (barato, sin red)")
     ap.add_argument("--sismos", action="store_true", help="archiva catálogo sísmico (CSN + USGS)")
     ap.add_argument("--incendios", action="store_true", help="archiva focos de calor (NASA FIRMS)")
     ap.add_argument("--alertas", action="store_true", help="alertas naturales vigentes (SENAPRED)")
@@ -119,12 +122,15 @@ def main() -> int:
     do_forecasts = args.forecasts or args.all
     do_obs = args.obs or args.all or not (
         args.forecasts or args.all or args.sismos or args.incendios
-        or args.alertas or args.volcanes or args.hazards or args.emergencia)
+        or args.alertas or args.volcanes or args.hazards or args.emergencia or args.avisos)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
     do_volcanes = args.volcanes or args.hazards or args.all
     do_emergencia = args.emergencia or args.all
+    # Avisos son baratos (SQL local + mediana, sin red): se recalculan en toda
+    # corrida de observaciones o de pronósticos, no solo con --avisos explícito.
+    do_avisos = args.avisos or do_obs or do_forecasts
 
     now = datetime.now(timezone.utc)
     run_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -160,6 +166,8 @@ def main() -> int:
         ok &= step(con, run_at, "bias_json", lambda: calibrate.export_json(con))
     if do_obs or do_forecasts:
         ok &= step(con, run_at, "estaciones", lambda: write_estaciones(con))
+    if do_avisos:
+        ok &= step(con, run_at, "avisos", lambda: avisos.update(con, run_at))
     write_status(con)
     con.close()
     return 0 if ok else 1

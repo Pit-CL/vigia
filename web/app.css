@@ -514,6 +514,21 @@ main {
   padding: 12px 16px;
 }
 
+/* Barra de modo offline: sticky (no fixed) para que empuje el contenido en
+   vez de taparlo. El fondo usa --alerta-amarilla, que ya tiene su propia
+   variante oscura definida arriba en :root. */
+.offline-bar {
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  margin: 0;
+  padding: 8px 16px;
+  font: 500 0.82rem var(--font-mono);
+  text-align: center;
+  color: #1a2230;
+  background: var(--alerta-amarilla);
+}
+
 .colophon {
   max-width: 1080px;
   margin: 0 auto;
@@ -792,6 +807,7 @@ dialog::backdrop {
 /* ── Mapa de observaciones ───────────────────────────────────── */
 
 #map {
+  position: relative;
   height: 420px;
   border: 1.5px solid var(--border);
   background: var(--bg);
@@ -803,6 +819,54 @@ dialog::backdrop {
 /* El mapa es la pieza central del puesto de mando: en desktop se prioriza
    por sobre el resto de los paneles. */
 @media (min-width: 900px) { #map { height: 72vh; min-height: 560px; } }
+
+/* ── Rosa de los vientos: orientación fija (el norte siempre es arriba en
+   este mapa), decorativa y sin interceptar el arrastre/zoom del mapa.
+   z-index 800 = misma liga que los controles de Leaflet (.leaflet-control),
+   por debajo de los 1000 de su contenedor top/bottom (ver vendor/leaflet.css) —
+   así nunca tapa el zoom (arriba-izq.) ni la atribución (abajo-der.). */
+.map-rosa {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 800;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg-panel) 82%, transparent);
+  border: 1.5px solid var(--border);
+  box-shadow: 1px 1px 4px var(--shadow);
+  font: 600 0.62rem var(--font-mono);
+  color: var(--ink-soft);
+  pointer-events: none;
+}
+
+.map-rosa span { position: absolute; }
+
+.rosa-n, .rosa-s { left: 50%; transform: translateX(-50%); }
+.rosa-e, .rosa-o { top: 50%; transform: translateY(-50%); }
+.rosa-n { top: 3px; color: var(--accent); font-weight: 700; }
+.rosa-s { bottom: 3px; }
+.rosa-e { right: 5px; }
+.rosa-o { left: 5px; }
+
+/* Aguja: triángulo CSS apuntando al norte, bajo la N. */
+.rosa-aguja {
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 9px solid var(--accent);
+}
+
+/* Más chica en celulares, pero nunca oculta: es orientación de seguridad. */
+@media (max-width: 600px) {
+  .map-rosa { width: 44px; height: 44px; font-size: 0.54rem; }
+  .rosa-aguja { top: 11px; border-left-width: 3px; border-right-width: 3px; border-bottom-width: 7px; }
+}
 
 /* ── Mapa a pantalla completa ─────────────────────────────────── */
 
@@ -1158,6 +1222,23 @@ dialog::backdrop {
 .al-roja { border-color: var(--alerta-roja); }
 .al-amarilla { border-color: var(--alerta-amarilla); }
 .al-temprana_preventiva { border-color: var(--alerta-preventiva); }
+
+/* ── Avisos meteorológicos (derivados del pronóstico propio) ─────
+   El círculo y el emoji reutilizan `.alerta` (mismo look que SENAPRED);
+   solo el color de borde es propio de este aviso, no oficial. */
+.aviso-amarillo { border-color: var(--alerta-amarilla); }
+.aviso-naranja { border-color: var(--vol-naranja); }
+
+.av-amarillo, .av-naranja {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid;
+  background: var(--bg-panel);
+}
+.av-amarillo { border-color: var(--alerta-amarilla); }
+.av-naranja { border-color: var(--vol-naranja); }
 
 /* ── Volcanes: alerta técnica (SERNAGEOMIN RNVV) ─────────────── */
 

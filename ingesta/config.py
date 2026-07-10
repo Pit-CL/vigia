@@ -13,6 +13,7 @@ VERIF_PATH = Path(os.environ.get("CLIMA_VERIF", ROOT / "web" / "verificacion.jso
 ESTACIONES_PATH = Path(os.environ.get("CLIMA_ESTACIONES", ROOT / "web" / "estaciones.json"))
 AIRE_PATH = Path(os.environ.get("CLIMA_AIRE", ROOT / "web" / "aire.json"))
 BIAS_PATH = Path(os.environ.get("CLIMA_BIAS", ROOT / "web" / "bias.json"))
+AVISOS_PATH = Path(os.environ.get("CLIMA_AVISOS", ROOT / "web" / "avisos.json"))
 
 # ── Estaciones: red curada nacional (ver stations_cl.py) ────────
 from stations_cl import STATIONS

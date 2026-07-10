@@ -32,6 +32,7 @@ services:
       CLIMA_ESTACIONES: /data/estaciones.json
       CLIMA_AIRE: /data/aire.json
       CLIMA_BIAS: /data/bias.json
+      CLIMA_AVISOS: /data/avisos.json
       CLIMA_SISMOS: /data/sismos.json
       CLIMA_INCENDIOS: /data/incendios.json
       CLIMA_ALERTAS: /data/alertas.json

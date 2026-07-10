@@ -18,6 +18,7 @@ web/verificacion.json
 web/estaciones.json
 web/aire.json
 web/bias.json
+web/avisos.json
 web/sismos.json
 web/incendios.json
 web/alertas.json

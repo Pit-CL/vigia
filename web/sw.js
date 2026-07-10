@@ -1,12 +1,17 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v3';
-const DATA_CACHE = 'vigia-data-v3';
+const SHELL_CACHE = 'vigia-shell-v4';
+const DATA_CACHE = 'vigia-data-v4';
+// Tiles del mapa base (CARTO): caché propia con límite LRU aproximado, para
+// que el mapa siga siendo usable sin conexión (ver fetch handler abajo).
+const TILES_CACHE = 'vigia-tiles-v1';
+const TILES_MAX = 400;
+const TILES_TRIM = 50;
 const SHELL = [
   './',
   'index.html',
   'emergencia.html',
-  'app.css?v=33',
-  'app.js?v=33',
+  'app.css?v=34',
+  'app.js?v=34',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -27,25 +32,52 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE && k !== TILES_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
+
+// LRU aproximado: keys() conserva el orden de inserción razonablemente, así
+// que borrar las primeras N es un FIFO suficiente para no crecer sin límite
+// (no es un LRU real por fecha de acceso, pero para tiles de mapa alcanza).
+function trimTilesCache(cache) {
+  cache.keys().then((keys) => {
+    if (keys.length <= TILES_MAX) return;
+    Promise.all(keys.slice(0, TILES_TRIM).map((k) => cache.delete(k)));
+  });
+}
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
 
+  // Tiles del mapa base (CARTO): red primero, con respaldo en caché para que
+  // el mapa siga usable offline. Las respuestas son opacas (Leaflet no pone
+  // crossOrigin en las <img> de tiles) pero SÍ se pueden cachear y servir —
+  // lo que antes rompía el mapa era manejar mal el respaldo, no el cacheo en
+  // sí. Sin red y sin tile cacheado, se deja fallar el fetch tal cual: se ve
+  // un tile roto, aceptable en modo offline (mejor que romper todo el mapa).
+  if (url.hostname.endsWith('.basemaps.cartocdn.com')) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(TILES_CACHE).then((c) => { c.put(e.request, copy); trimTilesCache(c); });
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
   // Solo gestionamos lo nuestro: same-origin y las APIs de Open-Meteo.
-  // Los tiles del mapa (cartocdn) y cualquier otro recurso cross-origin NO
-  // se interceptan — el navegador los maneja directo. Interceptarlos como
-  // respuestas opacas rompía el mapa en algunos navegadores (fondo en blanco).
+  // Cualquier otro recurso cross-origin el navegador lo maneja directo.
   const isOpenMeteo = url.hostname.endsWith('open-meteo.com');
   if (url.origin !== location.origin && !isOpenMeteo) return;
 
   // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
   const isData = isOpenMeteo ||
-    /\/(status|verificacion|estaciones|aire|bias|sismos|incendios|alertas|volcanes|emergencia|tsunami_vias|tsunami_areas)\.json$/.test(url.pathname);
+    /\/(status|verificacion|estaciones|aire|bias|avisos|sismos|incendios|alertas|volcanes|emergencia|tsunami_vias|tsunami_areas)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
       fetch(e.request)
