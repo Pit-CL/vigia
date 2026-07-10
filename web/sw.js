@@ -1,6 +1,6 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v5';
-const DATA_CACHE = 'vigia-data-v5';
+const SHELL_CACHE = 'vigia-shell-v6';
+const DATA_CACHE = 'vigia-data-v6';
 // Tiles del mapa base (CARTO): caché propia con límite LRU aproximado, para
 // que el mapa siga siendo usable sin conexión (ver fetch handler abajo).
 const TILES_CACHE = 'vigia-tiles-v1';
@@ -10,8 +10,8 @@ const SHELL = [
   './',
   'index.html',
   'emergencia.html',
-  'app.css?v=35',
-  'app.js?v=35',
+  'app.css?v=36',
+  'app.js?v=36',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -122,4 +122,23 @@ self.addEventListener('fetch', (e) => {
       return hit || refresh;
     })
   );
+});
+
+// Avisos de emergencia (Web Push): el payload trae { title, body }. Si no
+// llega JSON válido, se arma una notificación mínima con el texto crudo.
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data.json(); } catch (_) { d = { title: 'Vigía — aviso de emergencia', body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Vigía', {
+    body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+    lang: 'es', tag: 'vigia-emergencia', renotify: true,
+  }));
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type: 'window' }).then((cs) => {
+    for (const c of cs) if ('focus' in c) return c.focus();
+    return clients.openWindow('./');
+  }));
 });

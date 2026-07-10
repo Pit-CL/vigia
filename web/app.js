@@ -2233,6 +2233,84 @@ setupCapas();
 setupMapaFullscreen();
 setupRiesgos();
 setupPuntoCercano();
+setupPush();
+
+// ── Avisos de emergencia (Web Push) ────────────────────────────
+// Sin registro: la suscripción vive en el navegador (endpoint + claves) y el
+// servidor solo la usa para reenviar sismos/alertas/volcanes graves.
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+async function setupPush() {
+  const btn = $('#push-btn');
+  const info = $('#push-info');
+  if (!btn || !info) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+  btn.hidden = false;
+  info.hidden = false;
+
+  function pintar(suscrito) {
+    btn.textContent = suscrito ? '🔕 Desactivar avisos de emergencia' : '🔔 Recibir avisos de emergencia';
+    btn.setAttribute('aria-pressed', String(suscrito));
+  }
+
+  let reg;
+  try {
+    reg = await navigator.serviceWorker.ready;
+  } catch (_) {
+    return; // sin service worker activo: el botón queda oculto de más arriba
+  }
+  const subInicial = await reg.pushManager.getSubscription().catch(() => null);
+  pintar(!!subInicial);
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const actual = await reg.pushManager.getSubscription();
+      if (actual) {
+        await actual.unsubscribe();
+        await fetch('/api/push/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: actual.endpoint }),
+        }).catch(() => {});
+        pintar(false);
+        return;
+      }
+
+      const res = await fetch('/api/push/vapid');
+      const { publicKey } = await res.json();
+      if (!publicKey) {
+        alert('Las notificaciones aún no están habilitadas en el servidor.');
+        return;
+      }
+
+      const permiso = await Notification.requestPermission();
+      if (permiso !== 'granted') return;
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      });
+      await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub.toJSON()),
+      });
+      pintar(true);
+    } catch (_) {
+      alert('No se pudo activar los avisos de emergencia. Intenta de nuevo más tarde.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
 renderChips();
 loadAll().catch(showError);
 loadArchiveStatus();

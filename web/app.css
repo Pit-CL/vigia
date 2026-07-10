@@ -1432,6 +1432,26 @@ dialog::backdrop {
   border-top: 1px solid var(--border);
 }
 
+.push-btn {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  font: 500 0.78rem var(--font-mono);
+  color: var(--ink);
+  background: transparent;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.push-btn:hover { border-color: var(--ink); transform: translateY(-1px); }
+.push-btn:disabled { opacity: 0.55; cursor: wait; transform: none; }
+
+.push-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
 /* Chip de impacto estimado PAGER (USGS), en el popup del sismo y en el top-10. */
 .pager-chip {
   display: inline-block;
