@@ -31,6 +31,8 @@
   --vol-roja: #d81e2c;
   --evac: #1f9e4c;
   --evac-volcan: #ff7a1a;
+  --marea-sube: #2456c9;
+  --marea-baja: #0e9888;
   --pp-0: #dfe6f0;
   --pp-bajo: #7aa6ff;
   --pp-medio: #2f6fd6;
@@ -74,6 +76,8 @@
     --vol-roja: #ff4d5e;
     --evac: #4ce68a;
     --evac-volcan: #ff9648;
+    --marea-sube: #6f9bff;
+    --marea-baja: #3fc4b1;
     --pp-0: #24304a;
     --pp-bajo: #7aa6ff;
     --pp-medio: #6f9bff;
@@ -111,6 +115,8 @@
   --vol-roja: #ff4d5e;
   --evac: #4ce68a;
   --evac-volcan: #ff9648;
+  --marea-sube: #6f9bff;
+  --marea-baja: #3fc4b1;
   --pp-0: #24304a;
   --pp-bajo: #7aa6ff;
   --pp-medio: #6f9bff;
@@ -593,13 +599,21 @@ main {
   padding: 12px 16px;
 }
 
-/* Barra de modo offline: sticky (no fixed) para que empuje el contenido en
-   vez de taparlo. El fondo usa --alerta-amarilla, que ya tiene su propia
-   variante oscura definida arriba en :root. */
-.offline-bar {
+/* Envoltorio sticky (no fixed) para que el conjunto empuje el contenido en
+   vez de taparlo, en vez de position:sticky en cada barra por separado: dos
+   stickies hermanos con el mismo `top: 0` se superponen entre sí al hacer
+   scroll (el segundo tapa al primero); con el sticky en el contenedor y los
+   hijos en flujo normal, ambas barras —tsunami y offline— se apilan sin
+   pisarse si llegan a estar visibles a la vez. */
+.sticky-banners {
   position: sticky;
   top: 0;
   z-index: 200;
+}
+
+/* Barra de modo offline. El fondo usa --alerta-amarilla, que ya tiene su
+   propia variante oscura definida arriba en :root. */
+.offline-bar {
   margin: 0;
   padding: 8px 16px;
   font: 500 0.82rem var(--font-mono);
@@ -607,6 +621,19 @@ main {
   color: #1a2230;
   background: var(--alerta-amarilla);
 }
+
+/* Banner global de amenaza de tsunami: seguridad vital, sin botón de cierre,
+   dura lo que dure el estado. Texto blanco: --alerta-roja y --vol-naranja ya
+   son suficientemente saturados en ambos temas para ese contraste. */
+.tsunami-banner {
+  margin: 0;
+  padding: 10px 16px;
+  font: 700 0.88rem var(--font-mono);
+  text-align: center;
+  color: #fff;
+}
+.tsunami-banner.tsunami-amenaza { background: var(--alerta-roja); }
+.tsunami-banner.tsunami-precaucion { background: var(--vol-naranja); }
 
 .colophon {
   max-width: 1080px;
@@ -1423,6 +1450,64 @@ dialog::backdrop {
 /* Muestra de la leyenda: relleno translúcido, igual al L.polygon del área de
    evacuación en el mapa (mismo fillColor/fillOpacity). */
 .legend-swatch.area-swatch { background: var(--alerta-roja); opacity: 0.12; }
+
+/* ── Marea y costa (Open-Meteo Marine, no oficial) ───────────── */
+
+/* Reutiliza .stn-label (padding/borde/sombra) igual que .tc0..7 e .icap-0..4:
+   solo cambian el color de fondo y, por ser un color saturado, el texto. */
+.marea-sube { background-color: var(--marea-sube); }
+.marea-baja { background-color: var(--marea-baja); }
+.stn-label.marea-sube, .stn-label.marea-baja { color: #fff; border-color: rgba(0,0,0,0.35); }
+
+/* Triángulos de leyenda, mismo criterio que .vk-*/.al-* (variante chica del
+   marcador del mapa, aquí como glifo de texto en vez de forma CSS). */
+.mk-sube, .mk-baja { font-weight: 700; }
+.mk-sube { color: var(--marea-sube); }
+.mk-baja { color: var(--marea-baja); }
+
+.costa-now {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.costa-marea-icono { font-size: 1.6rem; line-height: 1; }
+.costa-marea-icono.marea-sube { color: var(--marea-sube); }
+.costa-marea-icono.marea-baja { color: var(--marea-baja); }
+
+.costa-marea-nivel {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.costa-marea-tendencia { color: var(--ink-soft); }
+
+.costa-detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px 18px;
+  margin: 0 0 12px;
+}
+
+.costa-detail div { border-top: 1px dotted var(--border); padding-top: 6px; }
+.costa-detail dt {
+  font: 400 0.66rem var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+.costa-detail dd {
+  margin: 2px 0 0;
+  font: 500 0.92rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.costa-tsunami { font-weight: 600; }
+.costa-tsunami.tsunami-precaucion { color: var(--vol-naranja); }
+.costa-tsunami.tsunami-amenaza { color: var(--alerta-roja); }
 
 /* ── Centro de riesgos ────────────────────────────────────────── */
 
