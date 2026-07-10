@@ -1358,8 +1358,12 @@ function precipClass(lluvia48, nieve48) {
 }
 
 function paintPrecip(group) {
-  const todas = (avisosData && avisosData.acumulados || []).filter((a) => a.lluvia_48h != null);
-  if (!todas.length) { $('#map-meta').textContent = 'sin acumulados previstos'; return; }
+  // Solo estaciones con precipitación prevista de verdad: los 0,0 mm son ruido
+  // visual (la mayoría del país en un día seco) y no aportan al mapa.
+  const todas = (avisosData && avisosData.acumulados || [])
+    .filter((a) => a.lluvia_48h != null)
+    .filter((a) => a.lluvia_48h >= 0.1 || (a.nieve_48h != null && a.nieve_48h >= 0.5));
+  if (!todas.length) { $('#map-meta').textContent = 'sin precipitación prevista en las próximas 48 h'; return; }
   const est = map.getZoom() < 9 ? agruparPorCelda(todas, 56).map((celda) => celda[0]) : todas;
   est.forEach((a) => {
     const nieve = a.nieve_48h != null && a.nieve_48h >= 1;
