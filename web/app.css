@@ -597,6 +597,35 @@ main {
   color: var(--accent);
 }
 
+/* ── Tabla de radios de emergencia ──────────────────────────── */
+/* clase propia (no .model-table): esa tiene una regla mobile que oculta
+   la 2ª columna, y aquí la frecuencia es el dato esencial */
+
+.radio-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+}
+
+.radio-table th {
+  text-align: left;
+  font: 600 0.66rem var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink);
+  padding: 6px 10px;
+}
+
+.radio-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.radio-table td:last-child, .radio-table th:last-child { text-align: right; }
+
 /* ── Estado, error, colofón ─────────────────────────────────── */
 
 .error {
@@ -1180,6 +1209,9 @@ dialog::backdrop {
   .model-table { font-size: 0.8rem; }
   .model-table th, .model-table td { padding: 7px 8px; }
   .model-table th:nth-child(2), .model-table td:nth-child(2) { display: none; }
+
+  .radio-table { font-size: 0.8rem; }
+  .radio-table th, .radio-table td { padding: 7px 8px; }
 
   dialog { padding: 16px 16px 18px; max-width: calc(100vw - 16px); }
   .dialog-head h3 { font-size: 1.02rem; }
