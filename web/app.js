@@ -1488,10 +1488,40 @@ function paintIncendios(group) {
         html: `<span class="stn-label foco-grupo">🔥<b>${grupo.length}</b></span>`,
         iconSize: [40, 26], iconAnchor: [20, 13],
       });
-      // Sin popup: el clic acerca el mapa al grupo en vez de mostrar detalle.
-      L.marker([lat, lon], { icon })
-        .on('click', () => map.setView([lat, lon], map.getZoom() + 2))
-        .addTo(group);
+      const marker = L.marker([lat, lon], {
+        icon, title: `${grupo.length} focos de calor — toca para ver`,
+      }).addTo(group);
+      const box = document.createElement('div');
+      box.className = 'stn-popup';
+      const h = document.createElement('strong');
+      h.textContent = `${grupo.length} focos de calor`;
+      box.appendChild(h);
+      const ul = document.createElement('ul');
+      ul.className = 'grupo-lista';
+      const MAX_LISTA = 12;
+      [...grupo].sort((a, b) => (b.frp || 0) - (a.frp || 0)).slice(0, MAX_LISTA).forEach((f) => {
+        const li = document.createElement('li');
+        li.textContent = `FRP ${f.frp != null ? f.frp + ' MW' : '—'} · confianza ${CONF_LABEL[f.conf] || f.conf} · ${fechaHora(f.utc)}`;
+        ul.appendChild(li);
+      });
+      if (grupo.length > MAX_LISTA) {
+        const li = document.createElement('li');
+        li.textContent = `y ${grupo.length - MAX_LISTA} más`;
+        ul.appendChild(li);
+      }
+      box.appendChild(ul);
+      const popup = L.popup({ maxWidth: 280 }).setLatLng([lat, lon]).setContent(box);
+      // Bajo zoom 12, el clic acerca el mapa (zoom+2) y normalmente el grupo
+      // se separa en focos individuales. Desde zoom 12 ya no hay margen para
+      // acercar más (tileLayer con maxZoom 13) y dos focos a <200 m siempre
+      // caen en la misma celda de 48 px: el grupo nunca se desagrega, así que
+      // el clic abre el detalle en un popup en vez de ser un botón muerto.
+      // (No se usa bindPopup para no duplicar el toggle automático de Leaflet
+      // con este handler de clic.)
+      marker.on('click', () => {
+        if (map.getZoom() < 12) map.setView([lat, lon], map.getZoom() + 2);
+        else popup.openOn(map);
+      });
     }
   });
   $('#map-meta').textContent = incendiosData.updated
@@ -1667,10 +1697,37 @@ function paintEmergencia(group) {
         html: `<span class="stn-label emg-grupo">🚑<b>${grupo.length}</b></span>`,
         iconSize: [40, 26], iconAnchor: [20, 13],
       });
-      // Sin popup: el clic acerca el mapa al grupo en vez de mostrar detalle.
-      L.marker([lat, lon], { icon })
-        .on('click', () => map.setView([lat, lon], map.getZoom() + 2))
-        .addTo(group);
+      const marker = L.marker([lat, lon], {
+        icon, title: `${grupo.length} servicios de emergencia — toca para ver`,
+      }).addTo(group);
+      const box = document.createElement('div');
+      box.className = 'stn-popup';
+      const h = document.createElement('strong');
+      h.textContent = `${grupo.length} en este punto`;
+      box.appendChild(h);
+      const ul = document.createElement('ul');
+      ul.className = 'grupo-lista';
+      const MAX_LISTA = 12;
+      grupo.slice(0, MAX_LISTA).forEach((it) => {
+        const li = document.createElement('li');
+        li.textContent = `${it.emoji} ${it.n}${it.d ? ` — ${it.d}` : ''}`;
+        ul.appendChild(li);
+      });
+      if (grupo.length > MAX_LISTA) {
+        const li = document.createElement('li');
+        li.textContent = `y ${grupo.length - MAX_LISTA} más`;
+        ul.appendChild(li);
+      }
+      box.appendChild(ul);
+      const popup = L.popup({ maxWidth: 280 }).setLatLng([lat, lon]).setContent(box);
+      // Mismo criterio que en incendios (paintIncendios): bajo zoom 12 el
+      // clic acerca el mapa y el grupo suele separarse; desde zoom 12 ya no
+      // hay margen para acercar más y el grupo nunca se desagrega, así que el
+      // clic abre el detalle en un popup.
+      marker.on('click', () => {
+        if (map.getZoom() < 12) map.setView([lat, lon], map.getZoom() + 2);
+        else popup.openOn(map);
+      });
     }
   });
   // Área de evacuación ante tsunami: solo con el mapa acercado (zoom ≥ 12) y
