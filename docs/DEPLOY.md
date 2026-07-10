@@ -3,7 +3,7 @@
 Vigía corre con tres contenedores (ver [`docker-compose.yml`](../docker-compose.yml)):
 
 - **`web`** — nginx Alpine sirviendo `web/` como sitio estático, endurecido, escuchando solo en `127.0.0.1`.
-- **`ingesta`** — Python + cron que archiva datos en `data/clima.db` y publica los 12 JSON que lee la PWA.
+- **`ingesta`** — Python + cron que archiva datos en `data/clima.db` y publica los 15 JSON que lee la PWA.
 - **`push`** — servidor de suscripciones (`server.py`, foreground) + cron de envío (`send.py`, cada 5 min) para las notificaciones Web Push de emergencias mayores. Es la única dependencia externa del proyecto (`pywebpush`); todo lo demás es librería estándar de Python.
 
 ## Puesta en marcha
@@ -51,11 +51,12 @@ Cloudflare aporta el TLS y la CDN del borde; el origen nunca queda expuesto dire
 | Pronósticos | 2 veces al día | 6 modelos deterministas + ensamble (51 miembros) |
 | Verificación + calibración | con cada corrida de observaciones/pronósticos | recomputa `verificacion.json` y recalcula bias → `bias.json` |
 | Avisos meteorológicos propios | con cada corrida (sin red, barato) | mediana multi-modelo → `avisos.json` |
-| Sismos (CSN + USGS) | cada 10 min | `sismos.json` |
+| Sismos (CSN + USGS) + estado de tsunami (PTWC) | cada 10 min | `sismos.json`, `tsunami.json` |
 | Incendios (NASA FIRMS) + alertas (SENAPRED) | cada hora | `incendios.json`, `alertas.json` |
 | Volcanes (RNVV SERNAGEOMIN) | 2 veces al día | `volcanes.json` |
+| Marea, oleaje y temperatura del mar (Open-Meteo Marine) | 4 veces al día | `marea.json` |
 | Infraestructura de emergencia (Chile Preparado) | 1 vez por semana (cuasi-estática) | `emergencia.json`, `tsunami_vias.json`, `tsunami_areas.json` |
-| Envío de Web Push (contenedor `push`) | cada 5 min | notifica sismos/alertas/volcanes nuevos a los suscriptores |
+| Envío de Web Push (contenedor `push`) | cada 5 min | notifica sismos/alertas/volcanes/tsunami nuevos a los suscriptores |
 
 Definición en [`deploy/crontab`](../deploy/crontab) y [`push/crontab`](../push/crontab).
 
@@ -71,13 +72,14 @@ rsync -a --delete \
   --exclude 'web/sismos.json' --exclude 'web/incendios.json' --exclude 'web/alertas.json' \
   --exclude 'web/volcanes.json' --exclude 'web/emergencia.json' \
   --exclude 'web/tsunami_vias.json' --exclude 'web/tsunami_areas.json' \
+  --exclude 'web/marea.json' --exclude 'web/tsunami.json' \
   ./ servidor:/ruta/clima/
 docker compose restart web
 ```
 
 > **Importante:** si cambiaste `app.js` o `app.css`, sube el sufijo `?v=N` en `index.html` (y en `sw.js`). Cloudflare cachea JS/CSS por extensión; sin el bump seguiría sirviendo la versión anterior. Los JSON de datos y `sw.js` se sirven con `no-cache` para evitar justamente eso.
 
-> Los doce JSON de arriba se excluyen porque son **generados**: en dev la ingesta los escribe en `web/` (defaults de `ingesta/config.py`); en prod van a `/data` (envs del compose) y nginx los sirve por `alias`. Antes de correr el `rsync --delete`, verifica que la ruta de destino sea la correcta — `--delete` borra en el servidor cualquier archivo que no exista en el origen.
+> Los quince JSON de arriba se excluyen porque son **generados**: en dev la ingesta los escribe en `web/` (defaults de `ingesta/config.py`); en prod van a `/data` (envs del compose) y nginx los sirve por `alias`. Antes de correr el `rsync --delete`, verifica que la ruta de destino sea la correcta — `--delete` borra en el servidor cualquier archivo que no exista en el origen.
 
 ## Verificar estado
 

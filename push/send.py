@@ -19,6 +19,7 @@ DB_PATH = Path(os.environ.get("PUSH_DB", Path(__file__).resolve().parent.parent 
 SISMOS_PATH = Path(os.environ.get("PUSH_SISMOS", "/data/sismos.json"))
 ALERTAS_PATH = Path(os.environ.get("PUSH_ALERTAS", "/data/alertas.json"))
 VOLCANES_PATH = Path(os.environ.get("PUSH_VOLCANES", "/data/volcanes.json"))
+TSUNAMI_PATH = Path(os.environ.get("PUSH_TSUNAMI", "/data/tsunami.json"))
 
 SITE_URL = "https://clima.cavara.cl/"
 ACCION = "Revisa el mapa y tus vías de evacuación"
@@ -84,6 +85,16 @@ def _eventos_volcanes() -> list[tuple[str, str, str]]:
     return eventos
 
 
+def _eventos_tsunami() -> list[tuple[str, str, str]]:
+    data = _load_json(TSUNAMI_PATH)
+    if data.get("estado") != "amenaza":
+        return []
+    b = data.get("boletin") or {}
+    event_id = f"tsunami:{b.get('evento')}:{b.get('area')}:{b.get('emitido')}"
+    titulo = "🌊 AMENAZA DE TSUNAMI — evacúa la costa"
+    return [(event_id, titulo, "Sigue las instrucciones oficiales (SHOA/SENAPRED) y aléjate de la costa")]
+
+
 def _ensure_schema(con: sqlite3.Connection) -> None:
     con.execute(
         "CREATE TABLE IF NOT EXISTS subs("
@@ -125,7 +136,7 @@ def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], ti
 
 
 def main() -> None:
-    eventos = _eventos_sismos() + _eventos_alertas() + _eventos_volcanes()
+    eventos = _eventos_sismos() + _eventos_alertas() + _eventos_volcanes() + _eventos_tsunami()
     if not eventos:
         return
 

@@ -40,6 +40,8 @@ services:
       CLIMA_EMERGENCIA: /data/emergencia.json
       CLIMA_TSUNAMI_VIAS: /data/tsunami_vias.json
       CLIMA_TSUNAMI_AREAS: /data/tsunami_areas.json
+      CLIMA_MAREA: /data/marea.json
+      CLIMA_TSUNAMI: /data/tsunami.json
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}
@@ -64,6 +66,7 @@ services:
       PUSH_SISMOS: /data/sismos.json
       PUSH_ALERTAS: /data/alertas.json
       PUSH_VOLCANES: /data/volcanes.json
+      PUSH_TSUNAMI: /data/tsunami.json
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_CONTACT: ${VAPID_CONTACT:-}
