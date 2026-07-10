@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=35">
+  <link rel="stylesheet" href="app.css?v=36">
 </head>
 <body>
 
@@ -112,7 +112,9 @@
     <div class="riesgo-acciones">
       <a class="chip" href="emergencia.html">🆘 Qué hacer en una emergencia</a>
       <button id="btn-punto-cercano" class="chip">📍 Mi punto de encuentro ante tsunami</button>
+      <button id="push-btn" class="push-btn" hidden>🔔 Recibir avisos de emergencia</button>
     </div>
+    <small id="push-info" class="panel-note" hidden>Solo emergencias mayores: sismos destructivos, alertas rojas y volcanes en naranja o rojo. Sin registro; puedes desactivarlo cuando quieras.</small>
     <div id="punto-cercano-resultado" class="panel-note" hidden></div>
   </section>
 
@@ -311,6 +313,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 </body>
 </html>

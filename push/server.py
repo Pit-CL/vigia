@@ -113,6 +113,9 @@ class Handler(BaseHTTPRequestHandler):
             con.close()
             self._send_json(200, {"subs": n})
             return
+        if self.path == "/api/push/vapid":
+            self._send_json(200, {"publicKey": os.environ.get("VAPID_PUBLIC_KEY", "")})
+            return
         self._send_json(404, {"error": "not found"})
 
     def do_POST(self):
