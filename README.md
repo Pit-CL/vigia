@@ -39,41 +39,67 @@ Vigía es una PWA gratuita que junta, en un solo mapa de Chile, el pronóstico d
 ### 🚨 Centro de riesgos
 
 - **Sismos** (CSN + USGS) en tiempo real, actualizados cada 10 minutos, con estimación de réplicas vía la **ley de Omori** (estadística, no predicción puntual) y el impacto potencial estimado por **PAGER** (USGS).
-- **Incendios activos** vía **NASA FIRMS** (detección satelital VIIRS, 375 m de resolución).
+- **Vigilancia de tsunami cada 10 minutos**: feed del **PTWC (NOAA)** cruzado con el catálogo sísmico propio, con banner en el sitio y notificación push cuando hay amenaza — dejando explícito que la autoridad oficial para Chile es el **SHOA/SNAM**, no el PTWC.
+- **Incendios activos** vía **NASA FIRMS** (detección satelital VIIRS, 375 m de resolución), con **dirección probable de avance del fuego** estimada a partir del viento medido en la estación más cercana.
 - **Alertas vigentes de SENAPRED** explicadas en lenguaje claro, no solo el aviso oficial crudo.
 - **Semáforo volcánico** con el estado técnico de cada volcán activo según la RNVV de SERNAGEOMIN (best effort: la red no publica en tiempo real).
-- **Avisos meteorológicos propios** (viento, helada, lluvia, calor) derivados de la mediana multi-modelo — explícitamente **no oficiales**.
+- **Avisos meteorológicos propios** (viento, helada, lluvia, calor y **riesgo aluvional**) derivados de la mediana multi-modelo — explícitamente **no oficiales**. El aviso aluvional combina lluvia intensa con isoterma 0° alta: cuando la cordillera recibe agua líquida en vez de nieve, crece el riesgo de crecidas repentinas.
+- **Marea, oleaje y temperatura del mar** en 32 puntos de la costa chilena (Open-Meteo Marine), más **aviso de marejadas** propio cuando el modelo proyecta olas de 3,5 m o más — dejando claro que la marea de modelo no reemplaza las tablas oficiales del **SHOA** ni las marejadas oficiales que declara el SHOA/Armada.
+- **Catastro de remociones en masa**: 1.218 eventos históricos de SENAPRED (aluviones, deslizamientos, derrumbes) — es un registro histórico, no un pronóstico.
 - **Acumulados de lluvia y nieve** a 48 horas.
 
 ### 🚑 Emergencia comunitaria
 
 - **5.181 centros de salud, 1.418 cuarteles de bomberos, 883 unidades de Carabineros, 1.513 puntos de encuentro** y **2.746 + 196 vías de evacuación** (tsunami y volcán) más **345 zonas de inundación por tsunami**, todo en el mapa.
-- **Guía offline «qué hacer»** ante sismo, tsunami, incendio o erupción, más kit de emergencia y teléfonos útiles — funciona sin señal.
+- **Guía offline «qué hacer»** ante sismo, tsunami, incendio o erupción, más kit de emergencia, teléfonos útiles y **43 frecuencias de radio FM** (Radio Bío Bío, de Arica a Punta Arenas incluida Juan Fernández) para cuando celulares e internet caen, como ocurrió tras el 27F — funciona sin señal.
 - **Punto de encuentro más cercano** por geolocalización (se calcula en el navegador; la ubicación nunca se envía ni se guarda).
-- **Notificaciones Web Push de emergencias mayores**, opt-in y sin necesidad de registro.
+- **Notificaciones Web Push de emergencias mayores** (sismos, alertas, volcanes, tsunami), opt-in y sin necesidad de registro.
 
 ### 📱 PWA
 
-Instalable, con tema automático claro/oscuro, filtro «Chile» / «cerca de tu ciudad», y tiles del mapa de tu zona cacheados para que la guía de emergencia funcione sin conexión.
+Instalable, con tema automático claro/oscuro, filtro «Chile» / «cerca de tu ciudad», zoom a nivel calle, y tiles del mapa de tu zona cacheados para que la guía de emergencia funcione sin conexión.
+
+## Capas del mapa
+
+Doce capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
+
+| Capa | Qué muestra |
+|---|---|
+| 🌡️ Temperatura | Pronóstico de temperatura por punto, mediana multi-modelo |
+| 🌫️ Aire | Calidad del aire oficial SINCA (MP2,5, MP10, ICAP) |
+| 💧 Lluvia/nieve | Acumulados de precipitación a 48 horas |
+| 〰️ Sismos | Catálogo CSN + USGS, réplicas (Omori) e impacto estimado (PAGER) |
+| 🔥 Incendios | Focos activos NASA FIRMS + dirección probable de avance por viento |
+| ⚠️ Alertas | Alertas vigentes de SENAPRED, explicadas en lenguaje claro |
+| 🌋 Volcanes | Semáforo técnico de la RNVV (SERNAGEOMIN) |
+| 💨 Avisos | Avisos propios: viento, helada, lluvia, calor, riesgo aluvional |
+| ⛰️ Remociones | Catastro histórico de remociones en masa (SENAPRED) |
+| 🌊 Costa | Marea, oleaje, temperatura del mar y aviso de marejadas (32 puntos) |
+| 🏃 Evacuación | Vías y zonas de inundación por tsunami, más rutas de evacuación volcánica |
+| 🚑 Emergencia | Centros de salud, bomberos, Carabineros y puntos de encuentro |
+
+El botón **🇨🇱 Chile** encuadra el mapa al país completo; el mapa admite además zoom a nivel calle.
 
 ## Por qué es distinto
 
 1. **Verificación pública, no promesas.** Casi ninguna app de clima muestra cuánto se equivoca. Vigía archiva cada pronóstico y publica su error real por modelo y plazo.
 2. **Honestidad sísmica.** Los terremotos no se pueden predecir — ninguna app seria lo hace. Lo que sí se puede mostrar es estadística real (Omori para réplicas, PAGER para impacto estimado), siempre etiquetada como tal.
-3. **Todo con fuentes oficiales citadas.** DMC, CSN, SENAPRED, SERNAGEOMIN, NASA, USGS — cada dato apunta a su origen y licencia (ver tabla abajo).
-4. **Cero costo de operación, cero dependencias oscuras.** Ingesta 100 % Python estándar, sin CDNs de terceros, CSP estricta.
+3. **Honestidad de autoridad.** La marea que se ve es de un modelo global, no la tabla oficial del SHOA; los avisos propios (viento, helada, lluvia, calor, aluvional, marejadas) no son un boletín oficial de la DMC o el SHOA; el PTWC no es la autoridad para Chile (lo es el SHOA/SNAM); el catastro de remociones es histórico, no un pronóstico. Cada capa deja explícito qué es y qué no es.
+4. **Todo con fuentes oficiales citadas.** DMC, CSN, SENAPRED, SERNAGEOMIN, NASA, USGS, SHOA, PTWC — cada dato apunta a su origen y licencia (ver tabla abajo).
+5. **Cero costo de operación, cero dependencias oscuras.** Ingesta 100 % Python estándar, sin CDNs de terceros, CSP estricta.
 
 ## Arquitectura
 
 ```
 ingesta/ (Python stdlib, cron)              push/ (pywebpush, cron)
   • pronósticos: 6 modelos + ensamble         • suscripciones (opt-in, sin registro)
-  • observaciones: METAR + DMC                • envía Web Push de sismos/alertas/volcanes
+  • observaciones: METAR + DMC                • envía Web Push de sismos/alertas/volcanes/tsunami
   • verificación + calibración (bias)
   • sismos / incendios / alertas / volcanes
-  • infraestructura de emergencia
+  • tsunami (PTWC) / marea, oleaje y SST
+  • remociones en masa / infraestructura de emergencia
         │
-        ▼ escribe 12 JSON + SQLite
+        ▼ escribe 16 JSON + SQLite
    /data (volumen compartido)
         │
         ▼ sirve por alias, solo 127.0.0.1
@@ -86,7 +112,7 @@ ingesta/ (Python stdlib, cron)              push/ (pywebpush, cron)
    Cloudflare Tunnel → clima.cavara.cl
 ```
 
-Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingesta`** (Python stdlib + cron, produce los 12 JSON en `/data`) y **`push`** (servidor de suscripciones + cron de envío, la única dependencia externa del proyecto: `pywebpush`). Detalle completo en [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingesta`** (Python stdlib + cron, produce los 16 JSON en `/data`) y **`push`** (servidor de suscripciones + cron de envío, la única dependencia externa del proyecto: `pywebpush`). Detalle completo, incluida la cadencia de cada capa, en [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## Fuentes de datos
 
@@ -103,6 +129,9 @@ Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingest
 | [SENAPRED](https://senapred.cl/) (ArcGIS) | Alertas vigentes | Datos públicos del Estado de Chile |
 | [SERNAGEOMIN](https://rnvv.sernageomin.cl/) (RNVV) | Semáforo de alerta técnica volcánica | Datos públicos del Estado de Chile |
 | [Visor Chile Preparado](https://www.chilepreparado.cl/) (SENAPRED) | Centros de salud, bomberos, Carabineros, puntos de encuentro, vías de evacuación, zonas de inundación | Datos públicos del Estado de Chile |
+| Catastro de remociones en masa (SENAPRED, ArcGIS) | 1.218 eventos históricos (aluviones, deslizamientos, derrumbes) | Datos públicos del Estado de Chile |
+| [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api) | Marea, oleaje y temperatura del mar en 32 puntos de la costa | CC BY 4.0 |
+| [PTWC](https://www.tsunami.gov/) (NOAA) | Boletines de amenaza de tsunami para el Pacífico | Dominio público |
 | [INE](https://www.ine.gob.cl/) (censo) | Comunas y su geolocalización para el buscador | Datos públicos del Estado de Chile |
 
 ## Correr en local
