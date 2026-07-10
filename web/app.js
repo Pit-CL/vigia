@@ -254,7 +254,8 @@ let place = savedPlace();
 // ── Utilidades ─────────────────────────────────────────────────
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const isDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+const isDark = () => document.documentElement.dataset.tema === 'dark' ||
+  (document.documentElement.dataset.tema !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
 const modelColors = () => MODEL_COLORS[isDark() ? 'dark' : 'light'];
 const wmo = (code) => WMO[code] || ['—', '·'];
 const compass = (deg) => COMPASS[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
@@ -2234,10 +2235,59 @@ function showError(err) {
 }
 
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (document.documentElement.dataset.tema) return; // tema manual: ignora al sistema
+  syncThemeColorMeta();
   render();
   renderVerif();
   renderMapa();
 });
+
+// ── Selector de tema (auto → claro → oscuro → auto) ────────────
+
+const THEME_LABEL = { auto: 'automático', light: 'claro', dark: 'oscuro' };
+const THEME_ICON = { auto: '🌓', light: '☀️', dark: '🌙' };
+
+function themeState() {
+  const t = document.documentElement.dataset.tema;
+  return t === 'light' || t === 'dark' ? t : 'auto';
+}
+
+// Actualiza los <meta name="theme-color"> (uno por media claro/oscuro) para
+// que coincidan con el tema efectivo, incluso si fue elegido a mano.
+function syncThemeColorMeta() {
+  const bg = css('--bg');
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => { m.content = bg; });
+}
+
+function updateThemeBtn() {
+  const btn = $('#theme-btn');
+  if (!btn) return;
+  const t = themeState();
+  btn.textContent = THEME_ICON[t];
+  btn.title = `Tema: ${THEME_LABEL[t]}`;
+}
+
+function setupThemeBtn() {
+  const btn = $('#theme-btn');
+  if (!btn) return;
+  updateThemeBtn();
+  syncThemeColorMeta();
+  btn.addEventListener('click', () => {
+    const next = { auto: 'light', light: 'dark', dark: 'auto' }[themeState()];
+    if (next === 'auto') {
+      delete document.documentElement.dataset.tema;
+      try { localStorage.removeItem('sinoptica.tema'); } catch (_) { /* opcional */ }
+    } else {
+      document.documentElement.dataset.tema = next;
+      try { localStorage.setItem('sinoptica.tema', next); } catch (_) { /* opcional */ }
+    }
+    updateThemeBtn();
+    syncThemeColorMeta();
+    render();
+    renderVerif();
+    renderMapa();
+  });
+}
 
 if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
@@ -2267,6 +2317,7 @@ async function loadBias() {
 setupSearch();
 setupDialogs();
 setupVerifTabs();
+setupThemeBtn();
 setupCapas();
 setupMapaFullscreen();
 setupRiesgos();

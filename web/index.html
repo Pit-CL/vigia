@@ -15,7 +15,8 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=38">
+  <script src="theme.js?v=1"></script>
+  <link rel="stylesheet" href="app.css?v=39">
 </head>
 <body>
 
@@ -26,6 +27,7 @@
     <span class="brand-mark">▞</span>
     <h1>Vigía</h1>
     <span class="brand-sub">clima y riesgos naturales de Chile</span>
+    <button id="theme-btn" class="theme-btn" aria-label="Cambiar tema" title="Tema: automático">🌓</button>
     <button id="risk-badge" class="risk-badge" hidden></button>
   </div>
   <nav class="locbar" aria-label="Ubicación">
@@ -313,6 +315,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=38"></script>
+<script src="app.js?v=39"></script>
 </body>
 </html>

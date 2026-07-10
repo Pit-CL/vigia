@@ -36,7 +36,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema="light"]) {
     --bg: #0b111d;
     --bg-panel: #111929;
     --ink: #e9e4d6;
@@ -64,6 +64,37 @@
     --evac: #4ce68a;
     --evac-volcan: #ff9648;
   }
+}
+
+/* Selector manual de tema: mismo set que el bloque @media de arriba;
+   mantener sincronizados. */
+:root[data-tema="dark"] {
+  --bg: #0b111d;
+  --bg-panel: #111929;
+  --ink: #e9e4d6;
+  --ink-soft: #8b94a7;
+  --border: #243049;
+  --grid-line: rgba(233, 228, 214, 0.05);
+  --accent: #ff7a4d;
+  --accent2: #6f9bff;
+  --band: rgba(111, 155, 255, 0.16);
+  --band-outer: rgba(111, 155, 255, 0.08);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --sismo-h1: #ff4d5e;
+  --sismo-h6: #ff9d3d;
+  --sismo-h24: #e0c14f;
+  --foco-h: #ff6a33;
+  --foco-n: #ffab52;
+  --foco-l: #ffd873;
+  --alerta-roja: #ff4d5e;
+  --alerta-amarilla: #f0c14f;
+  --alerta-preventiva: #4bc76b;
+  --vol-verde: #4bc76b;
+  --vol-amarilla: #f0c14f;
+  --vol-naranja: #ff9648;
+  --vol-roja: #ff4d5e;
+  --evac: #4ce68a;
+  --evac-volcan: #ff9648;
 }
 
 * { box-sizing: border-box; }
@@ -152,6 +183,24 @@ a { color: var(--accent2); text-underline-offset: 2px; }
 .risk-badge:hover, .risk-badge:focus-visible {
   background: var(--alerta-roja);
   color: var(--bg-panel);
+  outline: none;
+}
+
+.theme-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font: 500 0.9rem var(--font-mono);
+  color: var(--ink);
+  background: var(--bg-panel);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.theme-btn:hover, .theme-btn:focus-visible {
+  border-color: var(--ink);
   outline: none;
 }
 
