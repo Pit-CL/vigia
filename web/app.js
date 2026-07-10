@@ -2000,9 +2000,24 @@ function setupPuntoCercano() {
         out.appendChild(verBtn);
       },
       (err) => {
-        out.textContent = err.code === err.PERMISSION_DENIED
-          ? 'Sin permiso de ubicación: actívalo en tu navegador para usar esta función.'
-          : 'No se pudo obtener tu ubicación.';
+        if (err.code === err.PERMISSION_DENIED) {
+          out.textContent = '';
+          const p = document.createElement('p');
+          p.textContent = 'Sin permiso de ubicación. Para activarlo:';
+          const ul = document.createElement('ul');
+          [
+            'En el celular: toca el candado o el ícono ⓘ junto a la dirección (arriba) → Permisos → Ubicación → Permitir, y vuelve a intentar.',
+            'En iPhone, si no aparece: Ajustes → Apps → Safari → Ubicación → Preguntar o Permitir.',
+            'En computador: haz clic en el candado de la barra de direcciones → Ubicación → Permitir, y recarga la página.',
+          ].forEach((t) => {
+            const li = document.createElement('li');
+            li.textContent = t;
+            ul.appendChild(li);
+          });
+          out.append(p, ul);
+        } else {
+          out.textContent = 'No se pudo obtener tu ubicación (sin señal de GPS o tardó demasiado). Inténtalo de nuevo.';
+        }
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
     );

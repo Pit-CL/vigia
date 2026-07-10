@@ -1465,3 +1465,12 @@ dialog::backdrop {
 .pager-yellow { color: var(--vol-amarilla); }
 .pager-orange { color: var(--vol-naranja); }
 .pager-red    { color: var(--vol-roja); }
+
+/* Instrucciones de permiso de ubicación (punto de encuentro) */
+#punto-cercano-resultado ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.85em;
+  color: var(--ink-soft);
+}
+#punto-cercano-resultado ul li { margin-bottom: 0.3rem; }
