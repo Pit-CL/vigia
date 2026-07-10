@@ -1,0 +1,4 @@
+# Envío de notificaciones Web Push (TZ del contenedor: America/Santiago)
+*/5 * * * * python3 /app/push/send.py >> /data/push.log 2>&1
+# Mantener el log acotado (~100 KB)
+17 4 * * * sh -c 'tail -c 100000 /data/push.log > /data/push.log.tmp && mv /data/push.log.tmp /data/push.log'
