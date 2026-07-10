@@ -213,6 +213,14 @@ const INFO = {
 <p><strong>Los tres niveles de alerta SENAPRED:</strong></p>
 <p class="info-fine">${EXPLICA_NIVEL.temprana_preventiva}<br>${EXPLICA_NIVEL.amarilla}<br>${EXPLICA_NIVEL.roja}</p>`,
   },
+  costa: {
+    title: 'Marea, oleaje y alerta de tsunami: ¿qué mostramos y qué no?',
+    html: `
+<p><strong>La marea que ves</strong> viene de un modelo global (Open-Meteo Marine, ~8 km de resolución) que estima el nivel del mar, el oleaje y la temperatura superficial en 32 puntos de la costa chilena.</p>
+<p><strong>Lo que NO es:</strong> una tabla de marea oficial. Para navegación, pesca o cualquier decisión que dependa de la hora exacta de pleamar o bajamar, la referencia es el <strong>SHOA</strong> (shoa.cl), que mide con mareógrafos reales en cada puerto.</p>
+<p><strong>El estado de tsunami</strong> de arriba de la página combina los boletines del <strong>PTWC</strong> (Centro de Alerta de Tsunamis del Pacífico, NOAA) con nuestro propio catálogo sísmico. La autoridad oficial en Chile es el <strong>SHOA</strong> a través del <strong>SNAM</strong> (Sistema Nacional de Alarma de Maremotos).</p>
+<p class="info-fine">Regla de autoprotección: si sientes un sismo fuerte y prolongado estando en la costa, evacúa a terreno alto de inmediato — no esperes ninguna alerta oficial, puede llegar después de que la ola toque tierra.</p>`,
+  },
 };
 
 // ── Estado ─────────────────────────────────────────────────────
@@ -229,6 +237,8 @@ let incendiosData = null; // focos de calor VIIRS (NASA FIRMS)
 let alertasData = null;   // alertas naturales vigentes (SENAPRED)
 let volcanesData = null;  // alerta técnica volcánica (SERNAGEOMIN RNVV)
 let avisosData = null;   // avisos meteo derivados del pronóstico propio (NO oficiales)
+let mareaData = null;    // marea, oleaje y temperatura del mar por punto costero (Open-Meteo Marine, no oficial)
+let tsunamiData = null;  // estado de amenaza de tsunami (PTWC + catálogo sísmico propio)
 let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
 let emergenciaCargando = false;
 let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
@@ -1103,6 +1113,26 @@ async function loadAvisos() {
   } catch (_) { /* sin avisos: la capa queda vacía */ }
 }
 
+async function loadMarea() {
+  try {
+    const res = await fetch('marea.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    mareaData = await res.json();
+    if (capasActivas.has('marea')) renderMapa();
+    renderCosta();
+  } catch (_) { /* sin marea: la capa y la tarjeta Costa quedan sin datos */ }
+}
+
+async function loadTsunami() {
+  try {
+    const res = await fetch('tsunami.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    tsunamiData = await res.json();
+    renderTsunamiBanner();
+    renderCosta();
+  } catch (_) { /* sin tsunami.json: el banner queda oculto */ }
+}
+
 // emergencia.json es cuasi-estático (~9.000 puntos, se refresca 1x/semana):
 // un solo fetch por sesión, disparado por toggleCapa al encender la capa
 // emergencia O la capa evacuacion (ambas comparten este loader), no en la
@@ -1139,6 +1169,7 @@ const CAPAS = {
   alertas:       { paint: paintAlertas },
   volcanes:      { paint: paintVolcanes },
   avisos:        { paint: paintAvisos },
+  marea:         { paint: paintMarea },
   evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
   emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
 };
@@ -1149,7 +1180,7 @@ const CAPAS = {
 // son lo que se busca, así que su texto y sus íconos deben quedar encima de
 // cualquier otra capa. 'evacuacion' cierra la lista porque sus vías son la
 // acción más urgente (hacia dónde ir), por sobre el resto.
-const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'precipitacion', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1248,6 +1279,7 @@ function renderMapa() {
   document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-legend-avisos').hidden = !capasActivas.has('avisos');
+  document.getElementById('map-legend-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-legend-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-legend-emergencia').hidden = !capasActivas.has('emergencia');
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
@@ -1258,6 +1290,7 @@ function renderMapa() {
   document.getElementById('map-note-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-note-avisos').hidden = !capasActivas.has('avisos');
+  document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
@@ -1653,6 +1686,41 @@ function paintAvisos(group) {
   $('#map-meta').textContent = avisosData.updated
     ? `${avisos.length} avisos meteo · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
     : `${avisos.length} avisos meteo`;
+}
+
+// ── Marea, oleaje y temperatura del mar (Open-Meteo Marine, no oficial) ──
+
+function paintMarea(group) {
+  const puntos = (mareaData && mareaData.puntos) || [];
+  if (!puntos.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin datos de marea'; return; }
+  puntos.forEach((p) => {
+    const cls = p.tendencia === 'bajando' ? 'marea-baja' : 'marea-sube';
+    const flecha = p.tendencia === 'bajando' ? '▼' : p.tendencia === 'subiendo' ? '▲' : '—';
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="stn-label ${cls}">${flecha}</span>`,
+      iconSize: [30, 26], iconAnchor: [15, 13],
+    });
+    const marker = L.marker([p.lat, p.lon], { icon, title: p.nombre }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = p.nombre; box.appendChild(h);
+    const meta = document.createElement('small');
+    meta.textContent = `Marea ${r1(p.nivel)} m (${p.tendencia || 'estable'})`;
+    box.appendChild(meta);
+    const filas = (p.extremos || []).slice(0, 2).map((e) =>
+      [e.tipo === 'pleamar' ? 'Pleamar' : 'Bajamar', `${fechaHora(e.t)} · ${r1(e.h)} m`]);
+    if (p.ola) filas.push(['Ola', `${r1(p.ola.altura)} m · ${r1(p.ola.periodo)} s`]);
+    if (p.sst != null) filas.push(['Mar', `${r1(p.sst)} °C`]);
+    box.appendChild(popupRows(filas));
+    const small = document.createElement('small');
+    small.textContent = (mareaData && mareaData.nota) || '';
+    box.appendChild(small);
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+  $('#map-meta').textContent = mareaData.updated
+    ? `${puntos.length} puntos costeros · marea de modelo (no oficial) · ${horaLocal(mareaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${puntos.length} puntos costeros · marea de modelo (no oficial)`;
 }
 
 const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', encuentro_tsunami: '🟢', encuentro_volcan: '🔶' };
@@ -2218,6 +2286,72 @@ function setupPuntoCercano() {
   });
 }
 
+// ── Banner global de amenaza de tsunami ────────────────────────
+// Sin botón de cierre a propósito: es seguridad vital y dura lo que dure el
+// estado real informado por tsunami.json, no lo que el usuario quiera ver.
+
+function renderTsunamiBanner() {
+  const el = $('#tsunami-banner');
+  if (!el || !tsunamiData) return;
+  const estado = tsunamiData.estado;
+  if (estado === 'amenaza') {
+    el.textContent = `🌊 AMENAZA DE TSUNAMI — ${tsunamiData.mensaje} · Sigue al SHOA/SENAPRED y evacúa la costa`;
+    el.className = 'tsunami-amenaza';
+    el.hidden = false;
+  } else if (estado === 'precaucion') {
+    el.textContent = tsunamiData.mensaje;
+    el.className = 'tsunami-precaucion';
+    el.hidden = false;
+  } else {
+    el.hidden = true;
+  }
+}
+
+// ── Costa: marea, oleaje y estado de tsunami del punto más cercano ─────
+// Reutiliza haversineKm (mismo patrón que estacionAireCercana/estacionObsCercana).
+
+function puntoCosteroActivo() {
+  if (!mareaData || !mareaData.puntos) return null;
+  let best = null;
+  for (const p of mareaData.puntos) {
+    const d = haversineKm(place.lat, place.lon, p.lat, p.lon);
+    if (!best || d < best.dist) best = { ...p, dist: d };
+  }
+  return best && best.dist <= 40 ? best : null;
+}
+
+function renderCosta() {
+  const panel = $('.panel-costa');
+  if (!panel) return;
+  const p = puntoCosteroActivo();
+  panel.hidden = !p;
+  if (!p) return;
+
+  $('#costa-nombre').textContent = p.nombre;
+  const cls = p.tendencia === 'bajando' ? 'marea-baja' : 'marea-sube';
+  $('#costa-marea-icono').textContent = p.tendencia === 'bajando' ? '▼' : p.tendencia === 'subiendo' ? '▲' : '—';
+  $('#costa-marea-icono').className = `costa-marea-icono ${cls}`;
+  $('#costa-marea-nivel').textContent = `${r1(p.nivel)} m`;
+  $('#costa-marea-tendencia').textContent = p.tendencia || 'estable';
+
+  const proxPleamar = (p.extremos || []).find((e) => e.tipo === 'pleamar');
+  const proxBajamar = (p.extremos || []).find((e) => e.tipo === 'bajamar');
+  $('#costa-pleamar').textContent = proxPleamar ? `${fechaHora(proxPleamar.t)} · ${r1(proxPleamar.h)} m` : '—';
+  $('#costa-bajamar').textContent = proxBajamar ? `${fechaHora(proxBajamar.t)} · ${r1(proxBajamar.h)} m` : '—';
+  $('#costa-ola').textContent = p.ola ? `${r1(p.ola.altura)} m · ${r1(p.ola.periodo)} s` : '—';
+  $('#costa-sst').textContent = p.sst != null ? `${r1(p.sst)} °C` : '—';
+
+  const tsu = $('#costa-tsunami');
+  if (tsunamiData) {
+    tsu.textContent = tsunamiData.mensaje;
+    tsu.className = `costa-tsunami ${tsunamiData.estado === 'amenaza' ? 'tsunami-amenaza' : tsunamiData.estado === 'precaucion' ? 'tsunami-precaucion' : ''}`;
+  } else {
+    tsu.textContent = '—';
+    tsu.className = 'costa-tsunami';
+  }
+  $('#costa-nota').textContent = (mareaData && mareaData.nota) || '';
+}
+
 // ── Ubicaciones: chips y búsqueda ──────────────────────────────
 
 function setPlace(p) {
@@ -2227,6 +2361,7 @@ function setPlace(p) {
   updateBiasStation();   // recalcular la estación de calibración cercana
   actualizarLabelCerca();
   if (riesgoAmbito === 'cerca') renderRiesgos();
+  renderCosta();   // recalcular el punto costero más cercano
   loadAll().catch(showError);
 }
 
@@ -2582,6 +2717,8 @@ loadIncendios();
 loadAlertas();
 loadVolcanes();
 loadAvisos();
+loadMarea();
+loadTsunami();
 
 // ── Refresco en vivo ───────────────────────────────────────────
 // Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
@@ -2598,7 +2735,7 @@ let refreshing = false;
 // El "última actualización" es el más reciente `updated` entre los JSON ya
 // cargados (mejor esfuerzo: no todos llegaron a existir necesariamente).
 function ultimaActualizacionLocal() {
-  const updates = [estacionesData, sismosData, incendiosData, alertasData, volcanesData, avisosData, biasData]
+  const updates = [estacionesData, sismosData, incendiosData, alertasData, volcanesData, avisosData, biasData, mareaData, tsunamiData]
     .filter((d) => d && d.updated).map((d) => d.updated);
   if (!updates.length) return null;
   const masReciente = updates.sort().pop();   // "YYYY-MM-DD HH:MM UTC" ordena bien como texto
@@ -2635,6 +2772,8 @@ async function refreshAll() {
   loadAlertas();       // alertas.json (SENAPRED)
   loadVolcanes();      // volcanes.json (SERNAGEOMIN RNVV)
   loadAvisos();        // avisos.json (derivado propio)
+  loadMarea();         // marea.json (Open-Meteo Marine, no oficial)
+  loadTsunami();       // tsunami.json (PTWC + catálogo sísmico propio)
   refreshing = false;
 }
 
