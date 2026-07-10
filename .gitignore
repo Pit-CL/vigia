@@ -24,6 +24,7 @@ web/incendios.json
 web/alertas.json
 web/volcanes.json
 web/emergencia.json
+web/remociones.json
 web/tsunami_vias.json
 web/tsunami_areas.json
 web/marea.json

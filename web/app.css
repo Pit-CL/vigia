@@ -31,6 +31,9 @@
   --vol-roja: #d81e2c;
   --evac: #1f9e4c;
   --evac-volcan: #ff7a1a;
+  --rem-flujo: #8a5a2b;
+  --rem-desliza: #b5541e;
+  --rem-caida: #55606e;
   --marea-sube: #2456c9;
   --marea-baja: #0e9888;
   --pp-0: #dfe6f0;
@@ -76,6 +79,9 @@
     --vol-roja: #ff4d5e;
     --evac: #4ce68a;
     --evac-volcan: #ff9648;
+    --rem-flujo: #d9a066;
+    --rem-desliza: #e6824a;
+    --rem-caida: #9aa8b8;
     --marea-sube: #6f9bff;
     --marea-baja: #3fc4b1;
     --pp-0: #24304a;
@@ -115,6 +121,9 @@
   --vol-roja: #ff4d5e;
   --evac: #4ce68a;
   --evac-volcan: #ff9648;
+  --rem-flujo: #d9a066;
+  --rem-desliza: #e6824a;
+  --rem-caida: #9aa8b8;
   --marea-sube: #6f9bff;
   --marea-baja: #3fc4b1;
   --pp-0: #24304a;
@@ -1450,6 +1459,72 @@ dialog::backdrop {
 /* Muestra de la leyenda: relleno translúcido, igual al L.polygon del área de
    evacuación en el mapa (mismo fillColor/fillOpacity). */
 .legend-swatch.area-swatch { background: var(--alerta-roja); opacity: 0.12; }
+
+/* ── Remociones en masa: catastro histórico (SENAPRED) ───────── */
+
+/* Ícono individual (zoom ≥ 9): reset del contenedor, igual que .foco/
+   .volcan-icon — la forma y el color los da la clase de subtipo. Tres
+   formas distintas (círculo/triángulo/rombo), no solo color, para que el
+   glifo se distinga incluso sin percibir el matiz. */
+.rem-icon { background: none; border: none; }
+.rem-flujo, .rem-desliza, .rem-caida { display: block; box-shadow: var(--shadow-1); }
+.rem-flujo {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background-color: var(--rem-flujo);
+}
+.rem-desliza {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 6px 11px 6px;
+  border-color: transparent transparent var(--rem-desliza) transparent;
+}
+.rem-caida {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--ink);
+  background-color: var(--rem-caida);
+  transform: rotate(45deg);
+}
+
+/* Grupo (zoom < 9): mismo patrón que .emg-grupo (reutiliza .stn-label con
+   fondo neutro): es un catastro histórico, no una emergencia activa. */
+.rem-grupo {
+  background-color: var(--bg-panel);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: var(--radius-full);
+}
+.rem-grupo b { font-variant-numeric: tabular-nums; }
+
+/* Glifos de la leyenda: mismas formas que el marcador del mapa, a menor
+   tamaño (igual criterio que .vk-*/.fk-* frente a .vol-*/.foco-*). */
+.rk-flujo, .rk-desliza, .rk-caida { display: inline-block; }
+.rk-flujo {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--ink);
+  background-color: var(--rem-flujo);
+}
+.rk-desliza {
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 5px 9px 5px;
+  border-color: transparent transparent var(--rem-desliza) transparent;
+}
+.rk-caida {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--ink);
+  background-color: var(--rem-caida);
+  transform: rotate(45deg);
+}
 
 /* ── Marea y costa (Open-Meteo Marine, no oficial) ───────────── */
 

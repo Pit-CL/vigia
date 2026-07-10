@@ -1,6 +1,6 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v16';
-const DATA_CACHE = 'vigia-data-v16';
+const SHELL_CACHE = 'vigia-shell-v17';
+const DATA_CACHE = 'vigia-data-v17';
 // Tiles del mapa base (CARTO): caché propia con límite LRU aproximado, para
 // que el mapa siga siendo usable sin conexión (ver fetch handler abajo).
 const TILES_CACHE = 'vigia-tiles-v1';
@@ -11,8 +11,8 @@ const SHELL = [
   'index.html',
   'emergencia.html',
   'theme.js?v=1',
-  'app.css?v=46',
-  'app.js?v=46',
+  'app.css?v=47',
+  'app.js?v=47',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -78,7 +78,7 @@ self.addEventListener('fetch', (e) => {
 
   // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
   const isData = isOpenMeteo ||
-    /\/(status|verificacion|estaciones|aire|bias|avisos|sismos|incendios|alertas|volcanes|emergencia|tsunami_vias|tsunami_areas|marea|tsunami)\.json$/.test(url.pathname);
+    /\/(status|verificacion|estaciones|aire|bias|avisos|sismos|incendios|alertas|volcanes|emergencia|remociones|tsunami_vias|tsunami_areas|marea|tsunami)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
       fetch(e.request)
