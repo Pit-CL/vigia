@@ -31,6 +31,11 @@
   --vol-roja: #d81e2c;
   --evac: #1f9e4c;
   --evac-volcan: #ff7a1a;
+  --pp-0: #dfe6f0;
+  --pp-bajo: #7aa6ff;
+  --pp-medio: #2f6fd6;
+  --pp-alto: #7c3aed;
+  --pp-severo: #c81e3a;
   --font-display: "Bricolage Grotesque", "Avenir Next", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
 }
@@ -63,6 +68,11 @@
     --vol-roja: #ff4d5e;
     --evac: #4ce68a;
     --evac-volcan: #ff9648;
+    --pp-0: #24304a;
+    --pp-bajo: #7aa6ff;
+    --pp-medio: #6f9bff;
+    --pp-alto: #a78bfa;
+    --pp-severo: #ff4d5e;
   }
 }
 
@@ -95,6 +105,11 @@
   --vol-roja: #ff4d5e;
   --evac: #4ce68a;
   --evac-volcan: #ff9648;
+  --pp-0: #24304a;
+  --pp-bajo: #7aa6ff;
+  --pp-medio: #6f9bff;
+  --pp-alto: #a78bfa;
+  --pp-severo: #ff4d5e;
 }
 
 * { box-sizing: border-box; }
@@ -975,6 +990,15 @@ dialog::backdrop {
 .tc6 { background-color: #e07038; }
 .tc7 { background-color: #d8432a; }
 .tcx { background-color: var(--ink-soft); }
+
+/* Acumulados de lluvia/nieve: escala de intensidad, no de temperatura.
+   pp-severo cubre además cualquier nevada >= 5 cm (más noticiable que el mm). */
+.pp-0 { background-color: var(--pp-0); }
+.pp-bajo { background-color: var(--pp-bajo); }
+.pp-medio { background-color: var(--pp-medio); }
+.pp-alto { background-color: var(--pp-alto); }
+.pp-severo { background-color: var(--pp-severo); }
+.stn-label.pp-alto, .stn-label.pp-severo { color: #fff; border-color: rgba(0,0,0,0.35); }
 
 .stn-icon { background: none; border: none; }
 

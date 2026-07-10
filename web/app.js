@@ -1129,21 +1129,22 @@ async function loadEmergencia() {
 // 'emergencia' es lazy: ~9.000 puntos cuasi-estáticos que no se cargan salvo
 // que el usuario encienda la capa (ni en la carga inicial ni en el refresco).
 const CAPAS = {
-  temp:       { grupo: 'medicion', paint: paintTemp },
-  aire:       { grupo: 'medicion', paint: paintAire },
-  sismos:     { paint: paintSismos },
-  incendios:  { paint: paintIncendios },
-  alertas:    { paint: paintAlertas },
-  volcanes:   { paint: paintVolcanes },
-  avisos:     { paint: paintAvisos },
-  emergencia: { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
+  temp:          { grupo: 'medicion', paint: paintTemp },
+  aire:          { grupo: 'medicion', paint: paintAire },
+  precipitacion: { grupo: 'medicion', paint: paintPrecip },
+  sismos:        { paint: paintSismos },
+  incendios:     { paint: paintIncendios },
+  alertas:       { paint: paintAlertas },
+  volcanes:      { paint: paintVolcanes },
+  avisos:        { paint: paintAvisos },
+  emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
 };
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
 // pinta al final para que su texto en #map-meta prevalezca sobre las demás.
 // Los puntos de alerta van encima de los focos/eventos que resumen.
 // 'emergencia' va al final de todo: en una emergencia real es lo que se
 // busca, así que su texto y sus íconos deben quedar encima de cualquier otra capa.
-const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'emergencia'];
+const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'precipitacion', 'emergencia'];
 
 function capasGuardadas() {
   try {
@@ -1199,7 +1200,7 @@ function ensureMap() {
   // Al cambiar de zoom, el dedup/agrupado por celda de paintTemp/paintAire/
   // paintIncendios depende del zoom actual: hay que re-pintar la capa activa.
   map.on('zoomend', () => {
-    if (['temp', 'aire', 'incendios', 'emergencia'].some((k) => capasActivas.has(k))) renderMapa();
+    if (['temp', 'aire', 'precipitacion', 'incendios', 'emergencia'].some((k) => capasActivas.has(k))) renderMapa();
   });
   // Las vías de evacuación se filtran por el viewport visible (2.740 vías en
   // todo el país): al desplazar el mapa sin cambiar el zoom, también hay que
@@ -1233,9 +1234,10 @@ function renderMapa() {
     if (capasActivas.has(k)) CAPAS[k].paint(layerGroups[k]);
   }
 
-  const medicion = ['temp', 'aire'].find((k) => capasActivas.has(k));
+  const medicion = ['temp', 'aire', 'precipitacion'].find((k) => capasActivas.has(k));
   document.getElementById('map-legend-temp').hidden = medicion !== 'temp';
   document.getElementById('map-legend-aire').hidden = medicion !== 'aire';
+  document.getElementById('map-legend-precipitacion').hidden = medicion !== 'precipitacion';
   document.getElementById('map-legend-sismos').hidden = !capasActivas.has('sismos');
   document.getElementById('map-legend-incendios').hidden = !capasActivas.has('incendios');
   document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
@@ -1244,6 +1246,7 @@ function renderMapa() {
   document.getElementById('map-legend-emergencia').hidden = !capasActivas.has('emergencia');
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
   document.getElementById('map-note-aire').hidden = medicion !== 'aire';
+  document.getElementById('map-note-precipitacion').hidden = medicion !== 'precipitacion';
   document.getElementById('map-note-sismos').hidden = !capasActivas.has('sismos');
   document.getElementById('map-note-incendios').hidden = !capasActivas.has('incendios');
   document.getElementById('map-note-alertas').hidden = !capasActivas.has('alertas');
@@ -1333,6 +1336,60 @@ function paintAire(group) {
   const resumen = est.length < todas.length ? `${est.length} de ${todas.length} estaciones SINCA` : `${est.length} estaciones SINCA`;
   const acerca = est.length < todas.length ? ' (acerca el mapa para ver más)' : '';
   $('#map-meta').textContent = `${resumen} · MP2,5${acerca}`;
+}
+
+// Formato del acumulado: 1 decimal bajo 10 (precisión útil en valores chicos),
+// entero desde 10 (a esa magnitud el decimal ya no aporta).
+function fmtAcum(v) {
+  return v < 10 ? v.toFixed(1) : String(Math.round(v));
+}
+
+// Clase de color por magnitud: se clasifica el valor que se muestra en la
+// etiqueta (nieve si se está mostrando nieve, lluvia si no), salvo el piso de
+// severidad propio de la nieve (>= 5 cm es severo aunque el mm de lluvia no lo sea).
+function precipClass(lluvia48, nieve48) {
+  if (nieve48 != null && nieve48 >= 5) return 'pp-severo';
+  const v = nieve48 != null && nieve48 >= 1 ? nieve48 : (lluvia48 || 0);
+  if (v <= 1) return 'pp-0';
+  if (v <= 10) return 'pp-bajo';
+  if (v <= 30) return 'pp-medio';
+  if (v <= 60) return 'pp-alto';
+  return 'pp-severo';
+}
+
+function paintPrecip(group) {
+  const todas = (avisosData && avisosData.acumulados || []).filter((a) => a.lluvia_48h != null);
+  if (!todas.length) { $('#map-meta').textContent = 'sin acumulados previstos'; return; }
+  const est = map.getZoom() < 9 ? agruparPorCelda(todas, 56).map((celda) => celda[0]) : todas;
+  est.forEach((a) => {
+    const nieve = a.nieve_48h != null && a.nieve_48h >= 1;
+    const cls = precipClass(a.lluvia_48h, a.nieve_48h);
+    const label = nieve ? `❄ ${fmtAcum(a.nieve_48h)} cm` : `${fmtAcum(a.lluvia_48h)} mm`;
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="stn-label ${cls}">${label}</span>`,
+      iconSize: [50, 26], iconAnchor: [25, 13],
+    });
+    const marker = L.marker([a.lat, a.lon], { icon, title: a.nombre }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = a.nombre; box.appendChild(h);
+    box.appendChild(popupRows([
+      ['Lluvia 24 h', `${r1(a.lluvia_24h)} mm`],
+      ['Lluvia 48 h', `${r1(a.lluvia_48h)} mm`],
+      ['Nieve 24 h', a.nieve_24h != null ? `${r1(a.nieve_24h)} cm` : null],
+      ['Nieve 48 h', a.nieve_48h != null ? `${r1(a.nieve_48h)} cm` : null],
+    ]));
+    const small = document.createElement('small');
+    small.textContent = (avisosData && avisosData.fuente) || 'Derivado del pronóstico multi-modelo';
+    box.appendChild(small);
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+  const resumen = est.length < todas.length ? `${est.length} de ${todas.length} estaciones` : `${est.length} estaciones`;
+  const acerca = est.length < todas.length ? ' (acerca el mapa para ver más)' : '';
+  $('#map-meta').textContent = avisosData.updated
+    ? `${resumen} · acumulado 48 h · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${acerca}`
+    : `${resumen} · acumulado 48 h${acerca}`;
 }
 
 // Chip de impacto estimado PAGER (USGS) — mismo semáforo verde/amarillo/
@@ -1570,11 +1627,17 @@ function paintEmergencia(group) {
     for (const it of (categorias[cat] || [])) todos.push({ ...it, cat, emoji });
   }
   if (!todos.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin datos de emergencia'; return; }
+  // ~9.000 puntos en todo el país: pintarlos todos satura el DOM (9.292
+  // divIcons medidos a zoom 13 en Valparaíso). Se filtra primero al
+  // viewport actual (con margen, para no recortar en el borde) y recién
+  // sobre eso se agrupa/pinta — igual que ya se hace con vías y áreas.
+  const boundsPuntos = map.getBounds().pad(0.3);
+  const visibles = todos.filter((it) => boundsPuntos.contains([it.lat, it.lon]));
   // Con ~9.000 puntos el clustering es obligatorio salvo con el mapa muy
   // acercado (zoom ≥ 13), donde cada punto se pinta individual.
   const grupos = map.getZoom() >= 13
-    ? todos.map((it) => [it])
-    : agruparPorCelda(todos, 44).sort((a, b) => a.length - b.length);
+    ? visibles.map((it) => [it])
+    : agruparPorCelda(visibles, 44).sort((a, b) => a.length - b.length);
   grupos.forEach((grupo) => {
     if (grupo.length === 1) {
       const it = grupo[0];
@@ -1643,9 +1706,16 @@ function paintEmergencia(group) {
     }
   }
 
-  $('#map-meta').textContent = emergenciaData.updated
+  // Con el mapa en zoom país, las vías (zoom ≥ 11) y el área de inundación
+  // (zoom ≥ 12) no se pintan y no hay ninguna pista visual de que existen:
+  // el usuario reportó "no las veo". El hint solo aparece cuando falta el
+  // requisito de zoom para las vías (el más bajo de los dos).
+  const hintVias = map.getZoom() < 11
+    ? ' · vías de evacuación: acerca el mapa a una zona costera o volcánica'
+    : '';
+  $('#map-meta').textContent = (emergenciaData.updated
     ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${todos.length} puntos de emergencia`;
+    : `${todos.length} puntos de emergencia`) + hintVias;
 }
 
 function setupCapas() {
