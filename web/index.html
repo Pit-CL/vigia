@@ -15,9 +15,11 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=33">
+  <link rel="stylesheet" href="app.css?v=34">
 </head>
 <body>
+
+<p id="offline-bar" class="offline-bar" role="status" aria-live="polite" hidden></p>
 
 <header class="masthead">
   <div class="masthead-brand">
@@ -104,6 +106,7 @@
       <button class="riesgo-tile" data-capa="incendios" hidden><span class="rt-emoji">🔥</span><b id="rt-incendios">–</b><small>focos activos 48 h</small></button>
       <button class="riesgo-tile" data-capa="alertas" hidden><span class="rt-emoji">⚠️</span><b id="rt-alertas">–</b><small>alertas SENAPRED</small></button>
       <button class="riesgo-tile" data-capa="volcanes" hidden><span class="rt-emoji">🌋</span><b id="rt-volcanes">–</b><small>volcanes en alerta</small></button>
+      <button class="riesgo-tile" data-capa="avisos" hidden><span class="rt-emoji">💨</span><b id="rt-avisos">–</b><small>avisos meteo</small></button>
     </div>
     <ol id="riesgo-eventos" class="riesgo-eventos"></ol>
     <div class="riesgo-acciones">
@@ -128,12 +131,15 @@
       <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
       <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
       <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
+      <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos</button>
       <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
       <button id="map-fullscreen-btn" class="map-mode" aria-label="Mapa a pantalla completa" aria-pressed="false">⛶</button>
     </div>
-    <div id="map" aria-label="Mapa de estaciones con observaciones reales"></div>
+    <div id="map" aria-label="Mapa de estaciones con observaciones reales">
+      <div class="map-rosa" aria-hidden="true"><span class="rosa-n">N</span><span class="rosa-e">E</span><span class="rosa-s">S</span><span class="rosa-o">O</span><span class="rosa-aguja"></span></div>
+    </div>
     <div id="map-legend-temp" class="map-legend" aria-hidden="true">
       <span>frío</span>
       <span class="legend-swatch tc0"></span><span class="legend-swatch tc1"></span><span class="legend-swatch tc2"></span><span class="legend-swatch tc3"></span><span class="legend-swatch tc4"></span><span class="legend-swatch tc5"></span><span class="legend-swatch tc6"></span><span class="legend-swatch tc7"></span>
@@ -170,6 +176,11 @@
       <span class="vk-naranja"></span><span>Naranja</span>
       <span class="vk-roja"></span><span>Roja</span>
     </div>
+    <div id="map-legend-avisos" class="map-legend" aria-hidden="true" hidden>
+      <span class="av-amarillo"></span><span>Amarillo</span>
+      <span class="av-naranja"></span><span>Naranja</span>
+      <span>· 💨 viento · ❄️ helada · 🌧️ lluvia · 🌡️ calor</span>
+    </div>
     <div id="map-legend-emergencia" class="map-legend" aria-hidden="true" hidden>
       <span>🏥</span><span>Salud</span>
       <span>🚒</span><span>Bomberos</span>
@@ -186,6 +197,7 @@
     <p id="map-note-incendios" class="panel-note" hidden>Focos de calor satelitales (VIIRS 375 m, últimas 48 h) · <strong>NASA FIRMS</strong> · no todo foco es incendio.</p>
     <p id="map-note-alertas" class="panel-note" hidden>Alertas vigentes SENAPRED · punto = centroide del área alertada.</p>
     <p id="map-note-volcanes" class="panel-note" hidden>Alerta técnica volcánica · SERNAGEOMIN RNVV.</p>
+    <p id="map-note-avisos" class="panel-note" hidden>Avisos <strong>derivados del pronóstico propio</strong> de Vigía (mediana de 6 modelos, ventana de 48 h) — no son un aviso oficial de la DMC.</p>
     <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) para ver las vías de evacuación y la zona de inundación de tu costa · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
   </section>
 
@@ -299,6 +311,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=33"></script>
+<script src="app.js?v=34"></script>
 </body>
 </html>

@@ -2,6 +2,8 @@
 # Observaciones METAR/DMC cada hora; pronósticos 2 veces al día; sismos cada
 # 10 min; incendios (FIRMS) y alertas (SENAPRED) cada hora; volcanes (RNVV) 2x/día;
 # infraestructura de emergencia (SENAPRED) 1x/semana (cuasi-estática).
+# avisos meteo (derivados, propios) NO tienen línea propia: se recalculan
+# dentro de las corridas de observaciones y de pronósticos (barato, sin red).
 7 * * * * python3 /app/ingesta/run.py >> /data/ingesta.log 2>&1
 37 1,13 * * * python3 /app/ingesta/run.py --forecasts >> /data/ingesta.log 2>&1
 */10 * * * * python3 /app/ingesta/run.py --sismos >> /data/ingesta.log 2>&1

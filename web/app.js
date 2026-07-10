@@ -130,7 +130,7 @@ const INFO = {
 <p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico: cerca de 150 estaciones que cubren las 16 regiones de Chile, de Arica a la Antártica, más Isla de Pascua y Juan Fernández.</p>
 <p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación.</p>
 <p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto a lo largo de todo el país, de cordillera a costa.</p>
-<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas y volcanes, y —para una emergencia— infraestructura de emergencia y vías de evacuación. Cada capa declara su fuente oficial justo debajo del mapa.</p>
+<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas, volcanes y avisos meteorológicos derivados, y —para una emergencia— infraestructura de emergencia y vías de evacuación. Cada capa declara su fuente (u origen, si es propia) justo debajo del mapa.</p>
 <p class="info-fine">¿Por qué una estación puede diferir del «ahora» del panel superior? Porque el panel es un modelo interpolado a tu punto exacto y la estación es un sensor físico en SU punto exacto — comparar ambos es justamente cómo medimos la calidad del pronóstico (ver «¿Cuánto acierta cada modelo?»).</p>`,
   },
   ensamble: {
@@ -180,6 +180,7 @@ const INFO = {
 <p><strong>Alertas (SENAPRED).</strong> El Servicio Nacional de Prevención y Respuesta ante Desastres declara las alertas oficiales —roja, amarilla o temprana preventiva— por evento meteorológico, aluvión, incendio forestal u otro riesgo, con las comunas exactas bajo alerta.</p>
 <p><strong>Volcanes (SERNAGEOMIN).</strong> El Servicio Nacional de Geología y Minería opera la Red Nacional de Vigilancia Volcánica (RNVV) y publica el semáforo técnico de cada volcán activo: verde, amarilla, naranja o roja.</p>
 <p><strong>Incendios (NASA FIRMS).</strong> Focos de calor detectados por satélite (sensor VIIRS, 375 m de resolución) en las últimas 48 horas — no todo foco es un incendio confirmado en terreno.</p>
+<p><strong>Avisos meteorológicos (Vigía, no oficiales).</strong> A diferencia de las tres fuentes anteriores, estos avisos de viento, helada, lluvia y calor NO vienen de un organismo oficial: los calculamos nosotros aplicando umbrales propios —inspirados en los criterios públicos de la DMC, pero sin relación operativa con ella— a la mediana de nuestro propio pronóstico multi-modelo. Trátalos como una señal de alerta temprana, no como un aviso oficial.</p>
 <p class="info-fine">Los sismos no se pueden predecir: mostramos lo ya ocurrido y, tras un sismo mayor, la tasa estadística esperada de réplicas (ley de Omori) — nunca una proyección de cuándo o dónde ocurrirá el próximo.</p>`,
   },
 };
@@ -197,6 +198,7 @@ let sismosData = null;   // catálogo sísmico CSN + USGS
 let incendiosData = null; // focos de calor VIIRS (NASA FIRMS)
 let alertasData = null;   // alertas naturales vigentes (SENAPRED)
 let volcanesData = null;  // alerta técnica volcánica (SERNAGEOMIN RNVV)
+let avisosData = null;   // avisos meteo derivados del pronóstico propio (NO oficiales)
 let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
 let emergenciaCargando = false;
 let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), carga lazy junto con emergenciaData
@@ -1039,6 +1041,16 @@ async function loadVolcanes() {
   } catch (_) { /* sin RNVV: la capa queda vacía */ }
 }
 
+async function loadAvisos() {
+  try {
+    const res = await fetch('avisos.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    avisosData = await res.json();
+    if (capasActivas.has('avisos')) renderMapa();
+    renderRiesgos();
+  } catch (_) { /* sin avisos: la capa queda vacía */ }
+}
+
 // emergencia.json es cuasi-estático (~9.000 puntos, se refresca 1x/semana):
 // un solo fetch por sesión, disparado por toggleCapa al encender la capa, no
 // en la carga inicial ni en el refresco periódico de 10 min. tsunami_vias.json
@@ -1071,6 +1083,7 @@ const CAPAS = {
   incendios:  { paint: paintIncendios },
   alertas:    { paint: paintAlertas },
   volcanes:   { paint: paintVolcanes },
+  avisos:     { paint: paintAvisos },
   emergencia: { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
 };
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
@@ -1078,7 +1091,7 @@ const CAPAS = {
 // Los puntos de alerta van encima de los focos/eventos que resumen.
 // 'emergencia' va al final de todo: en una emergencia real es lo que se
 // busca, así que su texto y sus íconos deben quedar encima de cualquier otra capa.
-const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'temp', 'aire', 'emergencia'];
+const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'emergencia'];
 
 function capasGuardadas() {
   try {
@@ -1175,6 +1188,7 @@ function renderMapa() {
   document.getElementById('map-legend-incendios').hidden = !capasActivas.has('incendios');
   document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
+  document.getElementById('map-legend-avisos').hidden = !capasActivas.has('avisos');
   document.getElementById('map-legend-emergencia').hidden = !capasActivas.has('emergencia');
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
   document.getElementById('map-note-aire').hidden = medicion !== 'aire';
@@ -1182,6 +1196,7 @@ function renderMapa() {
   document.getElementById('map-note-incendios').hidden = !capasActivas.has('incendios');
   document.getElementById('map-note-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
+  document.getElementById('map-note-avisos').hidden = !capasActivas.has('avisos');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
@@ -1445,6 +1460,42 @@ function paintVolcanes(group) {
     : `${volcanes.length} volcanes`;
 }
 
+// ── Avisos meteorológicos (derivados del pronóstico propio, NO oficiales) ──
+
+const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', calor: '🌡️' };
+const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', calor: 'Calor extremo' };
+const AVISO_NIVEL_LABEL = { amarillo: 'Amarillo', naranja: 'Naranja' };
+
+function paintAvisos(group) {
+  const avisos = (avisosData && avisosData.avisos) || [];
+  if (!avisos.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin avisos meteo'; return; }
+  avisos.forEach((a) => {
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="alerta aviso-${a.nivel}">${AVISO_EMOJI[a.tipo] || '⚠️'}</span>`,
+      iconSize: [30, 30], iconAnchor: [15, 15],
+    });
+    const marker = L.marker([a.lat, a.lon], { icon, title: a.nombre }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong');
+    h.textContent = `${AVISO_TIPO_LABEL[a.tipo] || a.tipo} · ${a.nombre}`;
+    box.appendChild(h);
+    box.appendChild(popupRows([
+      ['Nivel', AVISO_NIVEL_LABEL[a.nivel] || a.nivel],
+      ['Valor pico', `${r1(a.valor)} ${a.unidad}`],
+      ['Hora del pico', `${horaLocal(a.hora_peak)} h`],
+    ]));
+    const small = document.createElement('small');
+    small.textContent = (avisosData && avisosData.nota) || 'Aviso derivado de modelos, no es un aviso oficial de la DMC';
+    box.appendChild(small);
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+  $('#map-meta').textContent = avisosData.updated
+    ? `${avisos.length} avisos meteo · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${avisos.length} avisos meteo`;
+}
+
 const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', encuentro_tsunami: '🟢', encuentro_volcan: '🔶' };
 
 function paintEmergencia(group) {
@@ -1665,7 +1716,11 @@ function riesgoCounts(ambito = riesgoAmbito) {
   const incendiosN = incendiosData
     ? (ambito === 'cerca' ? (incendiosData.focos || []).filter((f) => enAmbito(f, ambito)).length : incendiosData.n)
     : 0;
-  return { sismos24, sismoMax6, rojas, amarillas, volcanesAlerta, volPeor, incendiosN };
+  // Avisos meteo: conteo aparte (5.º tile), nunca mezclado con las 4 fuentes
+  // oficiales de arriba — son una derivación propia, no un aviso oficial.
+  const avisos = avisosData ? avisosData.avisos.filter((a) => enAmbito(a, ambito)) : [];
+  const avisoAlto = avisos.some((a) => a.nivel === 'naranja');
+  return { sismos24, sismoMax6, rojas, amarillas, volcanesAlerta, volPeor, incendiosN, avisosN: avisos.length, avisoAlto };
 }
 
 function renderRiesgoTiles(c) {
@@ -1682,6 +1737,7 @@ function renderRiesgoTiles(c) {
   set('#rt-alertas', alertasTxt, c.rojas > 0 ? 'rt-alto' : c.amarillas > 0 ? 'rt-medio' : 'rt-cero');
   const volAlto = c.volPeor === 'naranja' || c.volPeor === 'roja';
   set('#rt-volcanes', c.volcanesAlerta.length, volAlto ? 'rt-alto' : c.volPeor === 'amarilla' ? 'rt-medio' : 'rt-cero');
+  set('#rt-avisos', c.avisosN, c.avisoAlto ? 'rt-alto' : c.avisosN > 0 ? 'rt-medio' : 'rt-cero');
 }
 
 // DD-MM-AAAA (formato de SENAPRED) → Date; null si no calza.
@@ -1726,6 +1782,17 @@ function riesgoEventos() {
     items.push({
       score, fecha: new Date(e.utc_time), capa: 'sismos', lat: e.lat, lon: e.lon,
       emoji: '〰️', texto: `M ${e.mag} · ${e.ref}`, pager: e.pager,
+    });
+  }
+
+  // Avisos meteo: entran al top-10 con menos score que un evento oficial
+  // (45 naranja / 25 amarillo) — son una derivación propia, no oficial.
+  for (const a of avisosData ? avisosData.avisos : []) {
+    items.push({
+      score: a.nivel === 'naranja' ? 45 : 25,
+      fecha: null, capa: 'avisos', lat: a.lat, lon: a.lon,
+      emoji: AVISO_EMOJI[a.tipo] || '⚠️',
+      texto: `${AVISO_TIPO_LABEL[a.tipo] || a.tipo} ${a.nivel} · ${a.nombre} · ${r1(a.valor)} ${a.unidad}`,
     });
   }
 
@@ -1791,7 +1858,7 @@ function renderRiskBadge(c) {
 function renderRiesgos() {
   const panel = document.querySelector('.panel-riesgos');
   if (!panel) return;
-  const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData);
+  const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData || avisosData);
   panel.hidden = !hayAlgo;
   if (!hayAlgo) { $('#risk-badge').hidden = true; return; }
 
@@ -1799,9 +1866,11 @@ function renderRiesgos() {
   panel.querySelector('[data-capa="incendios"]').hidden = !incendiosData;
   panel.querySelector('[data-capa="alertas"]').hidden = !alertasData;
   panel.querySelector('[data-capa="volcanes"]').hidden = !volcanesData;
+  panel.querySelector('[data-capa="avisos"]').hidden = !avisosData;
 
   $('#riesgos-meta').textContent = [
     ['CSN', sismosData], ['SENAPRED', alertasData], ['SERNAGEOMIN', volcanesData], ['NASA FIRMS', incendiosData],
+    ['Vigía (no oficial)', avisosData],
   ].filter(([, ok]) => ok).map(([nombre]) => nombre).join(' · ');
 
   renderRiesgoTiles(riesgoCounts());
@@ -2136,6 +2205,7 @@ loadSismos();
 loadIncendios();
 loadAlertas();
 loadVolcanes();
+loadAvisos();
 
 // ── Refresco en vivo ───────────────────────────────────────────
 // Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
@@ -2148,13 +2218,37 @@ const REFRESH_MIN_GAP_MS = 60 * 1000;  // ignora rebotes de foco < 60 s
 let lastRefreshAt = Date.now();
 let refreshing = false;
 
+// ── Modo offline: barra visible cuando no hay red ──────────────
+// El "última actualización" es el más reciente `updated` entre los JSON ya
+// cargados (mejor esfuerzo: no todos llegaron a existir necesariamente).
+function ultimaActualizacionLocal() {
+  const updates = [estacionesData, sismosData, incendiosData, alertasData, volcanesData, avisosData, biasData]
+    .filter((d) => d && d.updated).map((d) => d.updated);
+  if (!updates.length) return null;
+  const masReciente = updates.sort().pop();   // "YYYY-MM-DD HH:MM UTC" ordena bien como texto
+  return horaLocal(masReciente.replace(' UTC', 'Z').replace(' ', 'T'));
+}
+
+function mostrarOffline(mostrar) {
+  const bar = $('#offline-bar');
+  if (!bar) return;
+  if (!mostrar) { bar.hidden = true; return; }
+  const hora = ultimaActualizacionLocal();
+  bar.textContent = `⚠ Sin conexión — mostrando los últimos datos guardados${hora ? ` (actualizados ${hora} h)` : ''}`;
+  bar.hidden = false;
+}
+
+window.addEventListener('online', () => { mostrarOffline(false); refreshAll(); });
+window.addEventListener('offline', () => { mostrarOffline(true); });
+
 async function refreshAll() {
   if (refreshing || Date.now() - lastRefreshAt < REFRESH_MIN_GAP_MS) return;
   refreshing = true;
   lastRefreshAt = Date.now();
   try {
     await loadAll({ silent: true });   // Open-Meteo (current + modelos)
-  } catch (_) { /* sin red: la pantalla conserva el último dato bueno */ }
+    mostrarOffline(false);
+  } catch (_) { mostrarOffline(true); }   // sin red: la pantalla conserva el último dato bueno
   loadMapa();          // estaciones.json → medición real de la central cercana
   loadAireSinca();     // aire.json (SINCA)
   loadBias();          // bias.json (calibración)
@@ -2164,6 +2258,7 @@ async function refreshAll() {
   loadIncendios();     // incendios.json (NASA FIRMS)
   loadAlertas();       // alertas.json (SENAPRED)
   loadVolcanes();      // volcanes.json (SERNAGEOMIN RNVV)
+  loadAvisos();        // avisos.json (derivado propio)
   refreshing = false;
 }
 
