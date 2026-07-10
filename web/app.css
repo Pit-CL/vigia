@@ -1534,6 +1534,14 @@ dialog::backdrop {
 .marea-baja { background-color: var(--marea-baja); }
 .stn-label.marea-sube, .stn-label.marea-baja { color: #fff; border-color: rgba(0,0,0,0.35); }
 
+/* Aviso de marejadas (propio, no oficial): anillo extra sobre el marcador
+   de marea existente, mismo criterio de color que .aviso-amarillo/naranja. */
+.stn-label.marejada-aviso { box-shadow: 0 0 0 3px var(--vol-naranja), var(--shadow-1); }
+.stn-label.marejada-fuerte { box-shadow: 0 0 0 3px var(--alerta-roja), var(--shadow-1); }
+p.marejada-aviso, p.marejada-fuerte { font-weight: 600; margin: 4px 0; }
+p.marejada-aviso { color: var(--vol-naranja); }
+p.marejada-fuerte { color: var(--alerta-roja); }
+
 /* Triángulos de leyenda, mismo criterio que .vk-*/.al-* (variante chica del
    marcador del mapa, aquí como glifo de texto en vez de forma CSS). */
 .mk-sube, .mk-baja { font-weight: 700; }
@@ -1583,6 +1591,10 @@ dialog::backdrop {
 .costa-tsunami { font-weight: 600; }
 .costa-tsunami.tsunami-precaucion { color: var(--vol-naranja); }
 .costa-tsunami.tsunami-amenaza { color: var(--alerta-roja); }
+
+.costa-marejada { font-weight: 600; margin: 0 0 8px; }
+.costa-marejada-aviso { color: var(--vol-naranja); }
+.costa-marejada-fuerte { color: var(--alerta-roja); }
 
 /* ── Centro de riesgos ────────────────────────────────────────── */
 

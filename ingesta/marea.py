@@ -8,7 +8,7 @@ Sin tabla propia: como avisos.py, es barato de recalcular (un solo request
 batch a 32 puntos), así que se publica entero en cada corrida.
 """
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import config
 import sources
@@ -20,6 +20,10 @@ HOURLY_VARS = [
 ]
 FORECAST_DAYS = 3
 N_EXTREMOS = 4
+
+# Aviso de marejadas: pico de oleaje en las próximas 48 h (derivación propia;
+# las marejadas oficiales las avisa el SHOA/Armada, ver nota del payload).
+MAREJADA_AVISO, MAREJADA_FUERTE = 3.5, 5.0   # m, altura de ola
 
 # Puntos costeros curados norte a sur (continental + insular). Coordenadas
 # aproximadas del borde costero; puerto_chacabuco y puerto_williams caían en
@@ -108,6 +112,25 @@ def _valor(hourly: dict, var: str, idx: int | None, decimales: int):
     return round(serie[idx], decimales)
 
 
+def _marejada(times: list, wave_height: list, ahora) -> dict | None:
+    """Pico de altura de ola en las próximas 48 h, o None si no hay dato o no
+    supera el umbral de aviso. Null-safe (mismo patrón que el resto del
+    módulo)."""
+    limite = ahora + timedelta(hours=48)
+    candidatos = [(t, h) for t, h in zip(times, wave_height)
+                  if h is not None and ahora <= _dt(t) <= limite]
+    if not candidatos:
+        return None
+    t, h = max(candidatos, key=lambda p: p[1])
+    if h >= MAREJADA_FUERTE:
+        nivel = "fuerte"
+    elif h >= MAREJADA_AVISO:
+        nivel = "aviso"
+    else:
+        return None
+    return {"nivel": nivel, "altura": round(h, 2), "t": t + ":00Z"}
+
+
 def _punto(st: dict, hourly: dict, ahora) -> dict:
     times = hourly.get("time") or []
     nivel_serie = hourly.get("sea_level_height_msl") or []
@@ -132,6 +155,7 @@ def _punto(st: dict, hourly: dict, ahora) -> dict:
         "extremos": _extremos(times, nivel_serie, ahora),
         "ola": ola,
         "sst": _valor(hourly, "sea_surface_temperature", idx, 1),
+        "marejada": _marejada(times, hourly.get("wave_height") or [], ahora),
     }
 
 

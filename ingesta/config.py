@@ -46,6 +46,7 @@ HOURLY_VARS = [
     "wind_direction_10m",
     "cloud_cover",
     "pressure_msl",
+    "freezing_level_height",
 ]
 
 HORIZON_HOURS = 96          # 4 días: el rango útil para calibración

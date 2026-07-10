@@ -208,7 +208,7 @@ const INFO = {
 <p><strong>Alertas (SENAPRED).</strong> El Servicio Nacional de Prevención y Respuesta ante Desastres declara las alertas oficiales —roja, amarilla o temprana preventiva— por evento meteorológico, aluvión, incendio forestal u otro riesgo, con las comunas exactas bajo alerta.</p>
 <p><strong>Volcanes (SERNAGEOMIN).</strong> El Servicio Nacional de Geología y Minería opera la Red Nacional de Vigilancia Volcánica (RNVV) y publica el semáforo técnico de cada volcán activo: verde, amarilla, naranja o roja.</p>
 <p><strong>Incendios (NASA FIRMS).</strong> Focos de calor detectados por satélite (sensor VIIRS, 375 m de resolución) en las últimas 48 horas — no todo foco es un incendio confirmado en terreno.</p>
-<p><strong>Avisos meteorológicos (Vigía, no oficiales).</strong> A diferencia de las tres fuentes anteriores, estos avisos de viento, helada, lluvia y calor NO vienen de un organismo oficial: los calculamos nosotros aplicando umbrales propios —inspirados en los criterios públicos de la DMC, pero sin relación operativa con ella— a la mediana de nuestro propio pronóstico multi-modelo. Trátalos como una señal de alerta temprana, no como un aviso oficial.</p>
+<p><strong>Avisos meteorológicos (Vigía, no oficiales).</strong> A diferencia de las tres fuentes anteriores, estos avisos de viento, helada, lluvia, calor y riesgo aluvional NO vienen de un organismo oficial: los calculamos nosotros aplicando umbrales propios —inspirados en los criterios públicos de la DMC, pero sin relación operativa con ella— a la mediana de nuestro propio pronóstico multi-modelo. El aviso aluvional combina lluvia intensa con una isoterma 0° alta: cuando la nieve que normalmente retendría el agua en la cordillera cae como lluvia, las cuencas reciben agua líquida de golpe y crece el riesgo de crecidas repentinas y aluviones en quebradas y laderas. Trátalos como una señal de alerta temprana, no como un aviso oficial.</p>
 <p class="info-fine">Los sismos no se pueden predecir: mostramos lo ya ocurrido y, tras un sismo mayor, la tasa estadística esperada de réplicas (ley de Omori) — nunca una proyección de cuándo o dónde ocurrirá el próximo.</p>
 <p><strong>Los tres niveles de alerta SENAPRED:</strong></p>
 <p class="info-fine">${EXPLICA_NIVEL.temprana_preventiva}<br>${EXPLICA_NIVEL.amarilla}<br>${EXPLICA_NIVEL.roja}</p>`,
@@ -219,6 +219,7 @@ const INFO = {
 <p><strong>La marea que ves</strong> viene de un modelo global (Open-Meteo Marine, ~8 km de resolución) que estima el nivel del mar, el oleaje y la temperatura superficial en 32 puntos de la costa chilena.</p>
 <p><strong>Lo que NO es:</strong> una tabla de marea oficial. Para navegación, pesca o cualquier decisión que dependa de la hora exacta de pleamar o bajamar, la referencia es el <strong>SHOA</strong> (shoa.cl), que mide con mareógrafos reales en cada puerto.</p>
 <p><strong>El estado de tsunami</strong> de arriba de la página combina los boletines del <strong>PTWC</strong> (Centro de Alerta de Tsunamis del Pacífico, NOAA) con nuestro propio catálogo sísmico. La autoridad oficial en Chile es el <strong>SHOA</strong> a través del <strong>SNAM</strong> (Sistema Nacional de Alarma de Maremotos).</p>
+<p><strong>El aviso de marejadas</strong> también es propio (no oficial): lo calculamos cuando el modelo proyecta olas de 3,5 m o más en las próximas 48 h. Las marejadas oficiales las declara el <strong>SHOA</strong>/Armada de Chile.</p>
 <p class="info-fine">Regla de autoprotección: si sientes un sismo fuerte y prolongado estando en la costa, evacúa a terreno alto de inmediato — no esperes ninguna alerta oficial, puede llegar después de que la ola toque tierra.</p>`,
   },
 };
@@ -1677,8 +1678,8 @@ function paintVolcanes(group) {
 
 // ── Avisos meteorológicos (derivados del pronóstico propio, NO oficiales) ──
 
-const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', calor: '🌡️' };
-const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', calor: 'Calor extremo' };
+const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', calor: '🌡️', aluvional: '⛰️💧' };
+const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', calor: 'Calor extremo', aluvional: 'Riesgo aluvional' };
 const AVISO_NIVEL_LABEL = { amarillo: 'Amarillo', naranja: 'Naranja' };
 
 function paintAvisos(group) {
@@ -1696,11 +1697,18 @@ function paintAvisos(group) {
     const h = document.createElement('strong');
     h.textContent = `${AVISO_TIPO_LABEL[a.tipo] || a.tipo} · ${a.nombre}`;
     box.appendChild(h);
-    box.appendChild(popupRows([
+    const filas = [
       ['Nivel', AVISO_NIVEL_LABEL[a.nivel] || a.nivel],
       ['Valor pico', `${r1(a.valor)} ${a.unidad}`],
       ['Hora del pico', fechaHora(a.hora_peak)],
-    ]));
+    ];
+    if (a.tipo === 'aluvional' && a.isoterma_m != null) filas.push(['Isoterma 0°', `~${a.isoterma_m} m`]);
+    box.appendChild(popupRows(filas));
+    if (a.tipo === 'aluvional') {
+      const riesgo = document.createElement('p');
+      riesgo.textContent = `${r1(a.valor)} mm en 24 h con isoterma ~${a.isoterma_m} m — riesgo de aluvión en quebradas y laderas; aléjate de cauces`;
+      box.appendChild(riesgo);
+    }
     const small = document.createElement('small');
     small.textContent = (avisosData && avisosData.nota) || 'Aviso derivado de modelos, no es un aviso oficial de la DMC';
     box.appendChild(small);
@@ -1719,9 +1727,10 @@ function paintMarea(group) {
   puntos.forEach((p) => {
     const cls = p.tendencia === 'bajando' ? 'marea-baja' : 'marea-sube';
     const flecha = p.tendencia === 'bajando' ? '▼' : p.tendencia === 'subiendo' ? '▲' : '—';
+    const anillo = p.marejada ? ` marejada-${p.marejada.nivel}` : '';
     const icon = L.divIcon({
       className: 'stn-icon',
-      html: `<span class="stn-label ${cls}">${flecha}</span>`,
+      html: `<span class="stn-label ${cls}${anillo}">${flecha}</span>`,
       iconSize: [30, 26], iconAnchor: [15, 13],
     });
     const marker = L.marker([p.lat, p.lon], { icon, title: p.nombre }).addTo(group);
@@ -1736,6 +1745,12 @@ function paintMarea(group) {
     if (p.ola) filas.push(['Ola', `${r1(p.ola.altura)} m · ${r1(p.ola.periodo)} s`]);
     if (p.sst != null) filas.push(['Mar', `${r1(p.sst)} °C`]);
     box.appendChild(popupRows(filas));
+    if (p.marejada) {
+      const aviso = document.createElement('p');
+      aviso.className = `marejada-${p.marejada.nivel}`;
+      aviso.textContent = `🌊 Marejadas: olas de hasta ${r1(p.marejada.altura)} m ${fechaHora(p.marejada.t)}`;
+      box.appendChild(aviso);
+    }
     const small = document.createElement('small');
     small.textContent = (mareaData && mareaData.nota) || '';
     box.appendChild(small);
@@ -2434,6 +2449,15 @@ function renderCosta() {
   $('#costa-bajamar').textContent = proxBajamar ? `${fechaHora(proxBajamar.t)} · ${r1(proxBajamar.h)} m` : '—';
   $('#costa-ola').textContent = p.ola ? `${r1(p.ola.altura)} m · ${r1(p.ola.periodo)} s` : '—';
   $('#costa-sst').textContent = p.sst != null ? `${r1(p.sst)} °C` : '—';
+
+  const marejada = $('#costa-marejada');
+  if (p.marejada) {
+    marejada.textContent = `🌊 Marejadas: olas de hasta ${r1(p.marejada.altura)} m ${fechaHora(p.marejada.t)}`;
+    marejada.className = `costa-marejada costa-marejada-${p.marejada.nivel}`;
+    marejada.hidden = false;
+  } else {
+    marejada.hidden = true;
+  }
 
   const tsu = $('#costa-tsunami');
   if (tsunamiData) {
