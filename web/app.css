@@ -959,6 +959,14 @@ dialog::backdrop {
   font-variant-numeric: tabular-nums;
 }
 
+.alerta-explica, .alerta-nivel-explica {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  border-top: 1px dotted var(--border);
+  margin: 8px 0 0;
+  padding-top: 8px;
+}
+
 /* Leaflet acorde al tema */
 .leaflet-container { font-family: var(--font-display); }
 

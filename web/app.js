@@ -102,6 +102,34 @@ const OBS_LABELS = {
   precipitation_6h: ['Precipitación últimas 6 h', 'mm'],
 };
 
+// Explicación en lenguaje claro por texto del evento SENAPRED (primer match gana).
+// Los específicos van antes que "evento meteorológico", que es el genérico.
+const EXPLICA_EVENTO = [
+  [/zoosanitario/i, 'Vigilancia del SAG por una enfermedad animal (por ejemplo influenza aviar) detectada en la zona. No es un riesgo directo para las personas: evita tocar aves o animales muertos o enfermos y repórtalos al SAG (2 2345 1100).'],
+  [/alteraci[oó]n sanitaria/i, 'Situación sanitaria bajo vigilancia de la autoridad (agua, plagas o brotes). Sigue las indicaciones de la SEREMI de Salud de tu región.'],
+  [/crecida/i, 'Ríos o esteros de la zona vienen creciendo por lluvia o deshielo. No cruces cauces ni te acerques a las riberas; si vives cerca de un río, prepara una salida.'],
+  [/remoci[oó]n|aluvi[oó]n|deslizamiento/i, 'Riesgo de deslizamientos de tierra o aluviones por lluvia en laderas. Aléjate de quebradas y cauces; si escuchas ruido de piedras o agua creciendo, sube a terreno firme y alto.'],
+  [/altas temperaturas|ola de calor/i, 'Calor inusual para la zona. Hidrátate, evita el sol del mediodía y vigila a personas mayores, niños y mascotas. Sube el riesgo de incendios: evita cualquier fuego.'],
+  [/helada/i, 'Temperaturas bajo cero esperadas. Protege cañerías, cultivos, mascotas y personas en situación de calle (llama al 800 104 777 — Código Azul).'],
+  [/viento/i, 'Viento fuerte esperado. Asegura techumbres, toldos y objetos sueltos; precaución al conducir vehículos altos y aléjate de árboles y tendido eléctrico.'],
+  [/volc[aá]n/i, 'El volcán muestra actividad sobre lo normal y está bajo vigilancia reforzada de SERNAGEOMIN. Infórmate de tus vías de evacuación (capa 🚑 del mapa) y respeta los perímetros.'],
+  [/incendio|forestal/i, 'Condiciones favorables para incendios forestales o fuego activo en la zona. No enciendas fuego, reporta humo al 130 (CONAF) y prepárate para evacuar temprano si estás cerca.'],
+  [/meteorol[oó]gico/i, 'Sistema frontal u otro evento del tiempo significativo para la zona (lluvia, viento o nieve). Revisa el pronóstico de tu comuna aquí mismo y evita desplazamientos innecesarios en lo peor del evento.'],
+];
+const EXPLICA_EVENTO_DEFAULT = 'Alerta oficial de SENAPRED para la zona. Revisa senapred.cl para el detalle del evento.';
+
+function explicaEvento(evento) {
+  const hit = EXPLICA_EVENTO.find(([re]) => re.test(evento || ''));
+  return hit ? hit[1] : EXPLICA_EVENTO_DEFAULT;
+}
+
+// Explicación en lenguaje claro por nivel de alerta SENAPRED.
+const EXPLICA_NIVEL = {
+  temprana_preventiva: 'Temprana Preventiva: la autoridad vigila de cerca una amenaza que PODRÍA escalar; no exige acción inmediata de tu parte, solo mantenerte informado.',
+  amarilla: 'Amarilla: la amenaza crece y los equipos de emergencia se alistan; ten a mano lo esencial y revisa tus rutas.',
+  roja: 'Roja: la amenaza está en desarrollo y puede requerir evacuación u otra acción inmediata; sigue YA las instrucciones oficiales.',
+};
+
 // ── Explicaciones (simple primero, ciencia después) ────────────
 
 const INFO = {
@@ -181,7 +209,9 @@ const INFO = {
 <p><strong>Volcanes (SERNAGEOMIN).</strong> El Servicio Nacional de Geología y Minería opera la Red Nacional de Vigilancia Volcánica (RNVV) y publica el semáforo técnico de cada volcán activo: verde, amarilla, naranja o roja.</p>
 <p><strong>Incendios (NASA FIRMS).</strong> Focos de calor detectados por satélite (sensor VIIRS, 375 m de resolución) en las últimas 48 horas — no todo foco es un incendio confirmado en terreno.</p>
 <p><strong>Avisos meteorológicos (Vigía, no oficiales).</strong> A diferencia de las tres fuentes anteriores, estos avisos de viento, helada, lluvia y calor NO vienen de un organismo oficial: los calculamos nosotros aplicando umbrales propios —inspirados en los criterios públicos de la DMC, pero sin relación operativa con ella— a la mediana de nuestro propio pronóstico multi-modelo. Trátalos como una señal de alerta temprana, no como un aviso oficial.</p>
-<p class="info-fine">Los sismos no se pueden predecir: mostramos lo ya ocurrido y, tras un sismo mayor, la tasa estadística esperada de réplicas (ley de Omori) — nunca una proyección de cuándo o dónde ocurrirá el próximo.</p>`,
+<p class="info-fine">Los sismos no se pueden predecir: mostramos lo ya ocurrido y, tras un sismo mayor, la tasa estadística esperada de réplicas (ley de Omori) — nunca una proyección de cuándo o dónde ocurrirá el próximo.</p>
+<p><strong>Los tres niveles de alerta SENAPRED:</strong></p>
+<p class="info-fine">${EXPLICA_NIVEL.temprana_preventiva}<br>${EXPLICA_NIVEL.amarilla}<br>${EXPLICA_NIVEL.roja}</p>`,
   },
 };
 
@@ -1405,6 +1435,7 @@ function emojiEvento(evento) {
   return '⚠️';
 }
 
+
 function paintAlertas(group) {
   const todas = (alertasData && alertasData.alertas) || [];
   const conCoords = todas.filter((a) => a.lat != null && a.lon != null);
@@ -1426,6 +1457,14 @@ function paintAlertas(group) {
       ['Comunas', `${a.n_comunas} (${comunas})`],
       ['Vigente desde', a.desde],
     ]));
+    const pEvento = document.createElement('p');
+    pEvento.className = 'alerta-explica';
+    pEvento.textContent = explicaEvento(a.evento);
+    box.appendChild(pEvento);
+    const pNivel = document.createElement('p');
+    pNivel.className = 'alerta-nivel-explica';
+    pNivel.textContent = EXPLICA_NIVEL[a.nivel] || '';
+    box.appendChild(pNivel);
     marker.bindPopup(box, { maxWidth: 280 });
   });
   $('#map-meta').textContent = alertasData.updated
