@@ -61,10 +61,11 @@ Instalable, con tema automático claro/oscuro, filtro «Chile» / «cerca de tu 
 
 ## Capas del mapa
 
-Doce capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
+Trece capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
 
 | Capa | Qué muestra |
 |---|---|
+| 🛰️ Satélite | Imagen satelital GOES-East GeoColor (NASA GIBS), retraso típico 20–60 min · no es radar |
 | 🌡️ Temperatura | Pronóstico de temperatura por punto, mediana multi-modelo |
 | 🌫️ Aire | Calidad del aire oficial SINCA (MP2,5, MP10, ICAP) |
 | 💧 Lluvia/nieve | Acumulados de precipitación a 48 horas |
@@ -133,6 +134,7 @@ Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingest
 | [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api) | Marea, oleaje y temperatura del mar en 32 puntos de la costa | CC BY 4.0 |
 | [PTWC](https://www.tsunami.gov/) (NOAA) | Boletines de amenaza de tsunami para el Pacífico | Dominio público |
 | [INE](https://www.ine.gob.cl/) (censo) | Comunas y su geolocalización para el buscador | Datos públicos del Estado de Chile |
+| [NASA GIBS](https://www.earthdata.nasa.gov/data/tools/gibs) (GOES-East GeoColor, NOAA) | Imagen satelital de nubes y tormentas sobre Chile | Dominio público |
 
 ## Correr en local
 

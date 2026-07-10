@@ -1332,6 +1332,22 @@ dialog::backdrop {
   background: var(--border);
 }
 
+.satelite-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 12px;
+}
+
+.satelite-control .map-mode {
+  padding: 3px 10px;
+}
+
+.satelite-control .map-mode:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .sq-h1, .sq-h6, .sq-h24, .sq-old {
   display: inline-block;
   width: 10px;
