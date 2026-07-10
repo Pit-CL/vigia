@@ -24,6 +24,7 @@ web/alertas.json
 web/volcanes.json
 web/emergencia.json
 web/tsunami_vias.json
+web/tsunami_areas.json
 
 # Secretos: jamás al repo
 .env

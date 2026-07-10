@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=32">
+  <link rel="stylesheet" href="app.css?v=33">
 </head>
 <body>
 
@@ -114,7 +114,7 @@
   </section>
 
   <!-- Mapa de observaciones en vivo -->
-  <section class="panel" aria-labelledby="map-title">
+  <section id="map-panel" class="panel" aria-labelledby="map-title">
     <header class="panel-head">
       <h2 id="map-title">Observaciones en vivo</h2>
       <span id="map-meta" class="panel-meta">todo Chile</span>
@@ -131,6 +131,7 @@
       <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
+      <button id="map-fullscreen-btn" class="map-mode" aria-label="Mapa a pantalla completa" aria-pressed="false">⛶</button>
     </div>
     <div id="map" aria-label="Mapa de estaciones con observaciones reales"></div>
     <div id="map-legend-temp" class="map-legend" aria-hidden="true">
@@ -174,7 +175,10 @@
       <span>🚒</span><span>Bomberos</span>
       <span>🚓</span><span>Carabineros</span>
       <span>🟢</span><span>Punto de encuentro tsunami</span>
-      <span class="legend-swatch evac-swatch"></span><span>vía de evacuación (acércate a la costa)</span>
+      <span>🔶</span><span>Punto de encuentro volcán</span>
+      <span class="legend-swatch evac-swatch"></span><span>vía de evacuación tsunami</span>
+      <span class="legend-swatch evac-volcan-swatch"></span><span>vía de evacuación volcán</span>
+      <span class="legend-swatch area-swatch"></span><span>zona de inundación</span>
     </div>
     <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
     <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
@@ -182,7 +186,7 @@
     <p id="map-note-incendios" class="panel-note" hidden>Focos de calor satelitales (VIIRS 375 m, últimas 48 h) · <strong>NASA FIRMS</strong> · no todo foco es incendio.</p>
     <p id="map-note-alertas" class="panel-note" hidden>Alertas vigentes SENAPRED · punto = centroide del área alertada.</p>
     <p id="map-note-volcanes" class="panel-note" hidden>Alerta técnica volcánica · SERNAGEOMIN RNVV.</p>
-    <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) para ver las vías de evacuación de tu zona · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
+    <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) para ver las vías de evacuación y la zona de inundación de tu costa · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -295,6 +299,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>

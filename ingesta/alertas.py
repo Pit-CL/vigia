@@ -31,6 +31,25 @@ NIVELES_SERVICIO = ["VERDE", "AMARILLA", "ROJA"]
 NIVEL_FALLBACK = {"VERDE": "temprana_preventiva", "AMARILLA": "amarilla", "ROJA": "roja"}
 NIVEL_PRIORIDAD = {"roja": 0, "amarilla": 1, "temprana_preventiva": 2}
 
+# Umbral de antigüedad por nivel (verificado 2026-07-10: BIOLOGICAS_VERDE trae
+# residuos con FECHA_INI desde 2023-05 que SENAPRED nunca depuró de su propio
+# servicio — su dashboard tampoco los filtra). Roja y amarilla son urgentes y
+# se depuran rápido; temprana_preventiva es informativa y dura más.
+UMBRAL_DIAS_ANTIGUEDAD = {"roja": 60, "amarilla": 120, "temprana_preventiva": 365}
+
+
+def _antigua(fecha_ini: str | None, nivel: str, hoy: datetime) -> bool:
+    """True si FECHA_INI (DD-MM-AAAA) es más vieja que el umbral del nivel.
+    Sin fecha parseable se conserva: mejor mostrar de más que botar una
+    alerta real por un formato inesperado."""
+    if not fecha_ini:
+        return False
+    try:
+        fecha = datetime.strptime(fecha_ini, "%d-%m-%Y")
+    except ValueError:
+        return False
+    return (hoy - fecha).days > UMBRAL_DIAS_ANTIGUEDAD[nivel]
+
 
 def _normalizar_nivel(tipo_alert: str | None, nivel_servicio: str) -> str:
     """TIPO_ALERT es la fuente de verdad; el nivel del nombre del servicio
@@ -118,13 +137,18 @@ def update(con, fetched_at: str) -> int:
 
     # Agregación: una alerta por (categoría, causalidad, nivel, región) — sin
     # esto, una alerta regional aparecería repetida como un polígono por comuna.
+    hoy = datetime.now()
+    descartadas_antiguas = 0
     grupos: dict = {}
     for categoria_label, nivel_servicio, feat in features:
         attrs = feat.get("attributes") or {}
+        nivel = _normalizar_nivel(attrs.get("TIPO_ALERT"), nivel_servicio)
+        if _antigua(attrs.get("FECHA_INI"), nivel, hoy):
+            descartadas_antiguas += 1
+            continue
         region = attrs.get("REGION")
         comuna = attrs.get("COMUNA")
         causalidad = attrs.get("CAUSALIDAD")
-        nivel = _normalizar_nivel(attrs.get("TIPO_ALERT"), nivel_servicio)
         centro = _centroide(feat.get("geometry"))
         key = (categoria_label, causalidad, nivel, region)
         g = grupos.setdefault(key, {"comunas": set(), "centros": [], "desde": None})
@@ -153,6 +177,7 @@ def update(con, fetched_at: str) -> int:
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "fuente": "SENAPRED (dashboard ArcGIS)",
         "alertas": alertas,
+        "descartadas_antiguas": descartadas_antiguas,
     }
     config.ALERTAS_PATH.parent.mkdir(parents=True, exist_ok=True)
     config.ALERTAS_PATH.write_text(json.dumps(payload, ensure_ascii=False) + "\n")
