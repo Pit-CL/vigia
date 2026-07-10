@@ -85,3 +85,4 @@ EMERGENCIA_ARCGIS_BASE = os.environ.get(
     "EMERGENCIA_ARCGIS_BASE",
     "https://services5.arcgis.com/i7S5PSnIJAUcWvSE/arcgis/rest/services")
 TSUNAMI_VIAS_PATH = Path(os.environ.get("CLIMA_TSUNAMI_VIAS", ROOT / "web" / "tsunami_vias.json"))
+TSUNAMI_AREAS_PATH = Path(os.environ.get("CLIMA_TSUNAMI_AREAS", ROOT / "web" / "tsunami_areas.json"))

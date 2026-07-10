@@ -38,6 +38,7 @@ services:
       CLIMA_VOLCANES: /data/volcanes.json
       CLIMA_EMERGENCIA: /data/emergencia.json
       CLIMA_TSUNAMI_VIAS: /data/tsunami_vias.json
+      CLIMA_TSUNAMI_AREAS: /data/tsunami_areas.json
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}

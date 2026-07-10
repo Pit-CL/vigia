@@ -1,12 +1,12 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v2';
-const DATA_CACHE = 'vigia-data-v2';
+const SHELL_CACHE = 'vigia-shell-v3';
+const DATA_CACHE = 'vigia-data-v3';
 const SHELL = [
   './',
   'index.html',
   'emergencia.html',
-  'app.css?v=32',
-  'app.js?v=32',
+  'app.css?v=33',
+  'app.js?v=33',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -45,7 +45,7 @@ self.addEventListener('fetch', (e) => {
 
   // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
   const isData = isOpenMeteo ||
-    /\/(status|verificacion|estaciones|aire|bias|sismos|incendios|alertas|volcanes|emergencia|tsunami_vias)\.json$/.test(url.pathname);
+    /\/(status|verificacion|estaciones|aire|bias|sismos|incendios|alertas|volcanes|emergencia|tsunami_vias|tsunami_areas)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
       fetch(e.request)

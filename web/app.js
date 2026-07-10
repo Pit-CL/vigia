@@ -199,7 +199,8 @@ let alertasData = null;   // alertas naturales vigentes (SENAPRED)
 let volcanesData = null;  // alerta técnica volcánica (SERNAGEOMIN RNVV)
 let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
 let emergenciaCargando = false;
-let tsunamiViasData = null; // vías de evacuación (SENAPRED), carga lazy junto con emergenciaData
+let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), carga lazy junto con emergenciaData
+let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), carga lazy junto con emergenciaData
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -1041,16 +1042,19 @@ async function loadVolcanes() {
 // emergencia.json es cuasi-estático (~9.000 puntos, se refresca 1x/semana):
 // un solo fetch por sesión, disparado por toggleCapa al encender la capa, no
 // en la carga inicial ni en el refresco periódico de 10 min. tsunami_vias.json
-// se carga junto en el mismo Promise.all: misma capa, mismo gatillo.
+// y tsunami_areas.json se cargan junto en el mismo Promise.all: misma capa,
+// mismo gatillo.
 async function loadEmergencia() {
   if (emergenciaData || emergenciaCargando) return;
   emergenciaCargando = true;
-  const [emg, vias] = await Promise.all([
+  const [emg, vias, areas] = await Promise.all([
     fetch('emergencia.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch('tsunami_vias.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch('tsunami_areas.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   if (emg) emergenciaData = emg;
   tsunamiViasData = vias;
+  tsunamiAreasData = areas;
   emergenciaCargando = false;
   if (capasActivas.has('emergencia')) renderMapa();
 }
@@ -1441,7 +1445,7 @@ function paintVolcanes(group) {
     : `${volcanes.length} volcanes`;
 }
 
-const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', encuentro_tsunami: '🟢' };
+const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', encuentro_tsunami: '🟢', encuentro_volcan: '🔶' };
 
 function paintEmergencia(group) {
   if (!emergenciaData) {
@@ -1494,16 +1498,35 @@ function paintEmergencia(group) {
         .addTo(group);
     }
   });
-  // Vías de evacuación ante tsunami: solo con el mapa acercado (zoom ≥ 11) y
-  // filtradas por el viewport actual — con 2.740 vías en todo el país, pintar
-  // sin filtro de bounds haría el mapa ilegible y lento en cualquier zoom país.
+  // Área de evacuación ante tsunami: solo con el mapa acercado (zoom ≥ 12) y
+  // filtrada por viewport, igual que las vías. Va ANTES que las vías para
+  // quedar debajo (relleno de fondo, no un trazo que compita con la ruta a
+  // seguir); los marcadores de puntos siempre quedan por encima de ambas
+  // (Leaflet los pinta en un pane distinto al de polígonos/polilíneas).
+  if (tsunamiAreasData && map.getZoom() >= 12) {
+    const bounds = map.getBounds();
+    const color = css('--alerta-roja');
+    for (const area of tsunamiAreasData.areas || []) {
+      if (!bounds.contains(area.p[0])) continue;
+      L.polygon(area.p, { color, weight: 1, opacity: 0.3, fillColor: color, fillOpacity: 0.12 })
+        .bindPopup('Zona de evacuación ante tsunami — si sientes un sismo fuerte, abandona esta zona hacia terreno alto')
+        .addTo(group);
+    }
+  }
+
+  // Vías de evacuación (tsunami + volcán): solo con el mapa acercado (zoom ≥
+  // 11) y filtradas por el viewport actual — con ~2.940 vías en todo el
+  // país, pintar sin filtro de bounds haría el mapa ilegible y lento en
+  // cualquier zoom país.
   if (tsunamiViasData && map.getZoom() >= 11) {
     const bounds = map.getBounds();
-    const color = css('--evac');
+    const colorTsunami = css('--evac');
+    const colorVolcan = css('--evac-volcan');
     for (const via of tsunamiViasData.vias || []) {
       if (!bounds.contains(via.p[0])) continue;
-      L.polyline(via.p, { color, weight: 3, opacity: 0.85, dashArray: '6 4' })
-        .bindPopup(`Vía de evacuación · ${via.c}`)
+      const esVolcan = via.t === 'volcan';
+      L.polyline(via.p, { color: esVolcan ? colorVolcan : colorTsunami, weight: 3, opacity: 0.85, dashArray: '6 4' })
+        .bindPopup(esVolcan ? `Vía de evacuación volcánica · ${via.c}` : `Vía de evacuación · ${via.c}`)
         .addTo(group);
     }
   }
@@ -1529,6 +1552,64 @@ function setupCapas() {
       map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
     });
   }
+}
+
+// Pantalla completa: sobre el panel entero (no solo #map) para que la
+// leyenda y los toggles de capas sigan visibles y usables. Fullscreen API
+// nativa con fallback a una clase fija (.map-max) cuando no está disponible
+// (p.ej. Safari iOS en modo PWA instalada).
+function setupMapaFullscreen() {
+  const btn = document.getElementById('map-fullscreen-btn');
+  const panel = document.getElementById('map-panel');
+  if (!btn || !panel) return;
+
+  const activo = () => document.fullscreenElement === panel || panel.classList.contains('map-max');
+
+  function actualizarBoton() {
+    const on = activo();
+    btn.setAttribute('aria-pressed', String(on));
+    btn.setAttribute('aria-label', on ? 'Salir de pantalla completa' : 'Mapa a pantalla completa');
+    btn.textContent = on ? '✕' : '⛶';
+  }
+
+  function onEsc(e) {
+    if (e.key === 'Escape') salirFallback();
+  }
+
+  function salirFallback() {
+    panel.classList.remove('map-max');
+    document.removeEventListener('keydown', onEsc);
+    actualizarBoton();
+    if (map) map.invalidateSize();
+  }
+
+  function entrarFallback() {
+    panel.classList.add('map-max');
+    document.addEventListener('keydown', onEsc);
+    actualizarBoton();
+    if (map) map.invalidateSize();
+  }
+
+  btn.addEventListener('click', () => {
+    if (activo()) {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else salirFallback();
+      return;
+    }
+    if (panel.requestFullscreen) {
+      panel.requestFullscreen().catch(entrarFallback);
+    } else {
+      entrarFallback();
+    }
+  });
+
+  // fullscreenchange cubre tanto la entrada como la salida nativa (incluido
+  // el Esc que el navegador maneja solo): siempre se re-sincroniza el botón
+  // y se recalcula el tamaño del mapa.
+  document.addEventListener('fullscreenchange', () => {
+    actualizarBoton();
+    if (map) map.invalidateSize();
+  });
 }
 
 // ── Centro de riesgos: badge + panel resumen ───────────────────
@@ -2041,6 +2122,7 @@ setupSearch();
 setupDialogs();
 setupVerifTabs();
 setupCapas();
+setupMapaFullscreen();
 setupRiesgos();
 setupPuntoCercano();
 renderChips();
