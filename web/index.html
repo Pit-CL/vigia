@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=43">
+  <link rel="stylesheet" href="app.css?v=44">
 </head>
 <body>
 
@@ -137,6 +137,7 @@
       <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
       <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
       <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos</button>
+      <button class="map-mode" data-capa="evacuacion" aria-pressed="false">🏃 Evacuación</button>
       <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
@@ -193,15 +194,17 @@
       <span class="av-naranja"></span><span>Naranja</span>
       <span>· 💨 viento · ❄️ helada · 🌧️ lluvia · 🌡️ calor</span>
     </div>
+    <div id="map-legend-evacuacion" class="map-legend" aria-hidden="true" hidden>
+      <span class="legend-swatch evac-swatch"></span><span>vía de evacuación tsunami</span>
+      <span class="legend-swatch evac-volcan-swatch"></span><span>vía de evacuación volcán</span>
+      <span class="legend-swatch area-swatch"></span><span>zona de inundación</span>
+    </div>
     <div id="map-legend-emergencia" class="map-legend" aria-hidden="true" hidden>
       <span>🏥</span><span>Salud</span>
       <span>🚒</span><span>Bomberos</span>
       <span>🚓</span><span>Carabineros</span>
       <span>🟢</span><span>Punto de encuentro tsunami</span>
       <span>🔶</span><span>Punto de encuentro volcán</span>
-      <span class="legend-swatch evac-swatch"></span><span>vía de evacuación tsunami</span>
-      <span class="legend-swatch evac-volcan-swatch"></span><span>vía de evacuación volcán</span>
-      <span class="legend-swatch area-swatch"></span><span>zona de inundación</span>
     </div>
     <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
     <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
@@ -211,7 +214,8 @@
     <p id="map-note-alertas" class="panel-note" hidden>Alertas vigentes SENAPRED · punto = centroide del área alertada.</p>
     <p id="map-note-volcanes" class="panel-note" hidden>Alerta técnica volcánica · SERNAGEOMIN RNVV.</p>
     <p id="map-note-avisos" class="panel-note" hidden>Avisos <strong>derivados del pronóstico propio</strong> de Vigía (mediana de 6 modelos, ventana de 48 h) — no son un aviso oficial de la DMC.</p>
-    <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) para ver las vías de evacuación y la zona de inundación de tu costa · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
+    <p id="map-note-evacuacion" class="panel-note" hidden>Vías de evacuación y zona de inundación ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) a una zona costera o volcánica para verlas.</p>
+    <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -324,6 +328,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=43"></script>
+<script src="app.js?v=44"></script>
 </body>
 </html>

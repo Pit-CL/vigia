@@ -112,7 +112,7 @@ const EXPLICA_EVENTO = [
   [/altas temperaturas|ola de calor/i, 'Calor inusual para la zona. Hidrátate, evita el sol del mediodía y vigila a personas mayores, niños y mascotas. Sube el riesgo de incendios: evita cualquier fuego.'],
   [/helada/i, 'Temperaturas bajo cero esperadas. Protege cañerías, cultivos, mascotas y personas en situación de calle (llama al 800 104 777 — Código Azul).'],
   [/viento/i, 'Viento fuerte esperado. Asegura techumbres, toldos y objetos sueltos; precaución al conducir vehículos altos y aléjate de árboles y tendido eléctrico.'],
-  [/volc[aá]n/i, 'El volcán muestra actividad sobre lo normal y está bajo vigilancia reforzada de SERNAGEOMIN. Infórmate de tus vías de evacuación (capa 🚑 del mapa) y respeta los perímetros.'],
+  [/volc[aá]n/i, 'El volcán muestra actividad sobre lo normal y está bajo vigilancia reforzada de SERNAGEOMIN. Infórmate de tus vías de evacuación (capa 🏃 Evacuación del mapa) y respeta los perímetros.'],
   [/incendio|forestal/i, 'Condiciones favorables para incendios forestales o fuego activo en la zona. No enciendas fuego, reporta humo al 130 (CONAF) y prepárate para evacuar temprano si estás cerca.'],
   [/meteorol[oó]gico/i, 'Sistema frontal u otro evento del tiempo significativo para la zona (lluvia, viento o nieve). Revisa el pronóstico de tu comuna aquí mismo y evita desplazamientos innecesarios en lo peor del evento.'],
 ];
@@ -158,7 +158,7 @@ const INFO = {
 <p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico: cerca de 150 estaciones que cubren las 16 regiones de Chile, de Arica a la Antártica, más Isla de Pascua y Juan Fernández.</p>
 <p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación.</p>
 <p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto a lo largo de todo el país, de cordillera a costa.</p>
-<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas, volcanes y avisos meteorológicos derivados, y —para una emergencia— infraestructura de emergencia y vías de evacuación. Cada capa declara su fuente (u origen, si es propia) justo debajo del mapa.</p>
+<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas, volcanes y avisos meteorológicos derivados, y —para una emergencia— la capa 🏃 Evacuación (vías de evacuación y zona de inundación ante tsunami y volcán) y la capa 🚑 Emergencia (infraestructura como salud, bomberos y carabineros). Cada capa declara su fuente (u origen, si es propia) justo debajo del mapa.</p>
 <p class="info-fine">¿Por qué una estación puede diferir del «ahora» del panel superior? Porque el panel es un modelo interpolado a tu punto exacto y la estación es un sensor físico en SU punto exacto — comparar ambos es justamente cómo medimos la calidad del pronóstico (ver «¿Cuánto acierta cada modelo?»).</p>`,
   },
   ensamble: {
@@ -231,8 +231,8 @@ let volcanesData = null;  // alerta técnica volcánica (SERNAGEOMIN RNVV)
 let avisosData = null;   // avisos meteo derivados del pronóstico propio (NO oficiales)
 let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
 let emergenciaCargando = false;
-let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), carga lazy junto con emergenciaData
-let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), carga lazy junto con emergenciaData
+let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
+let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -1104,10 +1104,11 @@ async function loadAvisos() {
 }
 
 // emergencia.json es cuasi-estático (~9.000 puntos, se refresca 1x/semana):
-// un solo fetch por sesión, disparado por toggleCapa al encender la capa, no
-// en la carga inicial ni en el refresco periódico de 10 min. tsunami_vias.json
-// y tsunami_areas.json se cargan junto en el mismo Promise.all: misma capa,
-// mismo gatillo.
+// un solo fetch por sesión, disparado por toggleCapa al encender la capa
+// emergencia O la capa evacuacion (ambas comparten este loader), no en la
+// carga inicial ni en el refresco periódico de 10 min. tsunami_vias.json y
+// tsunami_areas.json (capa evacuacion) se cargan junto en el mismo
+// Promise.all: distinta capa, mismo gatillo.
 async function loadEmergencia() {
   if (emergenciaData || emergenciaCargando) return;
   emergenciaCargando = true;
@@ -1120,14 +1121,15 @@ async function loadEmergencia() {
   tsunamiViasData = vias;
   tsunamiAreasData = areas;
   emergenciaCargando = false;
-  if (capasActivas.has('emergencia')) renderMapa();
+  if (capasActivas.has('emergencia') || capasActivas.has('evacuacion')) renderMapa();
 }
 
 // Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
-// una a la vez); 'sismos', 'incendios', 'alertas', 'volcanes' y 'emergencia'
-// son independientes y se pueden combinar con cualquiera.
-// 'emergencia' es lazy: ~9.000 puntos cuasi-estáticos que no se cargan salvo
-// que el usuario encienda la capa (ni en la carga inicial ni en el refresco).
+// una a la vez); 'sismos', 'incendios', 'alertas', 'volcanes', 'evacuacion' y
+// 'emergencia' son independientes y se pueden combinar con cualquiera.
+// 'evacuacion' y 'emergencia' son lazy: ~9.000 puntos + vías/áreas
+// cuasi-estáticos que no se cargan salvo que el usuario encienda alguna de
+// las dos (ni en la carga inicial ni en el refresco).
 const CAPAS = {
   temp:          { grupo: 'medicion', paint: paintTemp },
   aire:          { grupo: 'medicion', paint: paintAire },
@@ -1137,14 +1139,17 @@ const CAPAS = {
   alertas:       { paint: paintAlertas },
   volcanes:      { paint: paintVolcanes },
   avisos:        { paint: paintAvisos },
+  evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
   emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
 };
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
 // pinta al final para que su texto en #map-meta prevalezca sobre las demás.
 // Los puntos de alerta van encima de los focos/eventos que resumen.
-// 'emergencia' va al final de todo: en una emergencia real es lo que se
-// busca, así que su texto y sus íconos deben quedar encima de cualquier otra capa.
-const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'precipitacion', 'emergencia'];
+// 'emergencia' y 'evacuacion' van al final de todo: en una emergencia real
+// son lo que se busca, así que su texto y sus íconos deben quedar encima de
+// cualquier otra capa. 'evacuacion' cierra la lista porque sus vías son la
+// acción más urgente (hacia dónde ir), por sobre el resto.
+const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'precipitacion', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1200,13 +1205,13 @@ function ensureMap() {
   // Al cambiar de zoom, el dedup/agrupado por celda de paintTemp/paintAire/
   // paintIncendios depende del zoom actual: hay que re-pintar la capa activa.
   map.on('zoomend', () => {
-    if (['temp', 'aire', 'precipitacion', 'incendios', 'emergencia'].some((k) => capasActivas.has(k))) renderMapa();
+    if (['temp', 'aire', 'precipitacion', 'incendios', 'emergencia', 'evacuacion'].some((k) => capasActivas.has(k))) renderMapa();
   });
   // Las vías de evacuación se filtran por el viewport visible (2.740 vías en
   // todo el país): al desplazar el mapa sin cambiar el zoom, también hay que
   // re-pintar para que aparezcan las vías que entraron al encuadre.
   map.on('moveend', () => {
-    if (capasActivas.has('emergencia')) renderMapa();
+    if (capasActivas.has('emergencia') || capasActivas.has('evacuacion')) renderMapa();
   });
   return map;
 }
@@ -1243,6 +1248,7 @@ function renderMapa() {
   document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-legend-avisos').hidden = !capasActivas.has('avisos');
+  document.getElementById('map-legend-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-legend-emergencia').hidden = !capasActivas.has('emergencia');
   document.getElementById('map-note-temp').hidden = medicion !== 'temp';
   document.getElementById('map-note-aire').hidden = medicion !== 'aire';
@@ -1252,6 +1258,7 @@ function renderMapa() {
   document.getElementById('map-note-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-note-avisos').hidden = !capasActivas.has('avisos');
+  document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
@@ -1734,11 +1741,23 @@ function paintEmergencia(group) {
       });
     }
   });
+  $('#map-meta').textContent = emergenciaData.updated
+    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${todos.length} puntos de emergencia`;
+}
+
+// Vías y áreas de evacuación ante tsunami/volcán: comparten loader con
+// 'emergencia' (loadEmergencia) pero son su propia capa — el usuario no las
+// encontraba mezcladas con los ~9.000 puntos de infraestructura.
+function paintEvacuacion(group) {
+  if (!tsunamiViasData && !tsunamiAreasData) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'cargando vías de evacuación…';
+    return;
+  }
   // Área de evacuación ante tsunami: solo con el mapa acercado (zoom ≥ 12) y
   // filtrada por viewport, igual que las vías. Va ANTES que las vías para
   // quedar debajo (relleno de fondo, no un trazo que compita con la ruta a
-  // seguir); los marcadores de puntos siempre quedan por encima de ambas
-  // (Leaflet los pinta en un pane distinto al de polígonos/polilíneas).
+  // seguir).
   if (tsunamiAreasData && map.getZoom() >= 12) {
     const bounds = map.getBounds();
     const color = css('--alerta-roja');
@@ -1754,6 +1773,7 @@ function paintEmergencia(group) {
   // 11) y filtradas por el viewport actual — con ~2.940 vías en todo el
   // país, pintar sin filtro de bounds haría el mapa ilegible y lento en
   // cualquier zoom país.
+  let pintadas = 0;
   if (tsunamiViasData && map.getZoom() >= 11) {
     const bounds = map.getBounds();
     const colorTsunami = css('--evac');
@@ -1764,19 +1784,17 @@ function paintEmergencia(group) {
       L.polyline(via.p, { color: esVolcan ? colorVolcan : colorTsunami, weight: 3, opacity: 0.85, dashArray: '6 4' })
         .bindPopup(esVolcan ? `Vía de evacuación volcánica · ${via.c}` : `Vía de evacuación · ${via.c}`)
         .addTo(group);
+      pintadas++;
     }
   }
 
   // Con el mapa en zoom país, las vías (zoom ≥ 11) y el área de inundación
   // (zoom ≥ 12) no se pintan y no hay ninguna pista visual de que existen:
-  // el usuario reportó "no las veo". El hint solo aparece cuando falta el
+  // el usuario reportó "no las veo". El aviso solo aparece cuando falta el
   // requisito de zoom para las vías (el más bajo de los dos).
-  const hintVias = map.getZoom() < 11
-    ? ' · vías de evacuación: acerca el mapa a una zona costera o volcánica'
-    : '';
-  $('#map-meta').textContent = (emergenciaData.updated
-    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${todos.length} puntos de emergencia`) + hintVias;
+  $('#map-meta').textContent = map.getZoom() < 11
+    ? 'vías de evacuación: acerca el mapa a una zona costera o volcánica'
+    : `${pintadas} vías de evacuación en el encuadre`;
 }
 
 function setupCapas() {
