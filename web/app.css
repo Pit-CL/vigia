@@ -29,6 +29,7 @@
   --vol-amarilla: #e0a71b;
   --vol-naranja: #ff7a1a;
   --vol-roja: #d81e2c;
+  --evac: #1f9e4c;
   --font-display: "Bricolage Grotesque", "Avenir Next", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", monospace;
 }
@@ -59,6 +60,7 @@
     --vol-amarilla: #f0c14f;
     --vol-naranja: #ff9648;
     --vol-roja: #ff4d5e;
+    --evac: #4ce68a;
   }
 }
 
@@ -205,6 +207,10 @@ a { color: var(--accent2); text-underline-offset: 2px; }
 .search-results li:hover,
 .search-results li[aria-selected="true"] { background: var(--band); }
 .search-results li small { color: var(--ink-soft); }
+/* Separa visualmente las comunas locales de los resultados de geocoding
+   remoto, sin agregar un <li> aparte (rompería la correspondencia de índices
+   con el arreglo `items` que usa la navegación por teclado). */
+.search-results li.search-sep { border-top: 1.5px solid var(--ink); }
 
 .chips {
   display: flex;
@@ -1169,6 +1175,10 @@ dialog::backdrop {
   gap: 3px;
 }
 .emg-grupo b { font-variant-numeric: tabular-nums; }
+
+/* Muestra de la leyenda: línea verde discontinua, igual al trazo real de
+   L.polyline en el mapa (color, weight y dashArray equivalentes). */
+.legend-swatch.evac-swatch { height: 0; border-top: 3px dashed var(--evac); }
 
 /* ── Centro de riesgos ────────────────────────────────────────── */
 
