@@ -38,6 +38,7 @@ services:
       CLIMA_ALERTAS: /data/alertas.json
       CLIMA_VOLCANES: /data/volcanes.json
       CLIMA_EMERGENCIA: /data/emergencia.json
+      CLIMA_REMOCIONES: /data/remociones.json
       CLIMA_TSUNAMI_VIAS: /data/tsunami_vias.json
       CLIMA_TSUNAMI_AREAS: /data/tsunami_areas.json
       CLIMA_MAREA: /data/marea.json

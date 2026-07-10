@@ -17,6 +17,7 @@ import db
 import emergencia
 import incendios
 import marea
+import remociones
 import sismos
 import sources
 import tsunami
@@ -121,13 +122,15 @@ def main() -> int:
                      help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami)")
     ap.add_argument("--emergencia", action="store_true",
                      help="infraestructura de emergencia comunitaria (SENAPRED, cuasi-estático semanal)")
+    ap.add_argument("--remociones", action="store_true",
+                     help="catastro de remociones en masa (SENAPRED, cuasi-estático semanal)")
     ap.add_argument("--all", action="store_true")
     args = ap.parse_args()
     do_forecasts = args.forecasts or args.all
     do_obs = args.obs or args.all or not (
         args.forecasts or args.all or args.sismos or args.incendios
         or args.alertas or args.volcanes or args.hazards or args.emergencia
-        or args.avisos or args.marea or args.tsunami)
+        or args.remociones or args.avisos or args.marea or args.tsunami)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
@@ -135,6 +138,7 @@ def main() -> int:
     do_marea = args.marea or args.all
     do_tsunami = args.tsunami or args.hazards or args.all
     do_emergencia = args.emergencia or args.all
+    do_remociones = args.remociones or args.emergencia or args.all
     # Avisos son baratos (SQL local + mediana, sin red): se recalculan en toda
     # corrida de observaciones o de pronósticos, no solo con --avisos explícito.
     do_avisos = args.avisos or do_obs or do_forecasts
@@ -169,6 +173,8 @@ def main() -> int:
         ok &= step(con, run_at, "tsunami", lambda: tsunami.update(con, run_at))
     if do_emergencia:
         ok &= step(con, run_at, "emergencia", lambda: emergencia.update(con, run_at))
+    if do_remociones:
+        ok &= step(con, run_at, "remociones", lambda: remociones.update(con, run_at))
     # Verificación y calibración solo con los pronósticos (2 veces al día):
     # con la red de 152 estaciones recalcularlas cada hora tarda más que el
     # propio ciclo horario y las corridas se apilan. estaciones.json sí se

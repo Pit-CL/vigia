@@ -82,6 +82,7 @@ API_RNVV = "https://rnvv.sernageomin.cl/"
 API_RNVV_FALLBACK = "https://www.sernageomin.cl/alertas-volcanicas/"
 
 EMERGENCIA_PATH = Path(os.environ.get("CLIMA_EMERGENCIA", ROOT / "web" / "emergencia.json"))
+REMOCIONES_PATH = Path(os.environ.get("CLIMA_REMOCIONES", ROOT / "web" / "remociones.json"))
 # FeatureServers del visor oficial "Chile Preparado" (SENAPRED).
 EMERGENCIA_ARCGIS_BASE = os.environ.get(
     "EMERGENCIA_ARCGIS_BASE",

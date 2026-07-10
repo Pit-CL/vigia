@@ -158,7 +158,7 @@ const INFO = {
 <p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico: cerca de 150 estaciones que cubren las 16 regiones de Chile, de Arica a la Antártica, más Isla de Pascua y Juan Fernández.</p>
 <p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación.</p>
 <p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto a lo largo de todo el país, de cordillera a costa.</p>
-<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas, volcanes y avisos meteorológicos derivados, y —para una emergencia— la capa 🏃 Evacuación (vías de evacuación y zona de inundación ante tsunami y volcán) y la capa 🚑 Emergencia (infraestructura como salud, bomberos y carabineros). Cada capa declara su fuente (u origen, si es propia) justo debajo del mapa.</p>
+<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas, volcanes y avisos meteorológicos derivados, la capa ⛰️ Remociones (catastro histórico SENAPRED de flujos, deslizamientos y caídas de rocas ya ocurridos — no es un pronóstico, pero el terreno con historial es terreno que puede repetir; ante lluvia intensa, aléjate de quebradas y laderas marcadas), y —para una emergencia— la capa 🏃 Evacuación (vías de evacuación y zona de inundación ante tsunami y volcán) y la capa 🚑 Emergencia (infraestructura como salud, bomberos y carabineros). Cada capa declara su fuente (u origen, si es propia) justo debajo del mapa.</p>
 <p class="info-fine">¿Por qué una estación puede diferir del «ahora» del panel superior? Porque el panel es un modelo interpolado a tu punto exacto y la estación es un sensor físico en SU punto exacto — comparar ambos es justamente cómo medimos la calidad del pronóstico (ver «¿Cuánto acierta cada modelo?»).</p>`,
   },
   ensamble: {
@@ -243,6 +243,7 @@ let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga la
 let emergenciaCargando = false;
 let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
+let remocionesData = null; // catastro de remociones en masa (SENAPRED), capa 'remociones', carga lazy propia
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -1154,12 +1155,30 @@ async function loadEmergencia() {
   if (capasActivas.has('emergencia') || capasActivas.has('evacuacion')) renderMapa();
 }
 
+// remociones.json es el catastro histórico de remociones en masa (~1.218
+// puntos, cuasi-estático, se refresca 1x/semana): loader propio, no
+// comparte disparador con loadEmergencia (es una fuente distinta, sin
+// relación con la infraestructura de emergencia).
+let remocionesCargando = false;
+async function loadRemociones() {
+  if (remocionesData || remocionesCargando) return;
+  remocionesCargando = true;
+  try {
+    const res = await fetch('remociones.json', { cache: 'no-store' });
+    if (res.ok) remocionesData = await res.json();
+  } catch (_) { /* sin catastro: la capa queda vacía */ }
+  remocionesCargando = false;
+  if (capasActivas.has('remociones')) renderMapa();
+}
+
 // Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
-// una a la vez); 'sismos', 'incendios', 'alertas', 'volcanes', 'evacuacion' y
-// 'emergencia' son independientes y se pueden combinar con cualquiera.
-// 'evacuacion' y 'emergencia' son lazy: ~9.000 puntos + vías/áreas
+// una a la vez); 'sismos', 'incendios', 'alertas', 'volcanes', 'remociones',
+// 'evacuacion' y 'emergencia' son independientes y se pueden combinar con
+// cualquiera. 'evacuacion' y 'emergencia' son lazy: ~9.000 puntos + vías/áreas
 // cuasi-estáticos que no se cargan salvo que el usuario encienda alguna de
-// las dos (ni en la carga inicial ni en el refresco).
+// las dos (ni en la carga inicial ni en el refresco). 'remociones' es lazy
+// por su propia cuenta: ~1.200 puntos igual de cuasi-estáticos, pero es un
+// catastro propio sin relación con emergenciaData.
 const CAPAS = {
   temp:          { grupo: 'medicion', paint: paintTemp },
   aire:          { grupo: 'medicion', paint: paintAire },
@@ -1169,6 +1188,7 @@ const CAPAS = {
   alertas:       { paint: paintAlertas },
   volcanes:      { paint: paintVolcanes },
   avisos:        { paint: paintAvisos },
+  remociones:    { paint: paintRemociones, lazy: loadRemociones, tieneData: () => remocionesData !== null },
   marea:         { paint: paintMarea },
   evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
   emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
@@ -1176,11 +1196,12 @@ const CAPAS = {
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
 // pinta al final para que su texto en #map-meta prevalezca sobre las demás.
 // Los puntos de alerta van encima de los focos/eventos que resumen.
+// 'remociones' va junto a las demás capas de peligro, antes de 'avisos'.
 // 'emergencia' y 'evacuacion' van al final de todo: en una emergencia real
 // son lo que se busca, así que su texto y sus íconos deben quedar encima de
 // cualquier otra capa. 'evacuacion' cierra la lista porque sus vías son la
 // acción más urgente (hacia dónde ir), por sobre el resto.
-const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1236,7 +1257,7 @@ function ensureMap() {
   // Al cambiar de zoom, el dedup/agrupado por celda de paintTemp/paintAire/
   // paintIncendios depende del zoom actual: hay que re-pintar la capa activa.
   map.on('zoomend', () => {
-    if (['temp', 'aire', 'precipitacion', 'incendios', 'emergencia', 'evacuacion'].some((k) => capasActivas.has(k))) renderMapa();
+    if (['temp', 'aire', 'precipitacion', 'incendios', 'remociones', 'emergencia', 'evacuacion'].some((k) => capasActivas.has(k))) renderMapa();
   });
   // Las vías de evacuación se filtran por el viewport visible (2.740 vías en
   // todo el país): al desplazar el mapa sin cambiar el zoom, también hay que
@@ -1279,6 +1300,7 @@ function renderMapa() {
   document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-legend-avisos').hidden = !capasActivas.has('avisos');
+  document.getElementById('map-legend-remociones').hidden = !capasActivas.has('remociones');
   document.getElementById('map-legend-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-legend-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-legend-emergencia').hidden = !capasActivas.has('emergencia');
@@ -1290,6 +1312,7 @@ function renderMapa() {
   document.getElementById('map-note-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-note-avisos').hidden = !capasActivas.has('avisos');
+  document.getElementById('map-note-remociones').hidden = !capasActivas.has('remociones');
   document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
@@ -1872,6 +1895,68 @@ function paintEvacuacion(group) {
   $('#map-meta').textContent = map.getZoom() < 11
     ? 'vías de evacuación: acerca el mapa a una zona costera o volcánica'
     : `${pintadas} vías de evacuación en el encuadre`;
+}
+
+// ── Remociones en masa: catastro histórico (SENAPRED) ───────────
+
+// Los subtipos 'Propagación' y 'Deformaciones de ladera' son marginales
+// (8 y 3 puntos de 1.218) y no justifican un color propio: se pintan con el
+// mismo glifo/color que 'Deslizamiento'.
+const REM_CLASE = {
+  Flujo: 'rem-flujo',
+  Deslizamiento: 'rem-desliza',
+  'Caída': 'rem-caida',
+  'Propagación': 'rem-desliza',
+  'Deformaciones de ladera': 'rem-desliza',
+};
+
+function paintRemociones(group) {
+  const puntos = (remocionesData && remocionesData.puntos) || [];
+  if (!puntos.length) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'cargando catastro de remociones…';
+    return;
+  }
+  const zoom = map.getZoom();
+  if (zoom < 9) {
+    // Bajo zoom 9: mismo patrón que paintIncendios, grupos con contador
+    // circular en vez de 1.218 puntos individuales ilegibles a escala país.
+    const grupos = agruparPorCelda(puntos, 48).sort((a, b) => a.length - b.length);
+    grupos.forEach((grupo) => {
+      const lat = grupo.reduce((s, p) => s + p.lat, 0) / grupo.length;
+      const lon = grupo.reduce((s, p) => s + p.lon, 0) / grupo.length;
+      const icon = L.divIcon({
+        className: 'stn-icon',
+        html: `<span class="stn-label rem-grupo">⛰️<b>${grupo.length}</b></span>`,
+        iconSize: [40, 26], iconAnchor: [20, 13],
+      });
+      const marker = L.marker([lat, lon], {
+        icon, title: `${grupo.length} remociones registradas — toca para acercar`,
+      }).addTo(group);
+      marker.on('click', () => map.setView([lat, lon], zoom + 2));
+    });
+  } else {
+    puntos.forEach((p) => {
+      const clase = REM_CLASE[p.t] || 'rem-desliza';
+      const icon = L.divIcon({ className: `rem-icon ${clase}`, iconSize: [12, 12], iconAnchor: [6, 6] });
+      const marker = L.marker([p.lat, p.lon], { icon, title: p.t }).addTo(group);
+      const box = document.createElement('div');
+      box.className = 'stn-popup';
+      const h = document.createElement('strong');
+      h.textContent = `${p.t} — remoción en masa registrada`;
+      box.appendChild(h);
+      const small = document.createElement('small');
+      small.textContent = 'Si vives cerca: ante lluvia intensa aléjate de quebradas y laderas';
+      box.appendChild(small);
+      marker.bindPopup(box, { maxWidth: 260 });
+      // Zona de influencia aproximada: solo con el mapa bien acercado, igual
+      // que el criterio de zoom de paintEvacuacion para no saturar el mapa.
+      if (zoom >= 12) {
+        const color = css(`--${clase}`);
+        L.circle([p.lat, p.lon], { radius: 150, color, weight: 0, fillColor: color, fillOpacity: 0.12 }).addTo(group);
+      }
+    });
+  }
+  $('#map-meta').textContent = `${puntos.length} remociones registradas · catastro SENAPRED`;
 }
 
 function setupCapas() {
