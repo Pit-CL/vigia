@@ -1032,6 +1032,16 @@ dialog::backdrop {
   font-variant-numeric: tabular-nums;
 }
 
+/* Detalle de un grupo (incendios/emergencia) cuando el mapa ya no puede
+   acercar más para desagregarlo: lista simple, un ítem por línea. */
+.stn-popup .grupo-lista {
+  margin: 10px 0 0;
+  padding-left: 16px;
+  font-size: 0.74rem;
+}
+.stn-popup .grupo-lista li { margin-bottom: 3px; }
+.stn-popup .grupo-lista li:last-child { margin-bottom: 0; }
+
 .alerta-explica, .alerta-nivel-explica {
   font-size: 0.78rem;
   color: var(--ink-soft);
