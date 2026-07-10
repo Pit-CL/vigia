@@ -296,6 +296,27 @@ function horaLocal(isoUtc) {
   } catch (_) { return isoUtc; }
 }
 
+// Fecha y hora local sin ambigüedad, para eventos que pueden ser de hoy,
+// ayer, mañana o de varios días atrás/adelante ("hoy 14:32", "ayer 09:15",
+// "mañana 06:00", "8 jul 14:32"). Compara fechas calendario en TZ Chile.
+function fechaHora(isoUtc) {
+  try {
+    const d = new Date(isoUtc);
+    const hora = horaLocal(isoUtc);
+    const soloFecha = new Intl.DateTimeFormat('en-CA', {
+      timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    const [ey, em, ed] = soloFecha.format(d).split('-').map(Number);
+    const [hy, hm, hd] = soloFecha.format(new Date()).split('-').map(Number);
+    const diffDias = Math.round((Date.UTC(ey, em - 1, ed) - Date.UTC(hy, hm - 1, hd)) / 86400000);
+    if (diffDias === 0) return `hoy ${hora}`;
+    if (diffDias === -1) return `ayer ${hora}`;
+    if (diffDias === 1) return `mañana ${hora}`;
+    const dia = d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: TZ }).replace('.', '');
+    return `${dia} ${hora}`;
+  } catch (_) { return isoUtc; }
+}
+
 // Hora relativa compacta para eventos de riesgo ("ahora" / "hace 2 h" / "hace 3 d").
 function haceCuanto(fecha) {
   const d = fecha instanceof Date ? fecha : new Date(fecha);
@@ -1351,7 +1372,7 @@ function paintSismos(group) {
     const filas = [
       ['Profundidad', e.prof_km != null ? `${e.prof_km} km` : null],
       ['Magnitud', `${e.mag} ${e.mag_tipo}`],
-      ['Hora local', `${horaLocal(e.utc_time)} h`],
+      ['Fecha y hora', fechaHora(e.utc_time)],
       ['Fuente', e.fuente === 'csn' ? 'CSN' : 'USGS'],
     ];
     if (replicas && replicas.mainshock_id === e.id) {
@@ -1524,7 +1545,7 @@ function paintAvisos(group) {
     box.appendChild(popupRows([
       ['Nivel', AVISO_NIVEL_LABEL[a.nivel] || a.nivel],
       ['Valor pico', `${r1(a.valor)} ${a.unidad}`],
-      ['Hora del pico', `${horaLocal(a.hora_peak)} h`],
+      ['Hora del pico', fechaHora(a.hora_peak)],
     ]));
     const small = document.createElement('small');
     small.textContent = (avisosData && avisosData.nota) || 'Aviso derivado de modelos, no es un aviso oficial de la DMC';
