@@ -51,3 +51,25 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
+
+  push:
+    build: ./push
+    container_name: clima-push
+    working_dir: /app
+    # server.py (suscripciones) corre en foreground; crond (envío) en background.
+    command: sh -c "cp /app/push/crontab /etc/crontabs/root && chown root:root /etc/crontabs/root && crond -l 6 && exec python3 /app/push/server.py"
+    environment:
+      TZ: America/Santiago
+      PUSH_DB: /data/push.db
+      PUSH_SISMOS: /data/sismos.json
+      PUSH_ALERTAS: /data/alertas.json
+      PUSH_VOLCANES: /data/volcanes.json
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_CONTACT: ${VAPID_CONTACT:-}
+    volumes:
+      - ./push:/app/push:ro
+      - ./data:/data
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
