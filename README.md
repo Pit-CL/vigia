@@ -1,76 +1,115 @@
 <div align="center">
 
-# 🌤️ Vigía
+# 🌎 Vigía
 
-**Pronóstico del tiempo multi-modelo, con incertidumbre honesta, verificación pública y centro de riesgos naturales, para todo Chile.**
+**Clima verificable y centro de riesgos naturales para todo Chile — gratis, sin publicidad, sin tracking.**
 
 [![Ver en vivo](https://img.shields.io/badge/▞_ver_en_vivo-clima.cavara.cl-c8451f?style=for-the-badge)](https://clima.cavara.cl)
 [![Licencia MIT](https://img.shields.io/badge/licencia-MIT-2456c9?style=for-the-badge)](LICENSE)
 [![PWA](https://img.shields.io/badge/PWA-instalable-0e9888?style=for-the-badge)](https://clima.cavara.cl)
+[![Python stdlib](https://img.shields.io/badge/python-solo_stdlib-3776ab?style=for-the-badge)](ingesta/)
+[![Hecho en Chile](https://img.shields.io/badge/hecho_en-Chile-d52b1e?style=for-the-badge)](https://clima.cavara.cl)
 
-![Vigía en escritorio](docs/hero-desktop.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/hero-dark.png">
+  <img src="docs/hero-light.png" alt="Vigía — pronóstico y centro de riesgos" width="100%">
+</picture>
+
+| Mapa (modo claro) | Mapa (modo oscuro) |
+|---|---|
+| <img src="docs/hero-light-mapa.png" width="100%"> | <img src="docs/hero-dark-mapa.png" width="100%"> |
 
 </div>
 
-## Por qué existe
+## ¿Qué es?
 
-Casi todas las apps de clima muestran **un solo número**, de **un solo modelo**, **sin decir cuánto aciertan**. Vigía hace lo contrario, sobre tres pilares:
-
-1. **Incertidumbre real.** Usa el ensamble del ECMWF (51 escenarios) para mostrar una banda de confianza, no una falsa certeza. Banda angosta = alta confianza; banda ancha = la atmósfera está difícil y cualquier número exacto sería mentira.
-2. **Seis modelos, no uno.** ECMWF IFS, NOAA GFS, DWD ICON, ECCC GEM, Météo-France ARPEGE y ECMWF AIFS (el modelo de IA del ECMWF), lado a lado. Cuando discrepan, lo verás: el desacuerdo *es* información.
-3. **Verificación pública.** Cada pronóstico se archiva y luego se compara con lo que **realmente midieron** las estaciones. La app publica su propio error (MAE y sesgo) por modelo y por plazo. Casi nadie en el mundo lo hace.
-
-Todo con APIs **gratuitas y abiertas**, sin claves para el usuario, sin tracking, sin CDNs de terceros, sin costo de operación.
-
-> **Foco geográfico:** Chile completo. La capa científica —observaciones reales y verificación— se apoya en una red curada de 152 estaciones distribuidas en las 16 regiones, incluidas Isla de Pascua (Rapa Nui) y la Antártica chilena.
-
-## Capturas
-
-| Detalle por día (móvil) | Escritorio (claro) |
-|---|---|
-| ![Detalle por día](docs/mobile-day.png) | ![Modo claro](docs/desktop-light.png) |
+Vigía es una PWA gratuita que junta, en un solo mapa de Chile, el pronóstico del tiempo con verificación pública y un centro de riesgos naturales (sismos, incendios, alertas, volcanes) más la infraestructura de emergencia más cercana. Sin publicidad, sin cuentas, sin tracking, código abierto bajo MIT.
 
 ## Características
 
-- 📈 **Banda de ensamble** (10–90 %, 51 miembros) + 6 modelos deterministas superpuestos (incluido el modelo de IA del ECMWF, AIFS).
-- 🌫️ **Calidad del aire** con la **medición oficial de la red SINCA** (Ministerio del Medio Ambiente) de la estación más cercana y su índice **ICAP** (D.S. 12/2011): nivel, color y consejo de salud, más el pronóstico de MP2,5 a 48 h — el contaminante crítico del invierno en Chile central.
-- 🗺️ **Mapa de observaciones en vivo** con dos capas: temperatura (red nacional de 152 estaciones) y calidad del aire (27 estaciones SINCA por nivel ICAP).
-- 🔍 **Detalle hora a hora** al tocar cualquier día: temperatura multi-modelo, precipitación, UV, sol, viento.
-- 🎯 **Panel de verificación** con el acierto de cada modelo por plazo (1 a 4 días), actualizado solo.
-- ℹ️ **Explicaciones en cada panel**, en doble registro: simple para cualquiera, riguroso para curiosos (qué significa de verdad «70 % de lluvia», qué es el ensamble, por qué los modelos difieren…).
-- 📱 **PWA instalable**, responsive, con modo claro/oscuro automático y funcionamiento offline del último pronóstico visto.
+### 🌤️ Clima verificable
 
-### Centro de riesgos
+- **6 modelos, no uno**: ECMWF IFS, **AIFS** (el modelo de IA del ECMWF), NOAA GFS, DWD ICON, ECCC GEM y Météo-France ARPEGE, más el **ensamble de 51 miembros** del ECMWF para mostrar una banda de incertidumbre real en vez de un número falso.
+- **Verificación pública**: cada pronóstico se archiva y se compara luego con lo que midieron las estaciones. La app publica su propio error (MAE, RMSE, sesgo) por modelo y por plazo.
+- **Calibración con disciplina científica**: corrección de sesgo por estación con EWMA, gate de muestra mínima y shrinkage — nunca sobre variables donde no corresponde (precipitación, dirección del viento).
+- **152 estaciones reales**: las 16 regiones continentales, Isla de Pascua (Rapa Nui), Juan Fernández y 11 bases antárticas chilenas.
+- **Buscador de las 345 comunas** de Chile.
+- **Calidad del aire** con la medición oficial de la red SINCA y el índice ICAP (D.S. 12/2011).
 
-- 🌎 **Sismos** (CSN + USGS): catálogo reciente en el mapa. Sin pronóstico de terremotos — nadie puede predecirlos — pero sí una estimación de réplicas vía la **ley de Omori**, que es estadística, no predicción puntual.
-- 🔥 **Incendios activos** vía **NASA FIRMS** (detección satelital de focos de calor).
-- 🚨 **Alertas vigentes de SENAPRED**, el organismo oficial de protección civil de Chile.
-- 🌋 **Semáforo volcánico** con el estado técnico de cada volcán activo según la **RNVV de SERNAGEOMIN**.
-- 🏥 **Infraestructura de emergencia** (albergues, puntos de encuentro, capacidad de respuesta) tomada del visor oficial **Chile Preparado** de SENAPRED.
+### 🚨 Centro de riesgos
 
-## Cómo funciona
+- **Sismos** (CSN + USGS) en tiempo real, actualizados cada 10 minutos, con estimación de réplicas vía la **ley de Omori** (estadística, no predicción puntual) y el impacto potencial estimado por **PAGER** (USGS).
+- **Incendios activos** vía **NASA FIRMS** (detección satelital VIIRS, 375 m de resolución).
+- **Alertas vigentes de SENAPRED** explicadas en lenguaje claro, no solo el aviso oficial crudo.
+- **Semáforo volcánico** con el estado técnico de cada volcán activo según la RNVV de SERNAGEOMIN (best effort: la red no publica en tiempo real).
+- **Avisos meteorológicos propios** (viento, helada, lluvia, calor) derivados de la mediana multi-modelo — explícitamente **no oficiales**.
+- **Acumulados de lluvia y nieve** a 48 horas.
+
+### 🚑 Emergencia comunitaria
+
+- **5.181 centros de salud, 1.418 cuarteles de bomberos, 883 unidades de Carabineros, 1.513 puntos de encuentro** y **2.746 + 196 vías de evacuación** (tsunami y volcán) más **345 zonas de inundación por tsunami**, todo en el mapa.
+- **Guía offline «qué hacer»** ante sismo, tsunami, incendio o erupción, más kit de emergencia y teléfonos útiles — funciona sin señal.
+- **Punto de encuentro más cercano** por geolocalización (se calcula en el navegador; la ubicación nunca se envía ni se guarda).
+- **Notificaciones Web Push de emergencias mayores**, opt-in y sin necesidad de registro.
+
+### 📱 PWA
+
+Instalable, con tema automático claro/oscuro, filtro «Chile» / «cerca de tu ciudad», y tiles del mapa de tu zona cacheados para que la guía de emergencia funcione sin conexión.
+
+## Por qué es distinto
+
+1. **Verificación pública, no promesas.** Casi ninguna app de clima muestra cuánto se equivoca. Vigía archiva cada pronóstico y publica su error real por modelo y plazo.
+2. **Honestidad sísmica.** Los terremotos no se pueden predecir — ninguna app seria lo hace. Lo que sí se puede mostrar es estadística real (Omori para réplicas, PAGER para impacto estimado), siempre etiquetada como tal.
+3. **Todo con fuentes oficiales citadas.** DMC, CSN, SENAPRED, SERNAGEOMIN, NASA, USGS — cada dato apunta a su origen y licencia (ver tabla abajo).
+4. **Cero costo de operación, cero dependencias oscuras.** Ingesta 100 % Python estándar, sin CDNs de terceros, CSP estricta.
+
+## Arquitectura
 
 ```
-┌─────────────────────────────┐         ┌──────────────────────────────┐
-│  web/  (PWA estática)        │         │  ingesta/  (Python stdlib)   │
-│  habla directo con Open-Meteo│         │  cron horario en contenedor  │
-│  Chart.js · Leaflet · vanilla│         │                              │
-└─────────────────────────────┘         │  • pronósticos (6 modelos +  │
-            │                            │    ensamble de 51 miembros)  │
-            │ lee JSON                   │  • observaciones (METAR+DMC) │
-            ▼                            │  • verificación (MAE/sesgo)  │
-   status / verificacion /  ◄────────────│  → SQLite + JSON públicos    │
-   estaciones / aire /                   └──────────────────────────────┘
-   bias .json
+ingesta/ (Python stdlib, cron)              push/ (pywebpush, cron)
+  • pronósticos: 6 modelos + ensamble         • suscripciones (opt-in, sin registro)
+  • observaciones: METAR + DMC                • envía Web Push de sismos/alertas/volcanes
+  • verificación + calibración (bias)
+  • sismos / incendios / alertas / volcanes
+  • infraestructura de emergencia
+        │
+        ▼ escribe 12 JSON + SQLite
+   /data (volumen compartido)
+        │
+        ▼ sirve por alias, solo 127.0.0.1
+   nginx (endurecido, CSP estricta)
+        │
+        ▼ HTTP
+   web/ (PWA: Chart.js · Leaflet · vanilla JS)
+        │
+        ▼ sin puertos abiertos
+   Cloudflare Tunnel → clima.cavara.cl
 ```
 
-- **Frontend** (`web/`): HTML/CSS/JS sin framework. Pinta el pronóstico consumiendo Open-Meteo desde el navegador, y enriquece con los JSON que genera la ingesta.
-- **Ingesta** (`ingesta/`): Python 3.12 **solo librería estándar** (`urllib` + `sqlite3`, cero dependencias). Archiva pronósticos y observaciones, y computa la verificación. Ese archivo histórico es el activo que habilitará la calibración local (MOS/EMOS).
-- **Deploy** (`deploy/` + `docker-compose.yml`): nginx endurecido + contenedor de cron. Pensado para correr detrás de un Cloudflare Tunnel, sin abrir puertos.
+Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingesta`** (Python stdlib + cron, produce los 12 JSON en `/data`) y **`push`** (servidor de suscripciones + cron de envío, la única dependencia externa del proyecto: `pywebpush`). Detalle completo en [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+## Fuentes de datos
+
+| Fuente | Aporta | Licencia |
+|---|---|---|
+| [Open-Meteo](https://open-meteo.com/) | Pronóstico de 6 modelos (incluido AIFS) + ensamble ECMWF de 51 miembros | CC BY 4.0 |
+| [Dirección Meteorológica de Chile](https://climatologia.meteochile.gob.cl/) | Observaciones de estaciones automáticas (EMA) | Uso público con atribución |
+| Red OMM / METAR vía [NOAA AWC](https://aviationweather.gov/) | Observaciones horarias de aeropuertos | Dominio público |
+| [SINCA](https://sinca.mma.gob.cl/) (Ministerio del Medio Ambiente) | Calidad del aire oficial (MP2,5, MP10, ICAP) | Uso público con atribución |
+| [CAMS](https://atmosphere.copernicus.eu/) (Copernicus) vía Open-Meteo | Pronóstico de calidad del aire | CC BY 4.0 |
+| [CSN](https://xor.cl/) (Centro Sismológico Nacional) | Catálogo sísmico de Chile | Datos públicos del Estado de Chile |
+| [USGS](https://earthquake.usgs.gov/fdsnws/event/1/) (FDSN Event + PAGER) | Catálogo sísmico global e impacto estimado | Dominio público |
+| [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/) | Focos de calor / incendios activos (VIIRS 375 m) | Cita NASA FIRMS |
+| [SENAPRED](https://senapred.cl/) (ArcGIS) | Alertas vigentes | Datos públicos del Estado de Chile |
+| [SERNAGEOMIN](https://rnvv.sernageomin.cl/) (RNVV) | Semáforo de alerta técnica volcánica | Datos públicos del Estado de Chile |
+| [Visor Chile Preparado](https://www.chilepreparado.cl/) (SENAPRED) | Centros de salud, bomberos, Carabineros, puntos de encuentro, vías de evacuación, zonas de inundación | Datos públicos del Estado de Chile |
+| [INE](https://www.ine.gob.cl/) (censo) | Comunas y su geolocalización para el buscador | Datos públicos del Estado de Chile |
 
 ## Correr en local
 
 ```bash
+git clone https://github.com/Pit-CL/vigia.git && cd vigia
+
 # 1. Un ciclo de ingesta (crea data/clima.db y los JSON en web/)
 python3 ingesta/run.py --all
 
@@ -78,54 +117,30 @@ python3 ingesta/run.py --all
 python3 -m http.server 8123 -d web   # → http://localhost:8123
 ```
 
-No necesitas claves: las observaciones llegan por METAR (NOAA, abierto). Para añadir las 10 estaciones automáticas de la DMC, copia `.env.example` a `.env` con tu token del [registro gratuito](https://climatologia.meteochile.gob.cl).
+No necesitas ninguna clave: las observaciones llegan por METAR (NOAA, abierto) y todo el centro de riesgos funciona sin credenciales salvo dos capas opcionales. Copia `.env.example` a `.env` para activarlas:
 
-## Desplegar
+- `DMC_USUARIO` / `DMC_TOKEN`: 10 estaciones automáticas adicionales de la DMC ([registro gratuito](https://climatologia.meteochile.gob.cl)).
+- `FIRMS_MAP_KEY`: capa de incendios activos ([registro gratuito](https://firms.modaps.eosdis.nasa.gov/api/)); sin ella queda dormida (0 focos, sin error).
+- `VAPID_PRIVATE_KEY` / `VAPID_PUBLIC_KEY` / `VAPID_CONTACT`: solo si vas a correr el contenedor `push` de notificaciones.
+
+## Producción
 
 ```bash
-docker compose up -d        # web (nginx) + ingesta (cron)
+docker compose up -d        # web (nginx) + ingesta (cron) + push (Web Push)
 ```
 
-El cron archiva observaciones cada hora y pronósticos cada 6 h. Detalle de operación, seguridad y el flujo exacto de actualización en [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Puesta en marcha completa, seguridad, ciclo de cron real y cómo actualizar sin tumbar el sitio: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
-## Fuentes de datos
+## Contribuir
 
-| Fuente | Aporta | Licencia |
-|---|---|---|
-| [Open-Meteo](https://open-meteo.com/) | Pronóstico de 6 modelos (incluido AIFS) + ensamble ECMWF | CC BY 4.0 |
-| [Dirección Meteorológica de Chile](https://climatologia.meteochile.gob.cl/) | Observaciones de estaciones automáticas (EMA) | Uso público con atribución |
-| Red OMM / METAR vía [NOAA AWC](https://aviationweather.gov/) | Observaciones horarias de aeropuertos | Dominio público |
-| [SINCA](https://sinca.mma.gob.cl/) (Ministerio del Medio Ambiente) | Calidad del aire oficial (MP2,5, MP10, ICAP) | Uso público con atribución |
-| [CAMS](https://atmosphere.copernicus.eu/) (Copernicus) vía Open-Meteo | Pronóstico de calidad del aire | CC BY 4.0 |
-| [CSN](https://xor.cl/) (Centro Sismológico Nacional) | Catálogo sísmico de Chile | Datos públicos del Estado de Chile |
-| [USGS](https://earthquake.usgs.gov/fdsnws/event/1/) (FDSN Event) | Catálogo sísmico global (respaldo) | Dominio público |
-| [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/) | Focos de calor / incendios activos (detección satelital) | Cita NASA FIRMS |
-| [SENAPRED](https://senapred.cl/) (ArcGIS) | Alertas vigentes e infraestructura de emergencia (Chile Preparado) | Datos públicos del Estado de Chile |
-| [SERNAGEOMIN](https://rnvv.sernageomin.cl/) (RNVV) | Semáforo de alerta técnica volcánica | Datos públicos del Estado de Chile |
+Issues y PRs bienvenidos. Reglas duras del proyecto (ver [`CLAUDE.md`](CLAUDE.md) para el detalle completo):
 
-## Hoja de ruta
-
-- [x] PWA multi-modelo con banda de ensamble
-- [x] Ingesta y archivo histórico (SQLite)
-- [x] Mapa de observaciones en vivo
-- [x] Verificación pública (MAE/sesgo por modelo y plazo)
-- [x] Calidad del aire con índice ICAP chileno
-- [x] Mediciones oficiales SINCA (estación más cercana como dato real)
-- [x] Mapa de calidad del aire con todas las estaciones SINCA por ICAP
-- [x] **Calibración local, fase 1**: corrección de sesgo por estación/variable (EWMA + gate de muestra + shrinkage → `bias.json`)
-- [x] Red nacional de 152 estaciones (16 regiones + Rapa Nui + Antártica)
-- [x] Modelo de IA del ECMWF (AIFS) como 6.º modelo determinista
-- [x] **Centro de riesgos**: sismos (CSN/USGS + réplicas de Omori), incendios (NASA FIRMS), alertas SENAPRED, semáforo volcánico RNVV e infraestructura de emergencia (Chile Preparado)
-- [ ] **Calibración local, fases siguientes**: EMOS → ML cuantílico (requiere más archivo histórico)
-- [ ] Modelo regional chileno WRF de la DMC (4 km) como 7.º modelo
-- [ ] Índice UV y alertas configurables
-
-La visión técnica completa está en [`PROPUESTA.md`](PROPUESTA.md).
-
-## Stack
-
-Vanilla JS · [Chart.js](https://www.chartjs.org/) · [Leaflet](https://leafletjs.com/) · Python (stdlib) · SQLite · nginx · Docker. Fuentes [Bricolage Grotesque](https://fonts.google.com/specimen/Bricolage+Grotesque) e [IBM Plex Mono](https://fonts.google.com/specimen/IBM+Plex+Mono), todo vendorizado (sin CDNs).
+- **Cero dependencias** en la ingesta (solo `urllib` + `sqlite3` de la librería estándar de Python).
+- Si tocas `web/app.js` o `web/app.css`, sube el `?v=N` en `index.html` **y** la versión de `sw.js` — si no, Cloudflare y el service worker siguen sirviendo la versión anterior.
+- La calibración (`ingesta/calibrate.py`) nunca aplica bias sin gate de muestra mínima, nunca corrige precipitación ni dirección del viento, y usa siempre observaciones de estación como ground truth.
 
 ## Licencia
 
-Código bajo [MIT](LICENSE). Los datos meteorológicos mantienen sus licencias de origen y exigen atribución, presente en la interfaz. Proyecto open source **sin fines comerciales**, hecho en Chile. 🇨🇱
+Código bajo [MIT](LICENSE). Los datos que consume y redistribuye mantienen sus licencias de origen y exigen atribución, presente en la interfaz. Proyecto open source **sin fines comerciales**, hecho en Chile. 🇨🇱
+
+La historia técnica del proyecto (propuesta original, antes de convertirse en Vigía) está en [`docs/HISTORIA.md`](docs/HISTORIA.md).

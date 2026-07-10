@@ -1,5 +1,7 @@
 # App de clima para Chile — propuesta técnica
 
+> **Documento original de la propuesta (2026-06), previo a la transformación en Vigía** — se conserva como historia del proyecto.
+
 > Investigación verificada el 2026-06-09. Objetivo: la app de clima científicamente más sólida posible para Chile (foco V Región + RM), 100% gratis y open source, con modelo de predicción propio.
 
 > **⚠️ Documento histórico (propuesta, no estado actual).** La implementación real difiere en varios puntos: stack Python stdlib + SQLite (no FastAPI/PostgreSQL), 15 estaciones (5 METAR + 10 DMC, no 50-100), frontend que consulta Open-Meteo directo desde el navegador, y sin Agromet/RedMeteo. El estado vigente está en `README.md` y `docs/CALIBRACION.md`.
