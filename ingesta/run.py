@@ -16,8 +16,10 @@ import config
 import db
 import emergencia
 import incendios
+import marea
 import sismos
 import sources
+import tsunami
 import volcanes
 import verify
 import calibrate
@@ -113,8 +115,10 @@ def main() -> int:
     ap.add_argument("--incendios", action="store_true", help="archiva focos de calor (NASA FIRMS)")
     ap.add_argument("--alertas", action="store_true", help="alertas naturales vigentes (SENAPRED)")
     ap.add_argument("--volcanes", action="store_true", help="alerta técnica volcánica (SERNAGEOMIN RNVV)")
+    ap.add_argument("--marea", action="store_true", help="marea, oleaje y temperatura del mar (Open-Meteo Marine)")
+    ap.add_argument("--tsunami", action="store_true", help="estado de amenaza de tsunami (PTWC + catálogo sísmico)")
     ap.add_argument("--hazards", action="store_true",
-                     help="peligros naturales (sismos + incendios + alertas + volcanes)")
+                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami)")
     ap.add_argument("--emergencia", action="store_true",
                      help="infraestructura de emergencia comunitaria (SENAPRED, cuasi-estático semanal)")
     ap.add_argument("--all", action="store_true")
@@ -122,11 +126,14 @@ def main() -> int:
     do_forecasts = args.forecasts or args.all
     do_obs = args.obs or args.all or not (
         args.forecasts or args.all or args.sismos or args.incendios
-        or args.alertas or args.volcanes or args.hazards or args.emergencia or args.avisos)
+        or args.alertas or args.volcanes or args.hazards or args.emergencia
+        or args.avisos or args.marea or args.tsunami)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
     do_volcanes = args.volcanes or args.hazards or args.all
+    do_marea = args.marea or args.all
+    do_tsunami = args.tsunami or args.hazards or args.all
     do_emergencia = args.emergencia or args.all
     # Avisos son baratos (SQL local + mediana, sin red): se recalculan en toda
     # corrida de observaciones o de pronósticos, no solo con --avisos explícito.
@@ -154,6 +161,12 @@ def main() -> int:
         ok &= step(con, run_at, "alertas", lambda: alertas.update(con, run_at))
     if do_volcanes:
         ok &= step(con, run_at, "volcanes", lambda: volcanes.update(con, run_at))
+    if do_marea:
+        ok &= step(con, run_at, "marea", lambda: marea.update(con, run_at))
+    if do_tsunami:
+        # Depende de la tabla `quakes` (sismos.py): si corre solo, sin
+        # --sismos en esta misma invocación, usa la tabla de una corrida previa.
+        ok &= step(con, run_at, "tsunami", lambda: tsunami.update(con, run_at))
     if do_emergencia:
         ok &= step(con, run_at, "emergencia", lambda: emergencia.update(con, run_at))
     # Verificación y calibración solo con los pronósticos (2 veces al día):
