@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=29">
+  <link rel="stylesheet" href="app.css?v=30">
 </head>
 <body>
 
@@ -28,8 +28,8 @@
   </div>
   <nav class="locbar" aria-label="Ubicación">
     <div class="search-wrap">
-      <input id="search" type="search" placeholder="Buscar ciudad en Chile…"
-             autocomplete="off" aria-label="Buscar ciudad">
+      <input id="search" type="search" placeholder="Busca tu comuna o localidad…"
+             autocomplete="off" aria-label="Buscar comuna o localidad">
       <ul id="search-results" class="search-results" hidden></ul>
     </div>
     <div id="chips" class="chips" role="listbox" aria-label="Ubicaciones frecuentes"></div>
@@ -169,6 +169,7 @@
       <span>🚒</span><span>Bomberos</span>
       <span>🚓</span><span>Carabineros</span>
       <span>🟢</span><span>Punto de encuentro tsunami</span>
+      <span class="legend-swatch evac-swatch"></span><span>vía de evacuación (acércate a la costa)</span>
     </div>
     <p id="map-note-temp" class="panel-note">Temperatura <strong>medida por sensores reales</strong>, no pronosticada: aeropuertos (red mundial OMM) y estaciones automáticas de la Dirección Meteorológica de Chile. Toca una estación para ver todas sus variables.</p>
     <p id="map-note-aire" class="panel-note" hidden>Material particulado <strong>medido por la red oficial SINCA</strong> (Ministerio del Medio Ambiente). El color indica el nivel ICAP. Toca una estación para ver MP2,5 y MP10.</p>
@@ -176,18 +177,18 @@
     <p id="map-note-incendios" class="panel-note" hidden>Focos de calor satelitales (VIIRS 375 m, últimas 48 h) · <strong>NASA FIRMS</strong> · no todo foco es incendio.</p>
     <p id="map-note-alertas" class="panel-note" hidden>Alertas vigentes SENAPRED · punto = centroide del área alertada.</p>
     <p id="map-note-volcanes" class="panel-note" hidden>Alerta técnica volcánica · SERNAGEOMIN RNVV.</p>
-    <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami · SENAPRED (Visor Chile Preparado) · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
+    <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) para ver las vías de evacuación de tu zona · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
   </section>
 
   <!-- Banda de ensamble -->
   <section class="panel panel-chart" aria-labelledby="ens-title">
     <header class="panel-head">
       <h2 id="ens-title">Temperatura próximas 48 h</h2>
-      <span class="panel-meta">banda 10–90 % · ensamble ECMWF (51 miembros) + 5 modelos</span>
+      <span class="panel-meta">banda 10–90 % · ensamble ECMWF (51 miembros) + 6 modelos</span>
       <button class="info-btn" data-info="ensamble" aria-label="¿Qué es la banda de incertidumbre?">?</button>
     </header>
     <div class="chart-box"><canvas id="chart-temp"></canvas></div>
-    <p class="panel-note">La banda muestra la incertidumbre real del pronóstico: mientras más ancha, menos certeza. Las líneas finas son los modelos individuales de 5 centros meteorológicos mundiales.</p>
+    <p class="panel-note">La banda muestra la incertidumbre real del pronóstico: mientras más ancha, menos certeza. Las líneas finas son los 6 modelos individuales, de 5 centros meteorológicos mundiales (dos de ellos, IFS y AIFS, del propio ECMWF).</p>
   </section>
 
   <!-- Precipitación -->
@@ -254,7 +255,7 @@
   <p id="archive-status" class="archive-status" hidden></p>
   <p>
     Datos meteorológicos de <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (CC BY 4.0) ·
-    modelos ECMWF, NOAA GFS, DWD ICON, ECCC GEM y Météo-France ARPEGE ·
+    modelos ECMWF (IFS y AIFS, su modelo de IA), NOAA GFS, DWD ICON, ECCC GEM y Météo-France ARPEGE ·
     observaciones <a href="https://www.meteochile.gob.cl/" rel="noopener">Dirección Meteorológica de Chile</a> (estaciones EMA y red OMM/METAR vía NOAA).
   </p>
   <p>Proyecto open source sin fines comerciales · hecho en Chile.</p>
@@ -288,6 +289,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>

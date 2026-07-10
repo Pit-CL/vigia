@@ -40,11 +40,12 @@ const MODELS = [
   { id: 'icon_seamless',        name: 'ICON',   org: 'DWD · Alemania' },
   { id: 'gem_seamless',         name: 'GEM',    org: 'ECCC · Canadá' },
   { id: 'meteofrance_seamless', name: 'ARPEGE', org: 'Météo-France' },
+  { id: 'ecmwf_aifs025_single', name: 'AIFS',   org: 'ECMWF · IA' },
 ];
 
 const MODEL_COLORS = {
-  light: ['#2456c9', '#0e9888', '#b07d10', '#8b4ac2', '#c8451f'],
-  dark:  ['#6f9bff', '#3fc4b1', '#d9a83a', '#b685e0', '#ff7a4d'],
+  light: ['#2456c9', '#0e9888', '#b07d10', '#8b4ac2', '#c8451f', '#c2317e'],
+  dark:  ['#6f9bff', '#3fc4b1', '#d9a83a', '#b685e0', '#ff7a4d', '#ff6fb0'],
 };
 
 const PLACES = [
@@ -126,9 +127,10 @@ const INFO = {
   mapa: {
     title: '¿De dónde salen estas mediciones?',
     html: `
-<p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico:</p>
-<p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación: desde Chacalluta en Arica hasta Teniente Marsh en la Antártica.</p>
-<p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto a lo largo de todo el país, de cordillera a costa: cerca de 150 estaciones en total entre ambas redes.</p>
+<p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico: cerca de 150 estaciones que cubren las 16 regiones de Chile, de Arica a la Antártica, más Isla de Pascua y Juan Fernández.</p>
+<p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación.</p>
+<p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto a lo largo de todo el país, de cordillera a costa.</p>
+<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas y volcanes, y —para una emergencia— infraestructura de emergencia y vías de evacuación. Cada capa declara su fuente oficial justo debajo del mapa.</p>
 <p class="info-fine">¿Por qué una estación puede diferir del «ahora» del panel superior? Porque el panel es un modelo interpolado a tu punto exacto y la estación es un sensor físico en SU punto exacto — comparar ambos es justamente cómo medimos la calidad del pronóstico (ver «¿Cuánto acierta cada modelo?»).</p>`,
   },
   ensamble: {
@@ -136,7 +138,7 @@ const INFO = {
     html: `
 <p><strong>En simple:</strong> el futuro de la atmósfera no se puede conocer con exactitud, así que el centro europeo ECMWF corre su modelo <strong>51 veces</strong>, cada vez partiendo de condiciones iniciales levemente distintas. La banda muestra dónde cae el 80 % de esos 51 futuros posibles. Banda angosta = los escenarios coinciden, alta confianza. Banda ancha = la atmósfera está «difícil», cualquier número exacto sería una falsa promesa.</p>
 <p><strong>La ciencia:</strong> la atmósfera es un sistema caótico — errores diminutos en el estado inicial crecen exponencialmente (el famoso «efecto mariposa» que describió Edward Lorenz en 1963). El pronóstico por ensambles es la respuesta operativa de la meteorología moderna a ese caos: en vez de fingir certeza, se cuantifica la incertidumbre. La línea segmentada es la mediana (la mitad de los escenarios está arriba y la mitad abajo).</p>
-<p class="info-fine">Las líneas finas de colores son los modelos <em>deterministas</em> de 5 centros mundiales — si además de la banda los modelos discrepan entre sí, la incertidumbre es doble.</p>`,
+<p class="info-fine">Las líneas finas de colores son los 6 modelos <em>deterministas</em> (5 centros mundiales — IFS y AIFS son ambos de ECMWF) — si además de la banda los modelos discrepan entre sí, la incertidumbre es doble.</p>`,
   },
   precipitacion: {
     title: '¿Qué significa «70 % de probabilidad de lluvia»?',
@@ -157,14 +159,15 @@ const INFO = {
     title: '¿Qué es un modelo meteorológico y por qué difieren?',
     html: `
 <p><strong>En simple:</strong> un modelo numérico divide la atmósfera del planeta en una grilla 3D de celdas (de ~10 a 25 km de lado según el modelo) y resuelve las ecuaciones de la física — movimiento, calor, humedad — hacia adelante en el tiempo, en algunos de los supercomputadores más grandes del mundo.</p>
-<p><strong>Los cinco que mostramos:</strong> IFS del centro europeo ECMWF (el de mayor prestigio mundial en verificaciones), GFS de la NOAA estadounidense, ICON del servicio alemán DWD, GEM del canadiense ECCC y ARPEGE de Météo-France.</p>
+<p><strong>Los seis que mostramos:</strong> IFS del centro europeo ECMWF (el de mayor prestigio mundial en verificaciones), GFS de la NOAA estadounidense, ICON del servicio alemán DWD, GEM del canadiense ECCC, ARPEGE de Météo-France y AIFS —el modelo de <strong>inteligencia artificial</strong> del propio ECMWF, que aprendió de décadas de datos en vez de resolver a mano las ecuaciones de la física—.</p>
 <p><strong>¿Por qué no dicen lo mismo?</strong> Difieren en la resolución de su grilla, en cómo representan procesos más pequeños que una celda (una nube, una quebrada de la cordillera) y en cómo digieren las observaciones iniciales. Chile es terreno difícil: el salto del Pacífico a los Andes en ~150 km es más angosto que una celda de algunos modelos.</p>
-<p class="info-fine">La fila «dispersión» es información valiosa: si los 5 modelos coinciden, puedes confiar; si difieren en 6 °C o en 10 mm de lluvia, la atmósfera está genuinamente impredecible y quien te dé un solo número te está simplificando de más.</p>`,
+<p class="info-fine">La fila «dispersión» es información valiosa: si los 6 modelos coinciden, puedes confiar; si difieren en 6 °C o en 10 mm de lluvia, la atmósfera está genuinamente impredecible y quien te dé un solo número te está simplificando de más.</p>`,
   },
   verificacion: {
     title: '¿Cómo medimos el acierto?',
     html: `
 <p><strong>El método:</strong> guardamos cada pronóstico en el momento en que se emite. Cuando llega la hora pronosticada, lo comparamos con lo que <em>realmente midieron</em> las cerca de 150 estaciones de la red nacional (aeropuertos + DMC). Nadie puede retocar el pronóstico después: queda archivado.</p>
+<p>Comparamos <strong>6 modelos</strong>, incluido el modelo de inteligencia artificial de ECMWF (AIFS): la tabla de abajo muestra con datos cuál acierta más en Chile, no cuál promete más.</p>
 <p><strong>MAE (error absoluto medio):</strong> el tamaño típico del error, en grados. «MAE 1,5 °C a 1 día» significa que, en promedio, la temperatura pronosticada para el día siguiente difirió 1,5 °C de la observada. Mientras más chico, mejor.</p>
 <p><strong>Sesgo:</strong> el error <em>con signo</em>. Un sesgo de +1 °C significa que el modelo tiende a pronosticar más calor del que llega; −1 °C, más frío. Conocer el sesgo de cada modelo en cada lugar es la base para corregirlo — exactamente lo que hará nuestro modelo de calibración local.</p>
 <p><strong>Los plazos:</strong> «a 1 día» evalúa pronósticos emitidos 24 h antes; «a 4 días», 96 h antes. El error crece con el plazo — eso también lo puedes ver aquí, transparente.</p>
@@ -196,6 +199,7 @@ let alertasData = null;   // alertas naturales vigentes (SENAPRED)
 let volcanesData = null;  // alerta técnica volcánica (SERNAGEOMIN RNVV)
 let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
 let emergenciaCargando = false;
+let tsunamiViasData = null; // vías de evacuación (SENAPRED), carga lazy junto con emergenciaData
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -222,6 +226,8 @@ const modelColors = () => MODEL_COLORS[isDark() ? 'dark' : 'light'];
 const wmo = (code) => WMO[code] || ['—', '·'];
 const compass = (deg) => COMPASS[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
 const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
+// Normaliza para comparar texto sin tildes ni mayúsculas ("Ñuñoa" ~ "nunoa").
+const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 function fetchJSON(url) {
   return fetch(url).then((res) => {
@@ -714,7 +720,7 @@ function renderCharts(best, multi, ens) {
   // indicador de calibración en el panel
   const meta = document.querySelector('#ens-title')?.closest('.panel-head')?.querySelector('.panel-meta');
   if (meta) {
-    const base = 'banda 10–90 % · ensamble ECMWF (51 miembros) + 5 modelos';
+    const base = 'banda 10–90 % · ensamble ECMWF (51 miembros) + 6 modelos';
     meta.textContent = biasStation ? `${base} · ✓ calibrado` : base;
     meta.title = biasStation
       ? `Modelos corregidos por sesgo local validado (estación ${biasStation.nombre}, holdout skill +0.21)`
@@ -815,7 +821,7 @@ function openDay(i) {
     hb.precipitation_probability ? idxDay.map((j) => hb.precipitation_probability[j]) : null);
 
   $('#day-dialog-note').textContent = idxMulti.length
-    ? 'Líneas de colores: los 5 modelos. Línea gruesa: síntesis best-match. Si se separan, la atmósfera está difícil de pronosticar.'
+    ? 'Líneas de colores: los 6 modelos. Línea gruesa: síntesis best-match. Si se separan, la atmósfera está difícil de pronosticar.'
     : 'Para días más allá de 72 h mostramos solo la síntesis: la dispersión entre modelos crece y el detalle hora a hora pierde precisión — es el límite físico del caos atmosférico, no un defecto.';
 
   $('#day-dialog').showModal();
@@ -1034,14 +1040,17 @@ async function loadVolcanes() {
 
 // emergencia.json es cuasi-estático (~9.000 puntos, se refresca 1x/semana):
 // un solo fetch por sesión, disparado por toggleCapa al encender la capa, no
-// en la carga inicial ni en el refresco periódico de 10 min.
+// en la carga inicial ni en el refresco periódico de 10 min. tsunami_vias.json
+// se carga junto en el mismo Promise.all: misma capa, mismo gatillo.
 async function loadEmergencia() {
   if (emergenciaData || emergenciaCargando) return;
   emergenciaCargando = true;
-  try {
-    const res = await fetch('emergencia.json', { cache: 'no-store' });
-    if (res.ok) emergenciaData = await res.json();
-  } catch (_) { /* sin datos: la capa queda vacía */ }
+  const [emg, vias] = await Promise.all([
+    fetch('emergencia.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch('tsunami_vias.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  if (emg) emergenciaData = emg;
+  tsunamiViasData = vias;
   emergenciaCargando = false;
   if (capasActivas.has('emergencia')) renderMapa();
 }
@@ -1122,6 +1131,12 @@ function ensureMap() {
   // paintIncendios depende del zoom actual: hay que re-pintar la capa activa.
   map.on('zoomend', () => {
     if (['temp', 'aire', 'incendios', 'emergencia'].some((k) => capasActivas.has(k))) renderMapa();
+  });
+  // Las vías de evacuación se filtran por el viewport visible (2.740 vías en
+  // todo el país): al desplazar el mapa sin cambiar el zoom, también hay que
+  // re-pintar para que aparezcan las vías que entraron al encuadre.
+  map.on('moveend', () => {
+    if (capasActivas.has('emergencia')) renderMapa();
   });
   return map;
 }
@@ -1468,6 +1483,20 @@ function paintEmergencia(group) {
         .addTo(group);
     }
   });
+  // Vías de evacuación ante tsunami: solo con el mapa acercado (zoom ≥ 11) y
+  // filtradas por el viewport actual — con 2.740 vías en todo el país, pintar
+  // sin filtro de bounds haría el mapa ilegible y lento en cualquier zoom país.
+  if (tsunamiViasData && map.getZoom() >= 11) {
+    const bounds = map.getBounds();
+    const color = css('--evac');
+    for (const via of tsunamiViasData.vias || []) {
+      if (!bounds.contains(via.p[0])) continue;
+      L.polyline(via.p, { color, weight: 3, opacity: 0.85, dashArray: '6 4' })
+        .bindPopup(`Vía de evacuación · ${via.c}`)
+        .addTo(group);
+    }
+  }
+
   $('#map-meta').textContent = emergenciaData.updated
     ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
     : `${todos.length} puntos de emergencia`;
@@ -1747,25 +1776,61 @@ function renderChips() {
   });
 }
 
+// Catastro de comunas (INE, web/comunas.json): fuente local instantánea, sin
+// red. Se carga una sola vez, al primer foco del buscador — no hace falta
+// antes porque nadie escribe sin haber tocado el input primero.
+let comunasData = null;
+let comunasCargando = false;
+async function cargarComunas() {
+  if (comunasData || comunasCargando) return;
+  comunasCargando = true;
+  try {
+    const res = await fetch('comunas.json');
+    if (res.ok) comunasData = await res.json();
+  } catch (_) { /* sin comunas.json: el buscador cae solo al geocoding remoto */ }
+  comunasCargando = false;
+}
+
+// Coincidencias por prefijo primero (más relevantes), luego por infijo.
+function buscarComunas(q) {
+  if (!comunasData) return [];
+  const nq = norm(q);
+  const prefijo = [], infijo = [];
+  for (const c of comunasData.comunas) {
+    const nn = norm(c.n);
+    if (nn.startsWith(nq)) prefijo.push(c);
+    else if (nn.includes(nq)) infijo.push(c);
+  }
+  return [...prefijo, ...infijo].slice(0, 8).map((c) => ({ ...c, tipo: 'comuna' }));
+}
+
 function setupSearch() {
   const input = $('#search');
   const list = $('#search-results');
   let timer = null;
-  let items = [];
+  let items = [];   // comunas locales + resultados de geocoding, en ese orden
   let sel = -1;
 
   const hide = () => { list.hidden = true; sel = -1; };
 
-  const show = (results) => {
-    items = results;
+  // `nComunas` marca dónde termina el tramo de comunas dentro de `items`,
+  // para pintar el separador visual solo cuando ambos tramos coexisten.
+  const render = (comunas, geo) => {
+    items = [...comunas, ...geo];
     list.innerHTML = '';
-    if (!results.length) { hide(); return; }
-    results.forEach((r, i) => {
+    if (!items.length) { hide(); return; }
+    items.forEach((r, i) => {
       const li = document.createElement('li');
-      li.append(`${r.name} `);
       const small = document.createElement('small');
-      small.textContent = [r.admin2, r.admin1].filter(Boolean).join(' · ');
+      if (r.tipo === 'comuna') {
+        li.append(`${r.n} `);
+        small.textContent = r.r;
+      } else {
+        li.append(`${r.name} `);
+        small.textContent = [r.admin2, r.admin1].filter(Boolean).join(' · ');
+      }
       li.appendChild(small);
+      if (i === comunas.length && comunas.length && geo.length) li.classList.add('search-sep');
       li.addEventListener('mousedown', (e) => { e.preventDefault(); pick(i); });
       list.appendChild(li);
     });
@@ -1777,18 +1842,24 @@ function setupSearch() {
     if (!r) return;
     input.value = '';
     hide();
-    setPlace({ name: r.name, admin1: r.admin1, lat: r.latitude, lon: r.longitude });
+    if (r.tipo === 'comuna') setPlace({ name: r.n, admin1: r.r, lat: r.lat, lon: r.lon });
+    else setPlace({ name: r.name, admin1: r.admin1, lat: r.latitude, lon: r.longitude });
   };
+
+  input.addEventListener('focus', () => { cargarComunas(); }, { once: true });
 
   input.addEventListener('input', () => {
     clearTimeout(timer);
     const q = input.value.trim();
     if (q.length < 2) { hide(); return; }
+    const comunas = buscarComunas(q);
+    render(comunas, []);   // comunas locales: instantáneo, no espera el debounce
     timer = setTimeout(async () => {
       try {
         const data = await fetchJSON(`${API_GEO}?name=${encodeURIComponent(q)}&count=6&language=es&format=json`);
-        show((data.results || []).filter((r) => r.country_code === 'CL'));
-      } catch (_) { hide(); }
+        const geo = (data.results || []).filter((r) => r.country_code === 'CL').map((r) => ({ ...r, tipo: 'geo' }));
+        render(comunas, geo);
+      } catch (_) { render(comunas, []); }
     }, 280);
   });
 

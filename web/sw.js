@@ -1,11 +1,11 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'sinoptica-shell-v12';
-const DATA_CACHE = 'sinoptica-data-v12';
+const SHELL_CACHE = 'sinoptica-shell-v13';
+const DATA_CACHE = 'sinoptica-data-v13';
 const SHELL = [
   './',
   'index.html',
-  'app.css?v=29',
-  'app.js?v=29',
+  'app.css?v=30',
+  'app.js?v=30',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -44,7 +44,7 @@ self.addEventListener('fetch', (e) => {
 
   // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
   const isData = isOpenMeteo ||
-    /\/(status|verificacion|estaciones|aire|bias|sismos|incendios|alertas|volcanes|emergencia)\.json$/.test(url.pathname);
+    /\/(status|verificacion|estaciones|aire|bias|sismos|incendios|alertas|volcanes|emergencia|tsunami_vias)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
       fetch(e.request)
