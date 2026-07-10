@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=51">
+  <link rel="stylesheet" href="app.css?v=52">
 </head>
 <body>
 
@@ -161,6 +161,7 @@
       <button class="map-mode" data-capa="aire" aria-pressed="false">🌫️ Aire</button>
       <button class="map-mode" data-capa="precipitacion" aria-pressed="false">💧 Lluvia/nieve</button>
       <span class="map-sep" aria-hidden="true"></span>
+      <button class="map-mode" data-capa="satelite" aria-pressed="false">🛰️ Satélite</button>
       <button class="map-mode" data-capa="sismos" aria-pressed="false">〰️ Sismos</button>
       <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
       <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
@@ -173,6 +174,10 @@
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
       <button id="map-fullscreen-btn" class="map-mode" aria-label="Mapa a pantalla completa" aria-pressed="false">⛶</button>
+    </div>
+    <div id="satelite-control" class="satelite-control" hidden>
+      <button id="satelite-play" class="map-mode" aria-pressed="false" title="Reproducir/pausar últimos frames">▶</button>
+      <span id="satelite-hora" class="panel-meta">—</span>
     </div>
     <div id="map" aria-label="Mapa de estaciones con observaciones reales">
       <div class="map-rosa" aria-hidden="true"><span class="rosa-n">N</span><span class="rosa-e">E</span><span class="rosa-s">S</span><span class="rosa-o">O</span><span class="rosa-aguja"></span></div>
@@ -259,6 +264,7 @@
     <p id="map-note-marea" class="panel-note" hidden>Marea, oleaje y temperatura del mar de <strong>Open-Meteo Marine</strong> (modelo global ~8 km) · las tablas oficiales de marea son del <strong>SHOA</strong> (shoa.cl).</p>
     <p id="map-note-evacuacion" class="panel-note" hidden>Vías de evacuación y zona de inundación ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) a una zona costera o volcánica para verlas.</p>
     <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
+    <p id="map-note-satelite" class="panel-note" hidden>Imagen satelital <strong>GOES-East GeoColor</strong> (NOAA vía NASA GIBS) · retraso típico 20–60 min respecto a la hora real · <strong>no es un radar</strong> — Chile no tiene red pública de radares meteorológicos, esta es la observación más cercana disponible.</p>
   </section>
 
   <!-- Banda de ensamble -->
@@ -371,6 +377,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=51"></script>
+<script src="app.js?v=52"></script>
 </body>
 </html>
