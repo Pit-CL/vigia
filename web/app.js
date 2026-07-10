@@ -1284,7 +1284,7 @@ function renderMapa() {
   if (!ensureMap()) return;
   if (tileLayer) map.removeLayer(tileLayer);
   tileLayer = L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
-    attribution: TILES_ATTR, maxZoom: 13, subdomains: 'abcd',
+    attribution: TILES_ATTR, maxZoom: 18, subdomains: 'abcd',
   }).addTo(map);
 
   for (const k of ORDEN_PINTADO) {
@@ -1623,15 +1623,15 @@ function paintIncendios(group) {
       }
       box.appendChild(ul);
       const popup = L.popup({ maxWidth: 280 }).setLatLng([lat, lon]).setContent(box);
-      // Bajo zoom 12, el clic acerca el mapa (zoom+2) y normalmente el grupo
-      // se separa en focos individuales. Desde zoom 12 ya no hay margen para
-      // acercar más (tileLayer con maxZoom 13) y dos focos a <200 m siempre
-      // caen en la misma celda de 48 px: el grupo nunca se desagrega, así que
-      // el clic abre el detalle en un popup en vez de ser un botón muerto.
+      // Bajo zoom 16, el clic acerca el mapa (zoom+2) y normalmente el grupo
+      // se separa en focos individuales. Desde zoom 16 el +2 ya llega al
+      // techo (tileLayer con maxZoom 18) y dos focos a <20 m siguen cayendo
+      // en la misma celda de 48 px: el grupo nunca se desagrega, así que el
+      // clic abre el detalle en un popup en vez de ser un botón muerto.
       // (No se usa bindPopup para no duplicar el toggle automático de Leaflet
       // con este handler de clic.)
       marker.on('click', () => {
-        if (map.getZoom() < 12) map.setView([lat, lon], map.getZoom() + 2);
+        if (map.getZoom() < 16) map.setView([lat, lon], map.getZoom() + 2);
         else popup.openOn(map);
       });
     }
@@ -1881,12 +1881,12 @@ function paintEmergencia(group) {
       }
       box.appendChild(ul);
       const popup = L.popup({ maxWidth: 280 }).setLatLng([lat, lon]).setContent(box);
-      // Mismo criterio que en incendios (paintIncendios): bajo zoom 12 el
-      // clic acerca el mapa y el grupo suele separarse; desde zoom 12 ya no
-      // hay margen para acercar más y el grupo nunca se desagrega, así que el
-      // clic abre el detalle en un popup.
+      // Mismo criterio que en incendios (paintIncendios): bajo zoom 16 el
+      // clic acerca el mapa y el grupo suele separarse; desde zoom 16 el +2
+      // ya llega al techo (maxZoom 18) y el grupo nunca se desagrega, así
+      // que el clic abre el detalle en un popup.
       marker.on('click', () => {
-        if (map.getZoom() < 12) map.setView([lat, lon], map.getZoom() + 2);
+        if (map.getZoom() < 16) map.setView([lat, lon], map.getZoom() + 2);
         else popup.openOn(map);
       });
     }
