@@ -1264,6 +1264,16 @@ function paintAire(group) {
   $('#map-meta').textContent = `${resumen} · MP2,5${acerca}`;
 }
 
+// Chip de impacto estimado PAGER (USGS) — mismo semáforo verde/amarillo/
+// naranja/rojo que las alertas volcánicas, reutilizando esas variables CSS.
+const PAGER_LABEL = { green: 'verde', yellow: 'amarillo', orange: 'naranja', red: 'rojo' };
+function pagerChip(alert) {
+  const span = document.createElement('span');
+  span.className = `pager-chip pager-${alert}`;
+  span.textContent = `Impacto estimado: ${PAGER_LABEL[alert] || alert} (USGS PAGER)`;
+  return span;
+}
+
 // Color por antigüedad del evento (valores en --sismo-* de app.css, ya
 // ajustados para verse bien en claro y oscuro); "old" reutiliza --ink-soft.
 function colorSismo(edadMs) {
@@ -1303,6 +1313,7 @@ function paintSismos(group) {
       small.textContent = replicas.nota;
       box.appendChild(small);
     }
+    if (e.pager) box.appendChild(pagerChip(e.pager));
     marker.bindPopup(box, { maxWidth: 280 });
   });
   $('#map-meta').textContent = sismosData.updated
@@ -1628,10 +1639,12 @@ function riesgoEventos() {
     if (e.mag < 4.5) continue;
     const edadMs = ahora - new Date(e.utc_time).getTime();
     if (edadMs > 48 * 3600e3) continue;
-    const score = 20 + e.mag * 5 + (edadMs < 6 * 3600e3 ? 20 : 0);
+    let score = 20 + e.mag * 5 + (edadMs < 6 * 3600e3 ? 20 : 0);
+    if (e.pager === 'orange') score += 30;
+    else if (e.pager === 'red') score += 50;
     items.push({
       score, fecha: new Date(e.utc_time), capa: 'sismos', lat: e.lat, lon: e.lon,
-      emoji: '〰️', texto: `M ${e.mag} · ${e.ref}`,
+      emoji: '〰️', texto: `M ${e.mag} · ${e.ref}`, pager: e.pager,
     });
   }
 
@@ -1672,6 +1685,7 @@ function renderRiesgoEventos() {
       document.querySelector('#map').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     li.appendChild(btn);
+    if (it.pager) li.appendChild(pagerChip(it.pager));
     ol.appendChild(li);
   });
 }
@@ -1742,6 +1756,68 @@ function setupRiesgos() {
     });
   });
   actualizarLabelCerca();
+}
+
+// Punto de encuentro ante tsunami más cercano a la posición real del usuario.
+// La geolocalización se pide solo con este gesto explícito (nunca automática)
+// y se usa una única vez para calcular la distancia: no se guarda en
+// localStorage ni en ninguna otra parte, por privacidad.
+function setupPuntoCercano() {
+  const btn = $('#btn-punto-cercano');
+  const out = $('#punto-cercano-resultado');
+  if (!btn || !out) return;
+
+  btn.addEventListener('click', () => {
+    out.hidden = false;
+    out.innerHTML = '';
+    if (!('geolocation' in navigator)) {
+      out.textContent = 'Tu navegador no permite geolocalización.';
+      return;
+    }
+    out.textContent = 'Buscando tu ubicación…';
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        if (!emergenciaData) {
+          out.textContent = 'Cargando puntos de encuentro…';
+          await loadEmergencia();
+        }
+        const puntos = (emergenciaData && emergenciaData.categorias && emergenciaData.categorias.encuentro_tsunami) || [];
+        if (!puntos.length) {
+          out.textContent = 'No hay datos de puntos de encuentro disponibles ahora mismo.';
+          return;
+        }
+        let cercano = null, dist = Infinity;
+        for (const p of puntos) {
+          const d = distKm(latitude, longitude, p.lat, p.lon);
+          if (d < dist) { dist = d; cercano = p; }
+        }
+        out.innerHTML = '';
+        if (dist > 30) {
+          out.textContent = 'Estás lejos de la costa: sin riesgo directo de tsunami en tu ubicación.';
+          return;
+        }
+        const texto = document.createElement('span');
+        texto.textContent = `Tu punto de encuentro más cercano: ${cercano.n}${cercano.d ? ' · ' + cercano.d : ''} — a ${dist.toFixed(1)} km. `;
+        out.appendChild(texto);
+        const verBtn = document.createElement('button');
+        verBtn.className = 'chip';
+        verBtn.textContent = 'ver en el mapa';
+        verBtn.addEventListener('click', () => {
+          if (!capasActivas.has('emergencia')) toggleCapa('emergencia');
+          if (ensureMap()) map.setView([cercano.lat, cercano.lon], 15);
+          document.querySelector('#map').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        out.appendChild(verBtn);
+      },
+      (err) => {
+        out.textContent = err.code === err.PERMISSION_DENIED
+          ? 'Sin permiso de ubicación: actívalo en tu navegador para usar esta función.'
+          : 'No se pudo obtener tu ubicación.';
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
+    );
+  });
 }
 
 // ── Ubicaciones: chips y búsqueda ──────────────────────────────
@@ -1966,6 +2042,7 @@ setupDialogs();
 setupVerifTabs();
 setupCapas();
 setupRiesgos();
+setupPuntoCercano();
 renderChips();
 loadAll().catch(showError);
 loadArchiveStatus();

@@ -45,9 +45,21 @@ REPLICA_RADIO_KM = 150.0
 REPLICA_N_MIN = 10
 REPLICA_T_MIN = 0.25    # días
 
+# PAGER (USGS): estimación de impacto humano para sismos significativos.
+PAGER_MAG_MIN = 6.0
+PAGER_MAX_EDAD_DIAS = 7   # sin alerta tras esto, se deja de reintentar la consulta
+
 
 def ensure_schema(con):
     con.executescript(SCHEMA)
+    # migración: usgs_id (id USGS del evento CSN ganador en el dedup) y pager
+    # (alerta de impacto USGS PAGER, cacheada) añadidas después.
+    cols = [r[1] for r in con.execute("PRAGMA table_info(quakes)")]
+    if "usgs_id" not in cols:
+        con.execute("ALTER TABLE quakes ADD COLUMN usgs_id TEXT")
+    if "pager" not in cols:
+        con.execute("ALTER TABLE quakes ADD COLUMN pager TEXT")
+    con.commit()
 
 
 def _dist_km(lat1, lon1, lat2, lon2) -> float:
@@ -118,12 +130,12 @@ def _ingest_usgs(con, fetched_at: str) -> tuple[int, str | None]:
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=DEDUP_VENTANA_DIAS)).strftime("%Y-%m-%dT%H:%M:%SZ")
     csn_ref = [
-        (datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc), lat, lon)
-        for t, lat, lon in con.execute(
-            "SELECT utc_time, lat, lon FROM quakes WHERE source='csn' AND utc_time >= ?", (cutoff,))
+        (id_, datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc), lat, lon)
+        for id_, t, lat, lon in con.execute(
+            "SELECT id, utc_time, lat, lon FROM quakes WHERE source='csn' AND utc_time >= ?", (cutoff,))
     ]
 
-    rows = []
+    rows, usgs_id_de_csn = [], []
     for feat in data.get("features", []):
         try:
             props, geom = feat["properties"], feat["geometry"]
@@ -132,8 +144,13 @@ def _ingest_usgs(con, fetched_at: str) -> tuple[int, str | None]:
             mag = float(props["mag"])
         except (KeyError, TypeError, ValueError, IndexError):
             continue
-        if any(abs((t - ct).total_seconds()) < DEDUP_SEGUNDOS and _dist_km(lat, lon, clat, clon) < DEDUP_KM
-               for ct, clat, clon in csn_ref):
+        match_id = next((cid for cid, ct, clat, clon in csn_ref
+                          if abs((t - ct).total_seconds()) < DEDUP_SEGUNDOS and _dist_km(lat, lon, clat, clon) < DEDUP_KM),
+                         None)
+        if match_id:
+            # El evento CSN gana el dedup, pero guardamos el id USGS del
+            # duplicado para poder consultar después su alerta PAGER.
+            usgs_id_de_csn.append((feat["id"], match_id))
             continue
         rows.append((
             f"usgs:{feat['id']}", "usgs", t.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -143,6 +160,8 @@ def _ingest_usgs(con, fetched_at: str) -> tuple[int, str | None]:
     con.executemany(
         "INSERT OR IGNORE INTO quakes(id, source, utc_time, lat, lon, depth_km, mag, mag_type, ref, inserted)"
         " VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
+    con.executemany(
+        "UPDATE quakes SET usgs_id=? WHERE id=? AND usgs_id IS NULL", usgs_id_de_csn)
     con.commit()
     return len(rows), None
 
@@ -215,18 +234,50 @@ def _omori(con) -> tuple[str | None, dict | None]:
     return mid, replicas
 
 
+def _enrich_pager(con) -> None:
+    """PAGER (USGS): alerta de impacto humano estimado para sismos M>=6.0.
+    Máximo 1 consulta de red por evento por corrida; si pasan
+    PAGER_MAX_EDAD_DIAS sin alerta (PAGER nunca corrió o el evento quedó
+    fuera de su alcance), se deja de reintentar."""
+    ahora = datetime.now(timezone.utc)
+    candidatos = con.execute(
+        "SELECT id, source, usgs_id, utc_time FROM quakes"
+        " WHERE mag >= ? AND pager IS NULL AND (source='usgs' OR usgs_id IS NOT NULL)",
+        (PAGER_MAG_MIN,)).fetchall()
+    for id_, source, usgs_id, utc_time in candidatos:
+        t = datetime.strptime(utc_time, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        if (ahora - t).days > PAGER_MAX_EDAD_DIAS:
+            continue
+        eid = usgs_id or (id_[len("usgs:"):] if source == "usgs" else None)
+        if not eid:
+            continue
+        try:
+            data, _ = sources.http_get_json(config.API_SISMOS_USGS, {"format": "geojson", "eventid": eid})
+        except RuntimeError:
+            continue
+        alert = (data.get("properties") or {}).get("alert")
+        if alert:
+            con.execute("UPDATE quakes SET pager=? WHERE id=?", (alert, id_))
+    con.commit()
+
+
 def _export_json(con, replicas: dict | None) -> int:
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=VENTANA_JSON_H)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    eventos = [{
-        "id": id_, "utc_time": utc_time,
-        "lat": round(lat, 3), "lon": round(lon, 3),
-        "prof_km": round(depth_km, 1) if depth_km is not None else None,
-        "mag": round(mag, 1), "mag_tipo": mag_type,
-        "ref": ref, "fuente": source,
-    } for id_, source, utc_time, lat, lon, depth_km, mag, mag_type, ref in con.execute(
-        "SELECT id, source, utc_time, lat, lon, depth_km, mag, mag_type, ref FROM quakes"
+    eventos = []
+    for id_, source, utc_time, lat, lon, depth_km, mag, mag_type, ref, pager in con.execute(
+        "SELECT id, source, utc_time, lat, lon, depth_km, mag, mag_type, ref, pager FROM quakes"
         " WHERE utc_time >= ? AND mag >= ? ORDER BY utc_time DESC LIMIT ?",
-        (cutoff, MAG_MIN_JSON, MAX_EVENTOS_JSON))]
+        (cutoff, MAG_MIN_JSON, MAX_EVENTOS_JSON)):
+        ev = {
+            "id": id_, "utc_time": utc_time,
+            "lat": round(lat, 3), "lon": round(lon, 3),
+            "prof_km": round(depth_km, 1) if depth_km is not None else None,
+            "mag": round(mag, 1), "mag_tipo": mag_type,
+            "ref": ref, "fuente": source,
+        }
+        if pager:
+            ev["pager"] = pager
+        eventos.append(ev)
     payload = {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "fuente": "CSN (api.xor.cl) + USGS FDSN",
@@ -248,6 +299,8 @@ def update(con, fetched_at: str) -> int:
         print(f"[aviso] CSN falló, sigue con USGS: {err_csn}")
     if err_usgs:
         print(f"[aviso] USGS falló, sigue con CSN: {err_usgs}")
+
+    _enrich_pager(con)
 
     mainshock_id, replicas = _omori(con)
     _prune(con, mainshock_id)

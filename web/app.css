@@ -1295,3 +1295,26 @@ dialog::backdrop {
   color: var(--ink-soft);
   font-size: 0.88rem;
 }
+
+.riesgo-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Chip de impacto estimado PAGER (USGS), en el popup del sismo y en el top-10. */
+.pager-chip {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  font: 600 0.68rem var(--font-mono);
+  border: 1.5px solid currentColor;
+  border-radius: 10px;
+}
+.pager-green  { color: var(--vol-verde); }
+.pager-yellow { color: var(--vol-amarilla); }
+.pager-orange { color: var(--vol-naranja); }
+.pager-red    { color: var(--vol-roja); }

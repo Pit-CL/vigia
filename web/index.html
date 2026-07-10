@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
-  <link rel="stylesheet" href="app.css?v=31">
+  <link rel="stylesheet" href="app.css?v=32">
 </head>
 <body>
 
@@ -106,6 +106,11 @@
       <button class="riesgo-tile" data-capa="volcanes" hidden><span class="rt-emoji">🌋</span><b id="rt-volcanes">–</b><small>volcanes en alerta</small></button>
     </div>
     <ol id="riesgo-eventos" class="riesgo-eventos"></ol>
+    <div class="riesgo-acciones">
+      <a class="chip" href="emergencia.html">🆘 Qué hacer en una emergencia</a>
+      <button id="btn-punto-cercano" class="chip">📍 Mi punto de encuentro ante tsunami</button>
+    </div>
+    <div id="punto-cercano-resultado" class="panel-note" hidden></div>
   </section>
 
   <!-- Mapa de observaciones en vivo -->
@@ -259,6 +264,7 @@
     observaciones <a href="https://www.meteochile.gob.cl/" rel="noopener">Dirección Meteorológica de Chile</a> (estaciones EMA y red OMM/METAR vía NOAA).
   </p>
   <p>Proyecto open source sin fines comerciales · hecho en Chile.</p>
+  <p><a href="emergencia.html">🆘 Qué hacer en una emergencia</a> · disponible sin conexión</p>
 </footer>
 
 <!-- Detalle por día -->
@@ -289,6 +295,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>
