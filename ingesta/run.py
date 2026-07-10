@@ -150,10 +150,15 @@ def main() -> int:
         ok &= step(con, run_at, "volcanes", lambda: volcanes.update(con, run_at))
     if do_emergencia:
         ok &= step(con, run_at, "emergencia", lambda: emergencia.update(con, run_at))
-    if do_obs or do_forecasts:
+    # Verificación y calibración solo con los pronósticos (2 veces al día):
+    # con la red de 152 estaciones recalcularlas cada hora tarda más que el
+    # propio ciclo horario y las corridas se apilan. estaciones.json sí se
+    # refresca en cada corrida de observaciones (es barato: última obs).
+    if do_forecasts:
         ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
         ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))
         ok &= step(con, run_at, "bias_json", lambda: calibrate.export_json(con))
+    if do_obs or do_forecasts:
         ok &= step(con, run_at, "estaciones", lambda: write_estaciones(con))
     write_status(con)
     con.close()

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 import config
 
-UA = "sinoptica-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
+UA = "vigia-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
 
 CATEGORIAS = {
     "METEOROLOGICAS": "meteorologica",

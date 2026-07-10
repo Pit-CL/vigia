@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌤️ Sinóptica
+# 🌤️ Vigía
 
 **Pronóstico del tiempo multi-modelo, con incertidumbre honesta, verificación pública y centro de riesgos naturales, para todo Chile.**
 
@@ -8,13 +8,13 @@
 [![Licencia MIT](https://img.shields.io/badge/licencia-MIT-2456c9?style=for-the-badge)](LICENSE)
 [![PWA](https://img.shields.io/badge/PWA-instalable-0e9888?style=for-the-badge)](https://clima.cavara.cl)
 
-![Sinóptica en escritorio](docs/hero-desktop.png)
+![Vigía en escritorio](docs/hero-desktop.png)
 
 </div>
 
 ## Por qué existe
 
-Casi todas las apps de clima muestran **un solo número**, de **un solo modelo**, **sin decir cuánto aciertan**. Sinóptica hace lo contrario, sobre tres pilares:
+Casi todas las apps de clima muestran **un solo número**, de **un solo modelo**, **sin decir cuánto aciertan**. Vigía hace lo contrario, sobre tres pilares:
 
 1. **Incertidumbre real.** Usa el ensamble del ECMWF (51 escenarios) para mostrar una banda de confianza, no una falsa certeza. Banda angosta = alta confianza; banda ancha = la atmósfera está difícil y cualquier número exacto sería mentira.
 2. **Seis modelos, no uno.** ECMWF IFS, NOAA GFS, DWD ICON, ECCC GEM, Météo-France ARPEGE y ECMWF AIFS (el modelo de IA del ECMWF), lado a lado. Cuando discrepan, lo verás: el desacuerdo *es* información.

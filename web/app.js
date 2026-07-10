@@ -1,4 +1,4 @@
-/* Sinóptica — pronóstico multi-modelo para todo Chile (Arica a la Antártica).
+/* Vigía — pronóstico multi-modelo para todo Chile (Arica a la Antártica).
    Datos: Open-Meteo (CC BY 4.0). Observaciones: DMC + red OMM (NOAA).
    Sin claves, sin tracking, sin CDNs. */
 'use strict';
@@ -523,7 +523,7 @@ function renderNow(best) {
   $('#now-rh').textContent = rh == null ? '—' : `${Math.round(rh)} %`;
   $('#now-wind').textContent = wsp == null ? '—' : `${Math.round(wsp)} km/h ${compass(wdir)}`;
   $('#now-pres').textContent = pres == null ? '—' : `${Math.round(pres)} hPa`;
-  document.title = `${Math.round(temp)}°C ${place.name} — Sinóptica`;
+  document.title = `${Math.round(temp)}°C ${place.name} — Vigía`;
 }
 
 // ── Constructores de gráficos (página y modal comparten) ───────
@@ -572,7 +572,7 @@ function buildTempChart(canvasId, labels, { ensS, modelSeries, bestSeries, bestL
               borderWidth: 1.3, pointRadius: 0, fill: false, tension: 0.35 });
   });
   if (bestSeries) {
-    const dest = bestLabel === 'Sinóptica';   // el blend va más destacado
+    const dest = bestLabel === 'Vigía';   // el blend va más destacado
     ds.push({ label: bestLabel || 'síntesis', data: bestSeries, borderColor: th.accent,
               borderWidth: dest ? 3 : 2, pointRadius: 0, fill: false, tension: 0.35,
               order: dest ? -1 : 0 });
@@ -714,8 +714,8 @@ function renderCharts(best, multi, ens) {
       const raw = arr.slice(start, start + window);
       return { name: m.name, data: corregirTemp(m.id, raw, times), colorIdx: i };
     }).filter(Boolean),
-    bestSeries: blendTemp(h, start, window, times),   // pronóstico Sinóptica (blend calibrado)
-    bestLabel: 'Sinóptica',
+    bestSeries: blendTemp(h, start, window, times),   // pronóstico Vigía (blend calibrado)
+    bestLabel: 'Vigía',
   });
   // indicador de calibración en el panel
   const meta = document.querySelector('#ens-title')?.closest('.panel-head')?.querySelector('.panel-meta');
