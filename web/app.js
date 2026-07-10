@@ -1379,7 +1379,7 @@ function paintAlertas(group) {
       ['Nivel', NIVEL_ALERTA_LABEL[a.nivel] || a.nivel],
       ['Región', a.region],
       ['Comunas', `${a.n_comunas} (${comunas})`],
-      ['Desde', a.desde],
+      ['Vigente desde', a.desde],
     ]));
     marker.bindPopup(box, { maxWidth: 280 });
   });
@@ -1497,21 +1497,54 @@ function setupCapas() {
 
 const VOL_RANK = { amarilla: 1, naranja: 2, roja: 3 };
 
-function riesgoCounts() {
+// Distancia entre dos puntos (haversine, radio terrestre 6371 km).
+// Misma fórmula que ingesta/sismos.py _dist_km.
+function distKm(lat1, lon1, lat2, lon2) {
+  const r = 6371;
+  const p1 = (lat1 * Math.PI) / 180, p2 = (lat2 * Math.PI) / 180;
+  const dp = ((lat2 - lat1) * Math.PI) / 180, dl = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(a));
+}
+
+// Radio que cubre la región típica alrededor de una ciudad (p.ej. la RM completa).
+const RADIO_CERCA_KM = 200;
+
+function savedRiesgoAmbito() {
+  try {
+    const v = localStorage.getItem('sinoptica.riesgoAmbito');
+    if (v === 'chile' || v === 'cerca') return v;
+  } catch (_) { /* localStorage puede no estar disponible */ }
+  return 'chile';
+}
+
+let riesgoAmbito = savedRiesgoAmbito();
+
+// Ítems sin lat/lon (algunas alertas futuras) se excluyen en modo 'cerca':
+// sin coordenadas no se puede saber si están cerca del lugar seleccionado.
+function enAmbito(it, ambito = riesgoAmbito) {
+  if (ambito === 'chile') return true;
+  if (it.lat == null || it.lon == null) return false;
+  return distKm(place.lat, place.lon, it.lat, it.lon) <= RADIO_CERCA_KM;
+}
+
+// ambito es parámetro (no siempre el global) porque el badge nacional necesita
+// las cuentas SIN filtrar por cercanía aunque el panel esté en modo 'cerca'.
+function riesgoCounts(ambito = riesgoAmbito) {
   const ahora = Date.now();
   const sismos24 = sismosData
-    ? sismosData.eventos.filter((e) => e.mag >= 4 && ahora - new Date(e.utc_time).getTime() <= 24 * 3600e3)
+    ? sismosData.eventos.filter((e) => e.mag >= 4 && ahora - new Date(e.utc_time).getTime() <= 24 * 3600e3 && enAmbito(e, ambito))
     : [];
   const sismoMax6 = sismos24.filter((e) => e.mag >= 6).sort((a, b) => b.mag - a.mag)[0] || null;
-  const alertas = alertasData ? alertasData.alertas : [];
+  const alertas = alertasData ? alertasData.alertas.filter((a) => enAmbito(a, ambito)) : [];
   const rojas = alertas.filter((a) => a.nivel === 'roja').length;
   const amarillas = alertas.filter((a) => a.nivel === 'amarilla').length;
-  const volcanesAlerta = volcanesData ? volcanesData.volcanes.filter((v) => v.nivel !== 'verde') : [];
+  const volcanesAlerta = volcanesData ? volcanesData.volcanes.filter((v) => v.nivel !== 'verde' && enAmbito(v, ambito)) : [];
   const volPeor = volcanesAlerta.reduce((peor, v) => (VOL_RANK[v.nivel] > (VOL_RANK[peor] || 0) ? v.nivel : peor), null);
-  return {
-    sismos24, sismoMax6, rojas, amarillas, volcanesAlerta, volPeor,
-    incendiosN: incendiosData ? incendiosData.n : 0,
-  };
+  const incendiosN = incendiosData
+    ? (ambito === 'cerca' ? (incendiosData.focos || []).filter((f) => enAmbito(f, ambito)).length : incendiosData.n)
+    : 0;
+  return { sismos24, sismoMax6, rojas, amarillas, volcanesAlerta, volPeor, incendiosN };
 }
 
 function renderRiesgoTiles(c) {
@@ -1573,8 +1606,9 @@ function riesgoEventos() {
     });
   }
 
-  items.sort((a, b) => b.score - a.score || (b.fecha?.getTime() || 0) - (a.fecha?.getTime() || 0));
-  return items.slice(0, 10);
+  const filtrados = items.filter((it) => enAmbito(it));
+  filtrados.sort((a, b) => b.score - a.score || (b.fecha?.getTime() || 0) - (a.fecha?.getTime() || 0));
+  return filtrados.slice(0, 10);
 }
 
 function renderRiesgoEventos() {
@@ -1584,7 +1618,9 @@ function renderRiesgoEventos() {
   if (!items.length) {
     const li = document.createElement('li');
     li.className = 'riesgo-vacio';
-    li.textContent = 'Sin alertas ni eventos significativos ahora. 🟢';
+    li.textContent = riesgoAmbito === 'cerca'
+      ? `Sin alertas ni eventos significativos cerca de ${place.name}. 🟢`
+      : 'Sin alertas ni eventos significativos ahora. 🟢';
     ol.appendChild(li);
     return;
   }
@@ -1644,10 +1680,16 @@ function renderRiesgos() {
     ['CSN', sismosData], ['SENAPRED', alertasData], ['SERNAGEOMIN', volcanesData], ['NASA FIRMS', incendiosData],
   ].filter(([, ok]) => ok).map(([nombre]) => nombre).join(' · ');
 
-  const c = riesgoCounts();
-  renderRiesgoTiles(c);
+  renderRiesgoTiles(riesgoCounts());
   renderRiesgoEventos();
-  renderRiskBadge(c);
+  // El badge es siempre nacional: una alerta roja en otra región igual merece
+  // el aviso, aunque el panel esté filtrado a "cerca de <ciudad>".
+  renderRiskBadge(riesgoCounts('chile'));
+}
+
+function actualizarLabelCerca() {
+  const btn = $('#rf-cerca');
+  if (btn) btn.textContent = `Cerca de ${place.name}`;
 }
 
 function setupRiesgos() {
@@ -1660,6 +1702,17 @@ function setupRiesgos() {
   $('#risk-badge').addEventListener('click', () => {
     document.querySelector('.panel-riesgos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
+
+  document.querySelectorAll('.rf-btn').forEach((btn) => {
+    btn.setAttribute('aria-pressed', String(btn.dataset.ambito === riesgoAmbito));
+    btn.addEventListener('click', () => {
+      riesgoAmbito = btn.dataset.ambito;
+      try { localStorage.setItem('sinoptica.riesgoAmbito', riesgoAmbito); } catch (_) { /* opcional */ }
+      document.querySelectorAll('.rf-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      renderRiesgos();
+    });
+  });
+  actualizarLabelCerca();
 }
 
 // ── Ubicaciones: chips y búsqueda ──────────────────────────────
@@ -1669,6 +1722,8 @@ function setPlace(p) {
   try { localStorage.setItem('sinoptica.place', JSON.stringify(p)); } catch (_) { /* opcional */ }
   if (map) map.setView([p.lat, p.lon], Math.max(map.getZoom(), 7));
   updateBiasStation();   // recalcular la estación de calibración cercana
+  actualizarLabelCerca();
+  if (riesgoAmbito === 'cerca') renderRiesgos();
   loadAll().catch(showError);
 }
 

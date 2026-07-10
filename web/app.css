@@ -1172,6 +1172,27 @@ dialog::backdrop {
 
 /* ── Centro de riesgos ────────────────────────────────────────── */
 
+.riesgo-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rf-btn {
+  padding: 3px 9px;
+  font: 500 0.7rem var(--font-mono);
+  color: var(--ink);
+  background: transparent;
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+}
+
+.rf-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
 .riesgo-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
