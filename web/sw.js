@@ -1,5 +1,5 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v22';
+const SHELL_CACHE = 'vigia-shell-v23';
 const DATA_CACHE = 'vigia-data-v21';
 // Tiles del mapa base (CARTO): caché propia con límite LRU aproximado, para
 // que el mapa siga siendo usable sin conexión (ver fetch handler abajo).
@@ -54,10 +54,13 @@ self.addEventListener('fetch', (e) => {
 
   // Tiles del mapa base (CARTO): red primero, con respaldo en caché para que
   // el mapa siga usable offline. Las respuestas son opacas (Leaflet no pone
-  // crossOrigin en las <img> de tiles) pero SÍ se pueden cachear y servir —
-  // lo que antes rompía el mapa era manejar mal el respaldo, no el cacheo en
-  // sí. Sin red y sin tile cacheado, se deja fallar el fetch tal cual: se ve
-  // un tile roto, aceptable en modo offline (mejor que romper todo el mapa).
+  // crossOrigin en las <img> de tiles) pero SÍ se pueden cachear y servir.
+  // OJO CSP: este fetch() desde el SW se rige por connect-src (no img-src) de
+  // la CSP que nginx adjunta a sw.js — cartocdn debe estar en AMBAS listas de
+  // deploy/nginx.conf o el fetch falla, el respaldo sale undefined y el mapa
+  // queda en blanco en toda carga controlada por el SW (bug real 2026-07).
+  // Sin red y sin tile cacheado, se deja fallar el fetch tal cual: se ve un
+  // tile roto, aceptable en modo offline (mejor que romper todo el mapa).
   if (url.hostname.endsWith('.basemaps.cartocdn.com')) {
     e.respondWith(
       fetch(e.request)
