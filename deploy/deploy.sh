@@ -8,8 +8,8 @@ set -e
 REF="${1:-origin/main}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVIDOR="omen"
-DESTINO="/opt/clima/"
+SERVIDOR="erp-rollitos"
+DESTINO="/opt/vigia/"
 
 EXPORT_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPORT_DIR"' EXIT
