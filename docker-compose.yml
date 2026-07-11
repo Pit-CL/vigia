@@ -55,6 +55,7 @@ services:
     volumes:
       - ./ingesta:/app/ingesta:ro
       - ./deploy/crontab:/crontab-src:ro
+      - ./web/comunas.json:/app/web/comunas.json:ro
       - ./data:/data
     security_opt:
       - no-new-privileges:true
