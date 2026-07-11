@@ -2706,7 +2706,10 @@ function renderCosta() {
 function setPlace(p) {
   place = p;
   try { localStorage.setItem('sinoptica.place', JSON.stringify(p)); } catch (_) { /* opcional */ }
-  if (map) map.setView([p.lat, p.lon], Math.max(map.getZoom(), 7));
+  // Zoom 11 ≈ la comuna y su entorno inmediato: elegir una ciudad debe
+  // enfocarla, no mostrar media región. Si el usuario ya estaba más adentro
+  // (p. ej. nivel calle), se respeta su zoom.
+  if (map) map.setView([p.lat, p.lon], Math.max(map.getZoom(), 11));
   updateBiasStation();   // recalcular la estación de calibración cercana
   actualizarLabelCerca();
   if (riesgoAmbito === 'cerca') renderRiesgos();
