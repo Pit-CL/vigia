@@ -257,6 +257,11 @@ let sateliteFrames = [];
 let sateliteLayers = new Map(); // timestamp ISO (o 'default') → L.tileLayer
 let sateliteFrameIdx = -1;
 let sateliteTimer = null;
+// Capa de solo-etiquetas de CARTO sobre el satélite: sus tiles horneados
+// tapan el rotulado del mapa base. Vive fuera de layerGroups por la misma
+// razón que sateliteLayers (sobrevivir al clearLayers() de cada render).
+let sateliteLabelsLayer = null;
+let sateliteLabelsTema = null; // 'light'/'dark' con el que se creó/actualizó sateliteLabelsLayer
 
 function savedPlace() {
   try {
@@ -1059,6 +1064,12 @@ const TILES = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
 };
 const TILES_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>';
+// Solo el rotulado (nombres de ciudades) de CARTO, sin el resto del mapa base:
+// se usa por encima del satélite, que de otro modo tapa las etiquetas horneadas.
+const TILES_LABELS = {
+  light: 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
+};
 
 // Capa satelital: NASA GIBS, GOES-East ABI GeoColor (WMTS RESTful, sin API key).
 // Ojo con el orden del path: es {z}/{y}/{x} (TileMatrix/TileRow/TileCol), no
@@ -1245,6 +1256,18 @@ function getOrCreateSateliteLayer(t) {
   return layer;
 }
 
+function getOrCreateSateliteLabelsLayer() {
+  const tema = isDark() ? 'dark' : 'light';
+  if (!sateliteLabelsLayer) {
+    sateliteLabelsLayer = L.tileLayer(TILES_LABELS[tema], { maxZoom: 18, zIndex: 6, subdomains: 'abcd' });
+  } else if (sateliteLabelsTema !== tema) {
+    sateliteLabelsLayer.setUrl(TILES_LABELS[tema]);
+  }
+  sateliteLabelsTema = tema;
+  if (!map.hasLayer(sateliteLabelsLayer)) sateliteLabelsLayer.addTo(map);
+  return sateliteLabelsLayer;
+}
+
 function actualizarBotonPlaySatelite() {
   const btn = document.getElementById('satelite-play');
   if (!btn) return;
@@ -1288,6 +1311,7 @@ function toggleReproduccionSatelite() {
 function limpiarSatelite() {
   detenerReproduccionSatelite();
   sateliteLayers.forEach((layer) => { if (map.hasLayer(layer)) map.removeLayer(layer); });
+  if (sateliteLabelsLayer && map.hasLayer(sateliteLabelsLayer)) map.removeLayer(sateliteLabelsLayer);
 }
 
 function paintSatelite() {
@@ -1297,6 +1321,7 @@ function paintSatelite() {
   }
   if (sateliteFrameIdx < 0 || sateliteFrameIdx >= sateliteFrames.length) sateliteFrameIdx = sateliteFrames.length - 1;
   mostrarFrameSatelite(sateliteFrameIdx);
+  getOrCreateSateliteLabelsLayer();
   actualizarBotonPlaySatelite();
   $('#map-meta').textContent = 'Satélite GOES-East · retraso típico 20–60 min';
 }
