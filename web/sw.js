@@ -1,5 +1,5 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v31';
+const SHELL_CACHE = 'vigia-shell-v32';
 const DATA_CACHE = 'vigia-data-v21';
 // Tiles del mapa base (CARTO): caché propia con límite LRU aproximado, para
 // que el mapa siga siendo usable sin conexión (ver fetch handler abajo).
@@ -14,6 +14,7 @@ const SHELL = [
   './',
   'index.html',
   'emergencia.html',
+  'emergencia.js?v=1',
   'theme.js?v=1',
   'app.css?v=59',
   'app.js?v=59',

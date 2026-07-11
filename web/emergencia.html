@@ -13,6 +13,37 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="app.css?v=33">
+  <style>
+    /* Checklist del kit y formulario del plan familiar: propios de esta
+       página (liviana, sin app.js) — reutilizan las variables de app.css. */
+    .kit-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+    .kit-item { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .kit-item label { display: flex; align-items: baseline; gap: 8px; cursor: pointer; }
+    .kit-item input[type="checkbox"] { width: 17px; height: 17px; flex: 0 0 auto; accent-color: var(--accent); }
+    .kit-fecha { font: 400 0.72rem var(--font-mono); color: var(--ink-soft); white-space: nowrap; }
+    .kit-fecha.kit-revisar { color: var(--accent); font-weight: 600; }
+
+    .plan-form { display: grid; gap: 14px; margin-top: 12px; }
+    .plan-field { display: grid; gap: 5px; }
+    .plan-field label { font: 600 0.78rem var(--font-mono); color: var(--ink-soft); }
+    .plan-field input[type="text"],
+    .plan-field input[type="tel"] {
+      font: 400 0.9rem var(--font-display);
+      color: var(--ink);
+      background: var(--bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+    }
+    .plan-contacto-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .plan-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .plan-resumen dl { margin: 10px 0 0; display: grid; gap: 4px; }
+    .plan-resumen dt { font: 600 0.72rem var(--font-mono); color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 8px; }
+    .plan-resumen dd { margin: 0; }
+    @media (max-width: 520px) {
+      .plan-contacto-row { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
 
@@ -123,18 +154,153 @@
   </section>
 
   <section class="panel" aria-labelledby="kit-title">
-    <header class="panel-head"><h2 id="kit-title">🎒 Kit de emergencia</h2></header>
+    <header class="panel-head">
+      <h2 id="kit-title">🎒 Kit de emergencia</h2>
+      <span class="panel-meta" id="kit-counter">0 de 14 listos</span>
+    </header>
     <div class="info-body">
-      <p>Prepáralo antes, no durante: guárdalo en un lugar de fácil acceso y revísalo cada 6 meses.</p>
-      <ul>
-        <li>Agua potable para 3 días (mínimo 3 litros por persona al día).</li>
-        <li>Alimentos no perecibles para el mismo período.</li>
-        <li>Radio a pilas y linterna, con pilas de repuesto.</li>
-        <li>Botiquín básico y los medicamentos que tomas habitualmente.</li>
-        <li>Copias de documentos importantes (cédula, escrituras, seguros) en una bolsa impermeable.</li>
-        <li>Dinero en efectivo: en un corte prolongado no funcionan ni cajeros ni pagos electrónicos.</li>
-        <li>Punto de reunión familiar acordado de antemano, fuera de zona de riesgo.</li>
+      <p>Prepáralo antes, no durante: guárdalo en un lugar de fácil acceso. Marca lo que ya tienes — queda guardado en este dispositivo, no se envía a ningún servidor. Los ítems perecibles (agua, comida, pilas, medicamentos) piden revisión a los 6 meses de marcados.</p>
+      <ul class="kit-list" id="kit-list">
+        <li class="kit-item" data-id="agua">
+          <label for="kit-agua"><input type="checkbox" id="kit-agua"> Agua potable (4 litros por persona al día, para 3 días)</label>
+          <span class="kit-fecha" data-fecha-for="agua"></span>
+        </li>
+        <li class="kit-item" data-id="comida">
+          <label for="kit-comida"><input type="checkbox" id="kit-comida"> Alimentos no perecibles para 3 días</label>
+          <span class="kit-fecha" data-fecha-for="comida"></span>
+        </li>
+        <li class="kit-item" data-id="botiquin">
+          <label for="kit-botiquin"><input type="checkbox" id="kit-botiquin"> Botiquín básico</label>
+          <span class="kit-fecha" data-fecha-for="botiquin"></span>
+        </li>
+        <li class="kit-item" data-id="medicamentos">
+          <label for="kit-medicamentos"><input type="checkbox" id="kit-medicamentos"> Medicamentos personales que tomas habitualmente</label>
+          <span class="kit-fecha" data-fecha-for="medicamentos"></span>
+        </li>
+        <li class="kit-item" data-id="radio">
+          <label for="kit-radio"><input type="checkbox" id="kit-radio"> Radio a pilas</label>
+          <span class="kit-fecha" data-fecha-for="radio"></span>
+        </li>
+        <li class="kit-item" data-id="linterna">
+          <label for="kit-linterna"><input type="checkbox" id="kit-linterna"> Linterna</label>
+          <span class="kit-fecha" data-fecha-for="linterna"></span>
+        </li>
+        <li class="kit-item" data-id="pilas">
+          <label for="kit-pilas"><input type="checkbox" id="kit-pilas"> Pilas de repuesto</label>
+          <span class="kit-fecha" data-fecha-for="pilas"></span>
+        </li>
+        <li class="kit-item" data-id="cargador">
+          <label for="kit-cargador"><input type="checkbox" id="kit-cargador"> Cargador portátil (power bank)</label>
+          <span class="kit-fecha" data-fecha-for="cargador"></span>
+        </li>
+        <li class="kit-item" data-id="documentos">
+          <label for="kit-documentos"><input type="checkbox" id="kit-documentos"> Copias de documentos importantes (cédula, escrituras, seguros) en bolsa hermética</label>
+          <span class="kit-fecha" data-fecha-for="documentos"></span>
+        </li>
+        <li class="kit-item" data-id="efectivo">
+          <label for="kit-efectivo"><input type="checkbox" id="kit-efectivo"> Dinero en efectivo</label>
+          <span class="kit-fecha" data-fecha-for="efectivo"></span>
+        </li>
+        <li class="kit-item" data-id="abrigo">
+          <label for="kit-abrigo"><input type="checkbox" id="kit-abrigo"> Abrigo o manta</label>
+          <span class="kit-fecha" data-fecha-for="abrigo"></span>
+        </li>
+        <li class="kit-item" data-id="silbato">
+          <label for="kit-silbato"><input type="checkbox" id="kit-silbato"> Silbato</label>
+          <span class="kit-fecha" data-fecha-for="silbato"></span>
+        </li>
+        <li class="kit-item" data-id="higiene">
+          <label for="kit-higiene"><input type="checkbox" id="kit-higiene"> Artículos de higiene personal</label>
+          <span class="kit-fecha" data-fecha-for="higiene"></span>
+        </li>
+        <li class="kit-item" data-id="mascotas">
+          <label for="kit-mascotas"><input type="checkbox" id="kit-mascotas"> Comida y agua para tus mascotas (si corresponde)</label>
+          <span class="kit-fecha" data-fecha-for="mascotas"></span>
+        </li>
       </ul>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="auxilios-title">
+    <header class="panel-head"><h2 id="auxilios-title">🩹 Primeros auxilios</h2></header>
+    <div class="info-body">
+      <p>Resumen práctico basado en guías públicas de primeros auxilios (Cruz Roja y American Heart Association). No reemplaza un curso de primeros auxilios ni la atención médica: llama al <strong>131</strong> (SAMU) apenas puedas.</p>
+      <h3 class="dialog-h4">RCP en adultos</h3>
+      <ul>
+        <li><strong>30 compresiones por 2 ventilaciones</strong>: a un ritmo de 100 a 120 compresiones por minuto, en el centro del pecho, hundiendo entre 5 y 6 centímetros.</li>
+        <li>Pide a alguien que llame al 131 mientras tú continúas — no interrumpas las compresiones para hacerlo tú mismo si hay otra persona cerca.</li>
+        <li>Sigue hasta que la persona reaccione, llegue ayuda profesional o ya no puedas continuar.</li>
+      </ul>
+      <h3 class="dialog-h4">Hemorragias</h3>
+      <ul>
+        <li><strong>Aplica presión directa y continua sobre la herida</strong> con un paño limpio, sin retirarlo aunque se empape (agrega más paños encima si es necesario).</li>
+        <li>Usa un torniquete solo como último recurso, si la presión directa no logra detener el sangrado, y anota la hora exacta en que lo aplicaste.</li>
+      </ul>
+      <h3 class="dialog-h4">Fracturas</h3>
+      <ul>
+        <li><strong>Inmoviliza la extremidad en la posición en que está</strong>; no intentes realinear ni enderezar el hueso.</li>
+        <li>Si necesitas trasladar a la persona, sujeta la zona por encima y por debajo de la fractura antes de moverla.</li>
+      </ul>
+      <h3 class="dialog-h4">Quemaduras</h3>
+      <ul>
+        <li><strong>Enfría la zona con agua fría corriente durante 20 minutos.</strong></li>
+        <li>Nunca uses hielo ni pasta de dientes, y no revientes las ampollas: aumentan el daño y el riesgo de infección.</li>
+      </ul>
+      <h3 class="dialog-h4">Atragantamiento</h3>
+      <ul>
+        <li><strong>Maniobra de Heimlich</strong>: compresiones abdominales firmes y hacia arriba, justo sobre el ombligo, hasta que expulse el objeto.</li>
+        <li>En personas embarazadas o con abdomen muy grande, aplica compresiones torácicas en su lugar.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="plan-title">
+    <header class="panel-head"><h2 id="plan-title">👪 Plan familiar</h2></header>
+    <div class="info-body">
+      <p>Acuerda esto con tu familia antes de que ocurra una emergencia. Tras el terremoto y tsunami del 27 de febrero de 2010, los mensajes de texto entre regiones siguieron funcionando cuando las llamadas locales colapsaron: por eso conviene tener un contacto fuera de tu región.</p>
+      <form id="plan-form" class="plan-form">
+        <div class="plan-field">
+          <label for="plan-encuentro">Punto de encuentro acordado</label>
+          <input type="text" id="plan-encuentro" placeholder="Ej: casa de la abuela, plaza de la comuna...">
+        </div>
+        <div class="plan-field">
+          <label for="plan-c1-nombre">Contacto 1</label>
+          <div class="plan-contacto-row">
+            <input type="text" id="plan-c1-nombre" placeholder="Nombre">
+            <input type="tel" id="plan-c1-tel" placeholder="Teléfono">
+          </div>
+        </div>
+        <div class="plan-field">
+          <label for="plan-c2-nombre">Contacto 2</label>
+          <div class="plan-contacto-row">
+            <input type="text" id="plan-c2-nombre" placeholder="Nombre">
+            <input type="tel" id="plan-c2-tel" placeholder="Teléfono">
+          </div>
+        </div>
+        <div class="plan-field">
+          <label for="plan-c3-nombre">Contacto 3 (opcional)</label>
+          <div class="plan-contacto-row">
+            <input type="text" id="plan-c3-nombre" placeholder="Nombre">
+            <input type="tel" id="plan-c3-tel" placeholder="Teléfono">
+          </div>
+        </div>
+        <div class="plan-field">
+          <label for="plan-fuera-nombre">Contacto fuera de tu región</label>
+          <div class="plan-contacto-row">
+            <input type="text" id="plan-fuera-nombre" placeholder="Nombre">
+            <input type="tel" id="plan-fuera-tel" placeholder="Teléfono">
+          </div>
+        </div>
+        <div class="plan-actions">
+          <button type="submit" class="chip">Guardar plan</button>
+          <button type="button" id="plan-borrar" class="chip">Borrar plan</button>
+        </div>
+      </form>
+      <div id="plan-resumen" class="plan-resumen" hidden>
+        <h3 class="dialog-h4">Tu plan guardado</h3>
+        <dl id="plan-resumen-body"></dl>
+      </div>
+      <p class="panel-note">Esto queda solo en tu dispositivo: no se envía a ningún servidor.</p>
     </div>
   </section>
 
@@ -220,5 +386,6 @@
   <p><a href="index.html">← volver a Vigía</a></p>
 </footer>
 
+<script src="emergencia.js?v=1" defer></script>
 </body>
 </html>
