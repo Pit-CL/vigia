@@ -2285,8 +2285,10 @@ function riesgoCounts(ambito = riesgoAmbito) {
   const alertas = alertasData ? alertasData.alertas.filter((a) => enAmbito(a, ambito)) : [];
   const rojas = alertas.filter((a) => a.nivel === 'roja').length;
   const amarillas = alertas.filter((a) => a.nivel === 'amarilla').length;
+  const alertaRoja = alertas.find((a) => a.nivel === 'roja' && a.lat != null && a.lon != null) || null;
   const volcanesAlerta = volcanesData ? volcanesData.volcanes.filter((v) => v.nivel !== 'verde' && enAmbito(v, ambito)) : [];
   const volPeor = volcanesAlerta.reduce((peor, v) => (VOL_RANK[v.nivel] > (VOL_RANK[peor] || 0) ? v.nivel : peor), null);
+  const volcanPeor = volPeor ? volcanesAlerta.find((v) => v.nivel === volPeor) || null : null;
   const incendiosN = incendiosData
     ? (ambito === 'cerca' ? (incendiosData.focos || []).filter((f) => enAmbito(f, ambito)).length : incendiosData.n)
     : 0;
@@ -2294,7 +2296,10 @@ function riesgoCounts(ambito = riesgoAmbito) {
   // oficiales de arriba — son una derivación propia, no un aviso oficial.
   const avisos = avisosData ? avisosData.avisos.filter((a) => enAmbito(a, ambito)) : [];
   const avisoAlto = avisos.some((a) => a.nivel === 'naranja');
-  return { sismos24, sismoMax6, rojas, amarillas, volcanesAlerta, volPeor, incendiosN, avisosN: avisos.length, avisoAlto };
+  return {
+    sismos24, sismoMax6, rojas, amarillas, alertaRoja, volcanesAlerta, volPeor, volcanPeor,
+    incendiosN, avisosN: avisos.length, avisoAlto,
+  };
 }
 
 function renderRiesgoTiles(c) {
@@ -2414,22 +2419,34 @@ function renderRiesgoEventos() {
 
 function renderRiskBadge(c) {
   const badge = $('#risk-badge');
-  let texto = null, aria = null, capa = null;
+  let texto = null, aria = null, capa = null, evento = null;
   if (c.rojas > 0) {
     texto = `⚠ ${c.rojas} alerta${c.rojas > 1 ? 's' : ''} roja${c.rojas > 1 ? 's' : ''}`;
     aria = `${c.rojas} alerta(s) roja(s) de SENAPRED vigentes`;
     capa = 'alertas';
+    evento = c.alertaRoja;
   } else if (c.volPeor === 'naranja' || c.volPeor === 'roja') {
     texto = `🌋 volcán en ${c.volPeor}`;
     aria = `Volcán en alerta técnica ${c.volPeor}`;
     capa = 'volcanes';
+    evento = c.volcanPeor;
   } else if (c.sismoMax6) {
     texto = `〰️ sismo M${c.sismoMax6.mag} hoy`;
     aria = `Sismo de magnitud ${c.sismoMax6.mag} en las últimas 24 horas`;
     capa = 'sismos';
+    evento = c.sismoMax6;
   }
   badge.hidden = !texto;
-  if (texto) { badge.textContent = texto; badge.setAttribute('aria-label', aria); badge.dataset.capa = capa; }
+  if (texto) {
+    badge.textContent = texto; badge.setAttribute('aria-label', aria); badge.dataset.capa = capa;
+    if (evento && evento.lat != null && evento.lon != null) {
+      badge.dataset.lat = String(evento.lat);
+      badge.dataset.lon = String(evento.lon);
+    } else {
+      delete badge.dataset.lat;
+      delete badge.dataset.lon;
+    }
+  }
 }
 
 function renderRiesgos() {
@@ -2471,8 +2488,12 @@ function setupRiesgos() {
     });
   });
   $('#risk-badge').addEventListener('click', () => {
-    const capa = $('#risk-badge').dataset.capa;
+    const badge = $('#risk-badge');
+    const capa = badge.dataset.capa;
     if (capa && !capasActivas.has(capa)) toggleCapa(capa);
+    if (badge.dataset.lat !== undefined && badge.dataset.lon !== undefined && ensureMap()) {
+      map.setView([Number(badge.dataset.lat), Number(badge.dataset.lon)], 8);
+    }
     document.querySelector('#map').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
