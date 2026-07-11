@@ -1209,6 +1209,11 @@ async function loadEmergencia() {
         lat: f.lat,
         lon: f.lon,
       }));
+    // Las farmacias de turno rotan a diario: si el satélite lleva >26 h sin
+    // refrescar (farm.stale), las que muestra el mapa ya no están de turno.
+    // Mismo aviso que cortesData.stale (paintCortes) para no mostrar datos
+    // vencidos como si fueran vigentes.
+    emergenciaData.farmaciaStale = !!farm.stale;
   }
   tsunamiViasData = vias;
   tsunamiAreasData = areas;
@@ -2096,9 +2101,10 @@ function paintEmergencia(group) {
       });
     }
   });
+  const staleFarmacia = emergenciaData.farmaciaStale ? ' · farmacias: datos antiguos (satélite sin actualizar)' : '';
   $('#map-meta').textContent = emergenciaData.updated
-    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${todos.length} puntos de emergencia`;
+    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${staleFarmacia}`
+    : `${todos.length} puntos de emergencia${staleFarmacia}`;
 }
 
 // Bounding box de una geometría (área o vía), cacheado en el propio objeto
