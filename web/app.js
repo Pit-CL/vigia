@@ -3024,18 +3024,68 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
+// Preferencias del opt-in "solo mi zona" + recordatorio de kit, solo para
+// pintar la UI: la fuente de verdad de a quién se le envía vive en push/send.py.
+function savedPushPrefs() {
+  try {
+    const raw = localStorage.getItem('sinoptica.pushPrefs');
+    if (raw) return { zona: false, radio: 200, mag: 5.5, kit: false, ...JSON.parse(raw) };
+  } catch (_) { /* localStorage puede no estar disponible */ }
+  return { zona: false, radio: 200, mag: 5.5, kit: false };
+}
+
+function savePushPrefs(prefs) {
+  try { localStorage.setItem('sinoptica.pushPrefs', JSON.stringify(prefs)); } catch (_) { /* opcional */ }
+}
+
 async function setupPush() {
   const btn = $('#push-btn');
   const info = $('#push-info');
+  const zonaBox = $('#push-zona');
+  const zonaToggle = $('#push-zona-toggle');
+  const zonaRadio = $('#push-zona-radio');
+  const zonaMag = $('#push-zona-mag');
+  const kitToggle = $('#push-kit-reminder');
   if (!btn || !info) return;
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
   btn.hidden = false;
   info.hidden = false;
 
+  const prefs = savedPushPrefs();
+  if (zonaToggle) zonaToggle.checked = prefs.zona;
+  if (zonaRadio) zonaRadio.value = String(prefs.radio);
+  if (zonaMag) zonaMag.value = String(prefs.mag);
+  if (kitToggle) kitToggle.checked = prefs.kit;
+
   function pintar(suscrito) {
     btn.textContent = suscrito ? '🔕 Desactivar avisos de emergencia' : '🔔 Recibir avisos de emergencia';
     btn.setAttribute('aria-pressed', String(suscrito));
+    if (zonaBox) zonaBox.hidden = !suscrito;
+  }
+
+  // Campos opcionales de zona/kit para el body de /api/push/subscribe.
+  // Ubicación: `place` (comuna elegida), NUNCA GPS, redondeada a 0.1° (~11 km)
+  // con el mismo `r1` que ya usa el resto de la app.
+  function camposZona() {
+    const p = {
+      zona: !!(zonaToggle && zonaToggle.checked),
+      radio: zonaRadio ? Number(zonaRadio.value) : 200,
+      mag: zonaMag ? Number(zonaMag.value) : 5.5,
+      kit: !!(kitToggle && kitToggle.checked),
+    };
+    savePushPrefs(p);
+    // `zona` va siempre explícito (true/false): así el servidor distingue
+    // "el usuario apagó la zona" (borra lat/lon) de "esta petición no dice
+    // nada de zona" (preserva lo ya guardado) — ver push/server.py.
+    const campos = { zona: p.zona, kit_reminder: p.kit ? 1 : 0 };
+    if (p.zona) {
+      campos.lat = r1(place.lat);
+      campos.lon = r1(place.lon);
+      campos.radio_km = p.radio;
+      campos.mag_min = p.mag;
+    }
+    return campos;
   }
 
   let reg;
@@ -3044,6 +3094,21 @@ async function setupPush() {
   } catch (_) {
     return; // sin service worker activo: el botón queda oculto de más arriba
   }
+
+  async function resubscribe() {
+    const actual = await reg.pushManager.getSubscription();
+    if (!actual) return; // los controles de zona están ocultos si no hay suscripción
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...actual.toJSON(), ...camposZona() }),
+    }).catch(() => {});
+  }
+
+  [zonaToggle, zonaRadio, zonaMag, kitToggle].forEach((el) => {
+    if (el) el.addEventListener('change', resubscribe);
+  });
+
   const subInicial = await reg.pushManager.getSubscription().catch(() => null);
   pintar(!!subInicial);
 
@@ -3079,7 +3144,7 @@ async function setupPush() {
       await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sub.toJSON()),
+        body: JSON.stringify({ ...sub.toJSON(), ...camposZona() }),
       });
       pintar(true);
     } catch (_) {

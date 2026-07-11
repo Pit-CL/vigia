@@ -45,7 +45,71 @@ def _connect() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS subs("
         "endpoint TEXT PRIMARY KEY, p256dh TEXT, auth TEXT, created TEXT)"
     )
+    # Migración: columnas del opt-in "solo mi zona" + recordatorio de kit,
+    # añadidas después. sqlite no soporta "ADD COLUMN IF NOT EXISTS" -> try/except.
+    for ddl in (
+        "ALTER TABLE subs ADD COLUMN lat REAL",
+        "ALTER TABLE subs ADD COLUMN lon REAL",
+        "ALTER TABLE subs ADD COLUMN radio_km INTEGER",
+        "ALTER TABLE subs ADD COLUMN mag_min REAL",
+        "ALTER TABLE subs ADD COLUMN kit_reminder INTEGER DEFAULT 0",
+    ):
+        try:
+            con.execute(ddl)
+        except sqlite3.OperationalError:
+            pass
     return con
+
+
+# Rangos válidos de los campos opcionales de zona/kit. Fuera de rango o
+# ausente -> None; el UPSERT usa COALESCE(nuevo, actual) así que un
+# resubscribe sin (o con) campos inválidos jamás borra lo ya guardado.
+# Excepción explícita: si el body trae "zona": false (el usuario apagó
+# "solo mi zona" en la UI), sí hay que borrar lat/lon/radio_km/mag_min —
+# si no, COALESCE los dejaría pegados para siempre. Ver _borrar_zona().
+LAT_MIN, LAT_MAX = -56, -17    # bbox aproximado de Chile continental
+LON_MIN, LON_MAX = -76, -66
+RADIO_KM_MIN, RADIO_KM_MAX = 50, 500
+MAG_MIN_FLOOR, MAG_MIN_CEIL = 4.5, 6.5
+
+
+def _num(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _campos_zona(payload: dict):
+    """Valida lat/lon/radio_km/mag_min/kit_reminder del body de /subscribe.
+    Devuelve la tupla a persistir (None = no tocar el valor existente)."""
+    lat, lon = _num(payload.get("lat")), _num(payload.get("lon"))
+    if lat is None or lon is None or not (LAT_MIN <= lat <= LAT_MAX and LON_MIN <= lon <= LON_MAX):
+        lat = lon = None
+
+    radio_km = _num(payload.get("radio_km"))
+    if radio_km is None or not (RADIO_KM_MIN <= radio_km <= RADIO_KM_MAX):
+        radio_km = None
+    else:
+        radio_km = int(radio_km)
+
+    mag_min = _num(payload.get("mag_min"))
+    if mag_min is None or not (MAG_MIN_FLOOR <= mag_min <= MAG_MIN_CEIL):
+        mag_min = None
+
+    kit_reminder = payload.get("kit_reminder")
+    if kit_reminder is True or kit_reminder == 1:
+        kit_reminder = 1
+    elif kit_reminder is False or kit_reminder == 0:
+        kit_reminder = 0
+    else:
+        kit_reminder = None
+
+    return lat, lon, radio_km, mag_min, kit_reminder
+
+
+def _borrar_zona(payload: dict) -> bool:
+    """True si el body pide explícitamente apagar "solo mi zona" (checkbox
+    destildado en la UI) — la única señal que debe borrar lat/lon/radio_km/
+    mag_min en vez de preservarlos vía COALESCE."""
+    return payload.get("zona") is False
 
 
 def _client_ip(handler: BaseHTTPRequestHandler) -> str:
@@ -129,12 +193,27 @@ class Handler(BaseHTTPRequestHandler):
             if not _valid_subscription(payload):
                 self._send_json(400, {"error": "invalid subscription"})
                 return
+            lat, lon, radio_km, mag_min, kit_reminder = _campos_zona(payload)
             con = _connect()
             con.execute(
-                "INSERT OR REPLACE INTO subs(endpoint, p256dh, auth, created) "
-                "VALUES (?, ?, ?, datetime('now'))",
-                (payload["endpoint"], payload["keys"]["p256dh"], payload["keys"]["auth"]),
+                "INSERT INTO subs(endpoint, p256dh, auth, created, lat, lon, radio_km, mag_min, kit_reminder) "
+                "VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?, ?) "
+                "ON CONFLICT(endpoint) DO UPDATE SET "
+                "p256dh=excluded.p256dh, auth=excluded.auth, created=excluded.created, "
+                "lat=COALESCE(excluded.lat, subs.lat), lon=COALESCE(excluded.lon, subs.lon), "
+                "radio_km=COALESCE(excluded.radio_km, subs.radio_km), "
+                "mag_min=COALESCE(excluded.mag_min, subs.mag_min), "
+                "kit_reminder=COALESCE(excluded.kit_reminder, subs.kit_reminder)",
+                (
+                    payload["endpoint"], payload["keys"]["p256dh"], payload["keys"]["auth"],
+                    lat, lon, radio_km, mag_min, kit_reminder,
+                ),
             )
+            if _borrar_zona(payload):
+                con.execute(
+                    "UPDATE subs SET lat=NULL, lon=NULL, radio_km=NULL, mag_min=NULL WHERE endpoint=?",
+                    (payload["endpoint"],),
+                )
             con.commit()
             con.close()
             log.info("subscribe ok endpoint=%s...", payload["endpoint"][:48])
