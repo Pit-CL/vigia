@@ -72,16 +72,15 @@ INCENDIOS_PATH = Path(os.environ.get("CLIMA_INCENDIOS", ROOT / "web" / "incendio
 FIRMS_MAP_KEY = os.environ.get("FIRMS_MAP_KEY", "")
 API_FIRMS = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
 
-# Precios de combustible en línea (CNE, datastream Junar v2 "BENCI-EN-LINEA").
-# Mismo patrón que FIRMS: sin token registrado la capa queda dormida (0
-# estaciones, sin error) — ver ingesta/combustible.py. Accesible directo
+# Precios de combustible en línea (CNE, API v4 con login dinámico).
+# Mismo patrón que FIRMS: sin credenciales registradas la capa queda dormida
+# (0 estaciones, sin error) — ver ingesta/combustible.py. Accesible directo
 # desde el VPS (a diferencia de SEC/MINSAL, no requiere el satélite en omen).
 COMBUSTIBLE_PATH = Path(os.environ.get("CLIMA_COMBUSTIBLE", ROOT / "web" / "combustible.json"))
-CNE_API_KEY = os.environ.get("CNE_API_KEY", "")
-CNE_API_URL = os.environ.get(
-    "CNE_API_URL",
-    # https obligatorio: la auth_key viaja en la query string.
-    "https://cne.cloudapi.junar.com/api/v2/datastreams/BENCI-EN-LINEA-V2-80280/data.json/")
+CNE_EMAIL = os.environ.get("CNE_EMAIL", "")
+CNE_PASSWORD = os.environ.get("CNE_PASSWORD", "")
+CNE_LOGIN_URL = os.environ.get("CNE_LOGIN_URL", "https://api.cne.cl/api/login")
+CNE_ESTACIONES_URL = os.environ.get("CNE_ESTACIONES_URL", "https://api.cne.cl/api/v4/estaciones")
 
 ALERTAS_PATH = Path(os.environ.get("CLIMA_ALERTAS", ROOT / "web" / "alertas.json"))
 VOLCANES_PATH = Path(os.environ.get("CLIMA_VOLCANES", ROOT / "web" / "volcanes.json"))
