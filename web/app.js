@@ -377,7 +377,7 @@ async function loadAll({ silent = false } = {}) {
     current: 'temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,pressure_msl,precipitation',
     hourly: 'temperature_2m,precipitation,precipitation_probability,wind_speed_10m,relative_humidity_2m',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunrise,sunset,uv_index_max',
-    forecast_days: '7',
+    forecast_days: '14',
   });
   const qModels = urlBase({
     hourly: 'temperature_2m,precipitation',
