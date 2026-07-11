@@ -3187,14 +3187,15 @@ async function prepararZona() {
     // repoblar, para no repoblar en la caché que está por desaparecer.
     await new Promise((resolve) => {
       const onClear = (e) => {
-        if (e.data && e.data.type === 'pin-cleared') {
-          navigator.serviceWorker.removeEventListener('message', onClear);
-          resolve();
-        }
+        if (e.data && e.data.type === 'pin-cleared') listo();
+      };
+      const listo = () => {
+        navigator.serviceWorker.removeEventListener('message', onClear);
+        resolve();
       };
       navigator.serviceWorker.addEventListener('message', onClear);
       reg.active.postMessage({ type: 'pin-clear' });
-      setTimeout(resolve, 3000); // no bloquear indefinidamente si el SW no respondió
+      setTimeout(listo, 3000); // no bloquear indefinidamente si el SW no respondió
     });
   }
 
