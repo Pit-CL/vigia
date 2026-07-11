@@ -186,6 +186,7 @@
       <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos</button>
       <button class="map-mode" data-capa="remociones" aria-pressed="false">⛰️ Remociones</button>
       <button class="map-mode" data-capa="cortes" aria-pressed="false">⚡ Cortes</button>
+      <button class="map-mode" data-capa="combustible" aria-pressed="false">⛽ Combustible</button>
       <button class="map-mode" data-capa="marea" aria-pressed="false">🌊 Costa</button>
       <button class="map-mode" data-capa="evacuacion" aria-pressed="false">🏃 Evacuación</button>
       <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
@@ -254,6 +255,10 @@
       <span class="rk-caida"></span><span>Caída</span>
       <span>· círculo = zona de influencia ≈150 m</span>
     </div>
+    <div id="map-legend-combustible" class="map-legend" aria-hidden="true" hidden>
+      <span>⛽</span><span>estación con precios reportados</span>
+      <span>· ⛽ N = grupo de estaciones</span>
+    </div>
     <div id="map-legend-marea" class="map-legend" aria-hidden="true" hidden>
       <span class="mk-sube">▲</span><span>subiendo</span>
       <span class="mk-baja">▼</span><span>bajando</span>
@@ -281,6 +286,7 @@
     <p id="map-note-avisos" class="panel-note" hidden>Avisos <strong>derivados del pronóstico propio</strong> de Vigía (mediana de 6 modelos, ventana de 48 h) — no son un aviso oficial de la DMC.</p>
     <p id="map-note-remociones" class="panel-note" hidden>Catastro histórico de remociones en masa · SENAPRED — marca dónde ya ocurrieron flujos (aluviones), deslizamientos y caídas de rocas; terreno con historial es terreno que puede repetir. Círculo = zona de influencia aproximada (150 m).</p>
     <p id="map-note-cortes" class="panel-note" hidden>Cortes de luz reportados por <strong>SEC</strong> (interrupciones en línea) · endpoint no documentado, <strong>best effort</strong> — círculo escalado por clientes afectados. Se actualiza vía un satélite fuera del VPS; si ves "datos antiguos" el satélite lleva más de 30 min sin refrescar.</p>
+    <p id="map-note-combustible" class="panel-note" hidden>Precios de combustible en línea · <strong>CNE (Bencina en Línea)</strong> · se actualiza 2 veces al día.</p>
     <p id="map-note-marea" class="panel-note" hidden>Marea, oleaje y temperatura del mar de <strong>Open-Meteo Marine</strong> (modelo global ~8 km) · las tablas oficiales de marea son del <strong>SHOA</strong> (shoa.cl).</p>
     <p id="map-note-evacuacion" class="panel-note" hidden>Vías de evacuación y zona de inundación ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) a una zona costera o volcánica para verlas.</p>
     <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · farmacias de turno del día · MINSAL/Farmanet, vía un satélite fuera del VPS (best effort) · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
@@ -397,6 +403,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=62"></script>
+<script src="app.js?v=63"></script>
 </body>
 </html>

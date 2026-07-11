@@ -45,11 +45,13 @@ services:
       CLIMA_TSUNAMI: /data/tsunami.json
       CLIMA_CORTES: /data/cortes.json
       CLIMA_FARMACIAS: /data/farmacias.json
+      CLIMA_COMBUSTIBLE: /data/combustible.json
       CLIMA_INCOMING: /data/incoming
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}
       FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
+      CNE_API_KEY: ${CNE_API_KEY:-}
     volumes:
       - ./ingesta:/app/ingesta:ro
       - ./deploy/crontab:/crontab-src:ro

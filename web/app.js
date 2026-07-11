@@ -247,6 +247,7 @@ let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), 
 let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let remocionesData = null; // catastro de remociones en masa (SENAPRED), capa 'remociones', carga lazy propia
 let cortesData = null;   // cortes de luz SEC (best effort, vía satélite en omen)
+let combustibleData = null; // precios de combustible en línea (CNE), capa 'combustible', carga lazy propia; dormida sin CNE_API_KEY
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -1237,6 +1238,22 @@ async function loadRemociones() {
   if (capasActivas.has('remociones')) renderMapa();
 }
 
+// combustible.json: precios de bencina en línea (CNE), cuasi-estático (se
+// refresca 2x/día): loader propio, mismo patrón que loadRemociones. Sin
+// CNE_API_KEY registrada la capa queda dormida (combustible.json con n=0 o
+// directamente ausente) — paintCombustible lo muestra como "en preparación".
+let combustibleCargando = false;
+async function loadCombustible() {
+  if (combustibleData || combustibleCargando) return;
+  combustibleCargando = true;
+  try {
+    const res = await fetch('combustible.json', { cache: 'no-store' });
+    if (res.ok) combustibleData = await res.json();
+  } catch (_) { /* sin combustible: la capa queda vacía */ }
+  combustibleCargando = false;
+  if (capasActivas.has('combustible')) renderMapa();
+}
+
 // Satélite GOES-East: DescribeDomains devuelve el historial completo de
 // disponibilidad (~5 años) como UN solo <Domain>rango1,rango2,...</Domain>,
 // cada rango "inicio/fin/PT10M" (huecos entre rangos, y rangos de un solo
@@ -1367,7 +1384,9 @@ function paintSatelite() {
 // cuasi-estáticos que no se cargan salvo que el usuario encienda alguna de
 // las dos (ni en la carga inicial ni en el refresco). 'remociones' es lazy
 // por su propia cuenta: ~1.200 puntos igual de cuasi-estáticos, pero es un
-// catastro propio sin relación con emergenciaData.
+// catastro propio sin relación con emergenciaData. 'combustible' es lazy
+// igual que 'remociones': ~1.768 estaciones cuasi-estáticas (CNE, 2x/día),
+// dormida (0 estaciones) hasta que se registre CNE_API_KEY.
 const CAPAS = {
   temp:          { grupo: 'medicion', paint: paintTemp },
   aire:          { grupo: 'medicion', paint: paintAire },
@@ -1379,6 +1398,7 @@ const CAPAS = {
   avisos:        { paint: paintAvisos },
   remociones:    { paint: paintRemociones, lazy: loadRemociones, tieneData: () => remocionesData !== null },
   cortes:        { paint: paintCortes },
+  combustible:   { paint: paintCombustible, lazy: loadCombustible, tieneData: () => combustibleData !== null },
   marea:         { paint: paintMarea },
   evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
   emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
@@ -1394,7 +1414,7 @@ const CAPAS = {
 // acción más urgente (hacia dónde ir), por sobre el resto. 'satelite' va
 // primero: es la capa menos accionable, su texto en #map-meta no debe pisar
 // el de ninguna otra.
-const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'cortes', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'cortes', 'combustible', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1505,6 +1525,7 @@ function renderMapa() {
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-legend-avisos').hidden = !capasActivas.has('avisos');
   document.getElementById('map-legend-remociones').hidden = !capasActivas.has('remociones');
+  document.getElementById('map-legend-combustible').hidden = !capasActivas.has('combustible');
   document.getElementById('map-legend-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-legend-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-legend-emergencia').hidden = !capasActivas.has('emergencia');
@@ -1518,6 +1539,7 @@ function renderMapa() {
   document.getElementById('map-note-avisos').hidden = !capasActivas.has('avisos');
   document.getElementById('map-note-remociones').hidden = !capasActivas.has('remociones');
   document.getElementById('map-note-cortes').hidden = !capasActivas.has('cortes');
+  document.getElementById('map-note-combustible').hidden = !capasActivas.has('combustible');
   document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
@@ -2261,6 +2283,69 @@ function paintCortes(group) {
   $('#map-meta').textContent = cortesData.updated
     ? `${cortesData.n_comunas} comunas con cortes · SEC best effort · ${horaLocal(cortesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${stale}`
     : `${cortesData.n_comunas} comunas con cortes · SEC best effort${stale}`;
+}
+
+const PRECIO_COMBUSTIBLE_LABEL = {
+  gasolina_93: '93', gasolina_95: '95', gasolina_97: '97', diesel: 'Diésel', glp: 'GLP',
+};
+
+function formatoClp(v) {
+  return `$${Math.round(v).toLocaleString('es-CL')}`;
+}
+
+// combustible.json: dormida sin CNE_API_KEY (n=0 o archivo ausente) → misma
+// nota que "capa en preparación", no un error. Con datos, mismo patrón de
+// agrupado por celda que paintRemociones/paintIncendios (1.768 estaciones
+// son ilegibles a escala país); el ícono individual muestra el precio de
+// 93 (el más buscado) y el popup el resto de la tabla de precios.
+function paintCombustible(group) {
+  const estaciones = (combustibleData && combustibleData.estaciones) || [];
+  if (!estaciones.length) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'combustible: capa en preparación (sin datos todavía)';
+    return;
+  }
+  const zoom = map.getZoom();
+  if (zoom < 9) {
+    const grupos = agruparPorCelda(estaciones, 48).sort((a, b) => a.length - b.length);
+    grupos.forEach((grupo) => {
+      const lat = grupo.reduce((s, p) => s + p.lat, 0) / grupo.length;
+      const lon = grupo.reduce((s, p) => s + p.lon, 0) / grupo.length;
+      const icon = L.divIcon({
+        className: 'stn-icon',
+        html: `<span class="stn-label">⛽<b>${grupo.length}</b></span>`,
+        iconSize: [44, 26], iconAnchor: [22, 13],
+      });
+      const marker = L.marker([lat, lon], {
+        icon, title: `${grupo.length} estaciones de servicio — toca para acercar`,
+      }).addTo(group);
+      marker.on('click', () => map.setView([lat, lon], zoom + 2));
+    });
+  } else {
+    estaciones.forEach((e) => {
+      const precio93 = e.precios && e.precios.gasolina_93;
+      const icon = L.divIcon({
+        className: 'stn-icon',
+        html: `<span class="stn-label">${precio93 != null ? Math.round(precio93) : '⛽'}</span>`,
+        iconSize: [44, 26], iconAnchor: [22, 13],
+      });
+      const nombre = e.nombre || e.marca || 'Estación de servicio';
+      const marker = L.marker([e.lat, e.lon], { icon, title: nombre }).addTo(group);
+      const box = document.createElement('div');
+      box.className = 'stn-popup';
+      const h = document.createElement('strong'); h.textContent = nombre; box.appendChild(h);
+      if (e.comuna) {
+        const small = document.createElement('small');
+        small.textContent = e.marca && e.nombre ? `${e.marca} · ${e.comuna}` : e.comuna;
+        box.appendChild(small);
+      }
+      const precios = e.precios || {};
+      box.appendChild(popupRows(Object.keys(PRECIO_COMBUSTIBLE_LABEL)
+        .filter((k) => precios[k] != null)
+        .map((k) => [PRECIO_COMBUSTIBLE_LABEL[k], formatoClp(precios[k])])));
+      marker.bindPopup(box, { maxWidth: 260 });
+    });
+  }
+  $('#map-meta').textContent = `${estaciones.length} estaciones con precios · CNE Bencina en Línea`;
 }
 
 function setupCapas() {
