@@ -12,8 +12,10 @@ en el VPS — sube JSON crudos al VPS, que los procesa (`ingesta/cortes.py`,
    ```
    scp satelite/fetch_cl.py omen:~/vigia-satelite/fetch_cl.py
    ```
-2. Editar `SSH_DEST` en `fetch_cl.py` con la IP pública real del VPS
-   (`vigia.cavara.cl` NO sirve: solo resuelve al Cloudflare Tunnel, sin SSH).
+2. El destino se pasa por la env `VIGIA_SSH_DEST` (usuario@ip del VPS) en la
+   línea del crontab — NUNCA se escribe en el repo: es público y la IP de
+   origen del VPS debe permanecer oculta detrás del Cloudflare Tunnel
+   (`vigia.cavara.cl` NO sirve como destino: solo resuelve al tunnel, sin SSH).
 3. Generar una clave ssh dedicada (sin passphrase, para cron) y restringirla
    en el VPS a solo `scp` sobre `data/incoming/`:
    ```
@@ -30,7 +32,7 @@ en el VPS — sube JSON crudos al VPS, que los procesa (`ingesta/cortes.py`,
    `docker-compose.yml` — el volumen `./data:/data` hereda el uid del host).
 5. Crontab en omen (`crontab -e`):
    ```
-   */15 * * * * ssh-agent bash -c 'ssh-add ~/.ssh/vigia_satelite 2>/dev/null; python3 ~/vigia-satelite/fetch_cl.py' >> ~/vigia-satelite.log 2>&1
+   */15 * * * * VIGIA_SSH_DEST='usuario@IP_DEL_VPS' ssh-agent bash -c 'ssh-add ~/.ssh/vigia_satelite 2>/dev/null; python3 ~/vigia-satelite/fetch_cl.py' >> ~/vigia-satelite.log 2>&1
    ```
    MINSAL (farmacias) solo se usa 1x/día en la ingesta, pero viajar junto con
    SEC cada 15 min no cuesta nada (una fila de cron, un solo script).

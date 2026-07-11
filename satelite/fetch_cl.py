@@ -13,6 +13,7 @@ Tolerante: si una fuente falla, sube la otra igual. Sale 0 si al menos una
 fuente se subió con éxito, 1 si las dos fallaron.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -28,12 +29,12 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
 SEC_URL = "https://apps.sec.cl/INTONLINEv1/ClientesAfectados/GetPorFecha"
 MINSAL_URL = "https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php"
 
-# Destino en el VPS: usuario/host y ruta son constantes para no depender de
-# config externa en un script que corre en otra máquina. Clave ssh dedicada
-# (ver satelite/README.md), restringida por command= a solo scp sobre incoming/.
-# OJO: vigia.cavara.cl solo resuelve al Cloudflare Tunnel (HTTP, sin SSH) —
-# aquí va la IP pública real del VPS Hostinger, no el dominio del sitio.
-SSH_DEST = "rafael@76.13.237.200"
+# Destino en el VPS vía env VIGIA_SSH_DEST (se fija en la línea del crontab de
+# omen, ver satelite/README.md). NUNCA hardcodear usuario@IP aquí: el repo es
+# público y la IP de origen del VPS debe permanecer oculta — el Cloudflare
+# Tunnel existe precisamente para eso (vigia.cavara.cl no expone SSH).
+# Clave ssh dedicada, restringida por command= a solo scp sobre incoming/.
+SSH_DEST = os.environ.get("VIGIA_SSH_DEST", "")
 INCOMING_DIR = "/opt/vigia/data/incoming"
 
 TIMEOUT_S = 30
@@ -81,6 +82,9 @@ def _escribir_y_subir(nombre: str, fetch_fn, tmpdir: str) -> bool:
 
 
 def main() -> int:
+    if not SSH_DEST:
+        print("[error] falta VIGIA_SSH_DEST (usuario@ip del VPS); ver satelite/README.md")
+        return 1
     with tempfile.TemporaryDirectory() as tmpdir:
         ok_sec = _escribir_y_subir("sec.json", _fetch_sec, tmpdir)
         ok_minsal = _escribir_y_subir("farmacias_raw.json", _fetch_minsal, tmpdir)
