@@ -500,7 +500,7 @@ main {
 
 .daily {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(14, 1fr);
   gap: 10px;
   margin: 0;
   padding: 0;
@@ -509,7 +509,7 @@ main {
 
 @media (max-width: 720px) {
   /* Scroll horizontal con snap: columnas de ancho fijo que suman más que
-     el viewport, así desliza limpio en vez de comprimir los 7 días. */
+     el viewport, así desliza limpio en vez de comprimir los 14 días. */
   .daily {
     grid-template-columns: none;
     grid-auto-flow: column;
