@@ -30,6 +30,8 @@ Vigía es una PWA gratuita que junta, en un solo mapa de Chile, el pronóstico d
 ### 🌤️ Clima verificable
 
 - **6 modelos, no uno**: ECMWF IFS, **AIFS** (el modelo de IA del ECMWF), NOAA GFS, DWD ICON, ECCC GEM y Météo-France ARPEGE, más el **ensamble de 51 miembros** del ECMWF para mostrar una banda de incertidumbre real en vez de un número falso.
+- **Pronóstico diario a 14 días**: el resumen diario usa el modelo *best-match* de Open-Meteo. La comparación de los 6 modelos, el ensamble y la calibración de sesgo siguen acotados a 72 horas, porque la fuente del histórico de sesgo no expone leads más allá de eso.
+- **Pronóstico propio «Vigía»**: un blend de los 2 modelos con mejor verificación por estación y plazo, ponderado por su error (1/MAE²) y corregido por sesgo — en holdout le gana tanto al blend de los 6 modelos como a cualquiera de ellos por separado.
 - **Verificación pública**: cada pronóstico se archiva y se compara luego con lo que midieron las estaciones. La app publica su propio error (MAE, RMSE, sesgo) por modelo y por plazo.
 - **Calibración con disciplina científica**: corrección de sesgo por estación con EWMA, gate de muestra mínima y shrinkage — nunca sobre variables donde no corresponde (precipitación, dirección del viento).
 - **152 estaciones reales**: las 16 regiones continentales, Isla de Pascua (Rapa Nui), Juan Fernández y 11 bases antárticas chilenas.
