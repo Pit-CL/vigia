@@ -33,7 +33,7 @@ MINSAL_URL = "https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php"
 # (ver satelite/README.md), restringida por command= a solo scp sobre incoming/.
 # OJO: vigia.cavara.cl solo resuelve al Cloudflare Tunnel (HTTP, sin SSH) —
 # aquí va la IP pública real del VPS Hostinger, no el dominio del sitio.
-SSH_DEST = "vigia@IP_DEL_VPS"
+SSH_DEST = "rafael@76.13.237.200"
 INCOMING_DIR = "/opt/vigia/data/incoming"
 
 TIMEOUT_S = 30
