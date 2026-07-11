@@ -30,6 +30,7 @@ web/tsunami_areas.json
 web/marea.json
 web/tsunami.json
 web/cortes.json
+web/farmacias.json
 
 # Secretos: jamás al repo
 .env

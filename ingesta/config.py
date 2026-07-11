@@ -100,4 +100,5 @@ TSUNAMI_PATH = Path(os.environ.get("CLIMA_TSUNAMI", ROOT / "web" / "tsunami.json
 # fetchea la red (ver satelite/README.md).
 INCOMING_DIR = Path(os.environ.get("CLIMA_INCOMING", ROOT / "data" / "incoming"))
 CORTES_PATH = Path(os.environ.get("CLIMA_CORTES", ROOT / "web" / "cortes.json"))
+FARMACIAS_PATH = Path(os.environ.get("CLIMA_FARMACIAS", ROOT / "web" / "farmacias.json"))
 COMUNAS_PATH = ROOT / "web" / "comunas.json"  # catastro INE versionado, no lo genera la ingesta
