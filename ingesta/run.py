@@ -126,7 +126,7 @@ def main() -> int:
     ap.add_argument("--farmacias", action="store_true",
                      help="farmacias de turno MINSAL (vía satélite en omen — solo lee incoming/, sin red)")
     ap.add_argument("--combustible", action="store_true",
-                     help="precios de bencina en línea (CNE, dormida sin CNE_API_KEY — accesible directo desde el VPS)")
+                     help="precios de bencina en línea (CNE, dormida sin CNE_EMAIL/CNE_PASSWORD — accesible directo desde el VPS)")
     ap.add_argument("--hazards", action="store_true",
                      help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + cortes + farmacias + combustible)")
     ap.add_argument("--emergencia", action="store_true",

@@ -51,7 +51,8 @@ services:
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}
       FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
-      CNE_API_KEY: ${CNE_API_KEY:-}
+      CNE_EMAIL: ${CNE_EMAIL:-}
+      CNE_PASSWORD: ${CNE_PASSWORD:-}
     volumes:
       - ./ingesta:/app/ingesta:ro
       - ./deploy/crontab:/crontab-src:ro

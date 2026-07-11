@@ -1,121 +1,159 @@
-"""Precios de combustible en línea — CNE (Comisión Nacional de Energía),
-datastream Junar v2 "BENCI-EN-LINEA".
+"""Precios de combustible en línea — CNE (Comisión Nacional de Energía), API v4
+(api.cne.cl) con login dinámico.
 
-Capa dormida sin token (mismo patrón que incendios.py/FIRMS): CNE_API_KEY
-se registra gratis en api.cne.cl; sin ella el módulo no hace nada. A
-diferencia de SEC/MINSAL, la API de la CNE es accesible directo desde el
-VPS — no requiere el satélite en omen.
+Capa dormida sin credenciales (mismo patrón que FIRMS/DMC): CNE_EMAIL/
+CNE_PASSWORD se registran gratis en api.cne.cl; sin ambas el módulo no hace
+nada. Flujo verificado: POST a CNE_LOGIN_URL (form-urlencoded email+password)
+-> token efímero -> GET a CNE_ESTACIONES_URL con Authorization: Bearer
+<token>. El login se repite en cada corrida (el token es dinámico, la ingesta
+corre 2x/día). Accesible directo desde el VPS — no requiere el satélite en
+omen.
 
-TODO: verificar formato real de la respuesta con el token real. La URL
-histórica documentada del datastream es la de config.CNE_API_URL (Junar
-v2, "BENCI-EN-LINEA-V2-80280"); nadie la ha probado todavía con una key
-válida. El parser de abajo es DEFENSIVO — si la estructura real difiere de
-lo esperado, reporta un [aviso] y no rompe la ingesta. El payload crudo
-queda en raw_payloads para depurar apenas llegue el token.
+Seguridad: el email/password/token nunca se loguean ni viajan en un mensaje
+de excepción; si el login falla solo se reporta el status HTTP (el cuerpo de
+la respuesta podría ecoar las credenciales enviadas). El GET de estaciones no
+persiste las ~1.800 filas crudas en raw_payloads (pesan varios MB): guarda un
+resumen (conteo de estaciones por región).
 """
+import gzip
 import json
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 
 import config
-import sources
+from sources import UA
 
-# Nombres candidatos por campo: no sabemos cómo vienen realmente hasta tener
-# el token, así que se prueban varias variantes plausibles (snake_case,
-# concatenado, con/sin acento) — mismo criterio defensivo que _campo() en
-# cortes.py/farmacias.py.
-_CAMPOS_PRECIO = {
-    "gasolina_93": ("precio_93", "gasolina93", "gasolina_93", "93"),
-    "gasolina_95": ("precio_95", "gasolina95", "gasolina_95", "95"),
-    "gasolina_97": ("precio_97", "gasolina97", "gasolina_97", "97"),
-    "diesel": ("precio_diesel", "diesel", "petroleo_diesel"),
-    "glp": ("precio_glp", "glp"),
+# Precios en $/L (93/95/97/diésel) y $/m3 (GLP): la API entrega el número ya
+# en pesos ("1480.000" = 1.480 CLP, el ".000" son decimales siempre nulos,
+# NO un separador de miles — verificado contra la muestra real: 93 ronda
+# 1.480, diésel 1.246, GLP 586 y GNC 399, todos coherentes con precios de
+# mercado publicados; una lectura "miles" (1.480.000) sería absurda para
+# bencina por litro). Claves reales presentes en la muestra: 93, 95, 97, DI
+# (diésel), GLP, KE (kerosene), GNC y las variantes A93/A95/A97/ADI/AKE de
+# autoservicio — el frontend (paintCombustible en app.js) solo pinta las 5
+# de mayor demanda, así que solo esas se mapean.
+_PRECIO_CAMPOS = {
+    "gasolina_93": "93",
+    "gasolina_95": "95",
+    "gasolina_97": "97",
+    "diesel": "DI",
+    "glp": "GLP",
 }
 
 
-def _campo(row: dict, *nombres):
-    lower = {str(k).lower(): v for k, v in row.items()}
-    for n in nombres:
-        v = lower.get(n.lower())
-        if v not in (None, ""):
-            return v
-    return None
-
-
-def _num(raw):
+def _login() -> str | None:
+    """POST email+password -> token. None si falla; el aviso reporta SOLO el
+    status HTTP o la clase del error, nunca el cuerpo de la respuesta (podría
+    ecoar las credenciales enviadas)."""
+    body = urllib.parse.urlencode({
+        "email": config.CNE_EMAIL, "password": config.CNE_PASSWORD,
+    }).encode()
+    req = urllib.request.Request(
+        config.CNE_LOGIN_URL, data=body, method="POST",
+        headers={"User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded"})
     try:
-        return float(raw)
+        with urllib.request.urlopen(req, timeout=30) as res:
+            data = json.loads(res.read().decode("utf-8"))
+    except urllib.error.HTTPError as err:
+        print(f"[aviso] combustible CNE: login falló (HTTP {err.code})")
+        return None
+    except Exception as err:
+        print(f"[aviso] combustible CNE: login falló ({type(err).__name__})")
+        return None
+    token = data.get("token") if isinstance(data, dict) else None
+    return token if isinstance(token, str) and token else None
+
+
+def _get_estaciones(token: str) -> list | None:
+    req = urllib.request.Request(
+        config.CNE_ESTACIONES_URL, method="GET",
+        headers={
+            "User-Agent": UA,
+            "Authorization": f"Bearer {token}",
+            "Accept-Encoding": "identity",
+        })
+    try:
+        with urllib.request.urlopen(req, timeout=45) as res:
+            raw = res.read()
+            if res.headers.get("Content-Encoding") == "gzip":
+                raw = gzip.decompress(raw)
+            data = json.loads(raw.decode("utf-8"))
+    except Exception as err:
+        print(f"[aviso] combustible CNE: GET estaciones falló ({type(err).__name__})")
+        return None
+    return data if isinstance(data, list) else None
+
+
+def _num_precio(raw):
+    try:
+        return round(float(raw))
     except (TypeError, ValueError):
         return None
 
 
 def _mapear_estacion(row) -> dict | None:
-    """Una fila cruda -> {nombre?, marca?, comuna?, lat, lon, precios{}}.
-    Sin lat/lon utilizable la fila se descarta (no se puede pintar en el mapa)."""
-    if not isinstance(row, dict):
+    """Una fila cruda de /api/v4/estaciones -> {lat, lon, nombre?, marca?,
+    comuna?, precios{}}. Se descartan estaciones en mantención o sin
+    lat/lon utilizable (no se pueden pintar en el mapa)."""
+    if not isinstance(row, dict) or row.get("en_mantenimiento") == 1:
         return None
-    lat = _num(_campo(row, "latitud", "lat"))
-    lon = _num(_campo(row, "longitud", "lon", "lng"))
-    if lat is None or lon is None:
+    ubicacion = row.get("ubicacion") or {}
+    try:
+        lat = float(ubicacion.get("latitud"))
+        lon = float(ubicacion.get("longitud"))
+    except (TypeError, ValueError):
         return None
     item = {"lat": lat, "lon": lon}
-    nombre = _campo(row, "nombre", "razon_social")
+    nombre = row.get("razon_social")
     if nombre:
         item["nombre"] = str(nombre)
-    marca = _campo(row, "marca", "distribuidor")
+    marca = (row.get("distribuidor") or {}).get("marca")
     if marca:
         item["marca"] = str(marca)
-    comuna = _campo(row, "comuna")
+    comuna = ubicacion.get("nombre_comuna")
     if comuna:
         item["comuna"] = str(comuna)
+    precios_raw = row.get("precios") or {}
     precios = {}
-    for campo_out, candidatos in _CAMPOS_PRECIO.items():
-        v = _num(_campo(row, *candidatos))
-        if v is not None:
-            precios[campo_out] = v
+    for campo_out, clave_cne in _PRECIO_CAMPOS.items():
+        entry = precios_raw.get(clave_cne)
+        if isinstance(entry, dict):
+            v = _num_precio(entry.get("precio"))
+            if v is not None:
+                precios[campo_out] = v
     if precios:
         item["precios"] = precios
     return item
 
 
-def _parsear(data) -> tuple[list, str | None]:
-    """Devuelve (estaciones, aviso). Estructura Junar v2 esperada: un dict
-    con la lista de filas bajo 'result' (o alguna variante habitual: 'data',
-    'items', 'rows') o directamente una lista. Sin token real no hay forma
-    de confirmar cuál es — ante cualquier estructura no reconocida, aviso y
-    lista vacía en vez de reventar la ingesta completa."""
-    filas = None
-    if isinstance(data, dict):
-        for clave in ("result", "data", "items", "rows"):
-            if isinstance(data.get(clave), list):
-                filas = data[clave]
-                break
-    elif isinstance(data, list):
-        filas = data
-    if filas is None:
-        claves = list(data.keys()) if isinstance(data, dict) else type(data).__name__
-        return [], f"estructura inesperada en la respuesta CNE (claves/tipo: {claves})"
-    estaciones = [e for e in (_mapear_estacion(f) for f in filas) if e]
-    if filas and not estaciones:
-        return [], "la respuesta CNE trajo filas pero ninguna con lat/lon utilizable"
-    return estaciones, None
-
-
 def update(con, fetched_at: str) -> int:
-    if not config.CNE_API_KEY:
+    if not (config.CNE_EMAIL and config.CNE_PASSWORD):
         return 0
 
-    data, url = sources.http_get_json(config.CNE_API_URL, {"auth_key": config.CNE_API_KEY})
-    # La auth_key va en la query string: se descarta entera antes de persistir
-    # (un replace de la key cruda falla si urlencode la percent-codificó).
-    masked_url = url.split("?")[0]
+    token = _login()
+    if not token:
+        return 0
+
+    data = _get_estaciones(token)
+    if data is None:
+        return 0
+
+    # Resumen liviano en vez de las ~1.800 filas crudas (pesan varios MB):
+    # conteo de estaciones por región, suficiente para depurar sin ensuciar
+    # raw_payloads.
+    por_region = {}
+    for row in data:
+        region = ((row.get("ubicacion") or {}).get("nombre_region")) or "?"
+        por_region[region] = por_region.get(region, 0) + 1
+    resumen = {"n_estaciones": len(data), "por_region": por_region}
     con.execute(
         "INSERT INTO raw_payloads(fetched_at, source, url, payload) VALUES (?,?,?,?)",
-        (fetched_at, "combustible", masked_url, json.dumps(data, ensure_ascii=False)))
+        (fetched_at, "combustible", config.CNE_ESTACIONES_URL, json.dumps(resumen, ensure_ascii=False)))
     con.commit()
 
-    estaciones, aviso = _parsear(data)
-    if aviso:
-        print(f"[aviso] combustible CNE: {aviso}")
+    estaciones = [e for e in (_mapear_estacion(row) for row in data) if e]
 
     payload = {
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
