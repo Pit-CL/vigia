@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy versionado de Vigía a producción (omen:/opt/clima), con smoke test
+# Deploy versionado de Vigía a producción (erp-rollitos:/opt/vigia), con smoke test
 # al final. Reemplaza el rsync manual documentado en docs/DEPLOY.md.
 #
 # Uso: bash deploy/deploy.sh [ref]   (ref por defecto: origin/main)
