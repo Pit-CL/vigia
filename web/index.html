@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=58">
+  <link rel="stylesheet" href="app.css?v=59">
 </head>
 <body>
 
@@ -122,9 +122,11 @@
       </div>
       <button id="btn-punto-cercano" class="chip">📍 Mi punto de encuentro</button>
       <button id="push-btn" class="push-btn" hidden>🔔 Recibir avisos de emergencia</button>
+      <button id="pack-btn" class="chip">📦 Preparar mi zona (offline)</button>
     </div>
     <small id="push-info" class="panel-note" hidden>Solo emergencias mayores: sismos destructivos, alertas rojas y volcanes en naranja o rojo. Sin registro; puedes desactivarlo cuando quieras.</small>
     <div id="punto-cercano-resultado" class="panel-note" hidden></div>
+    <div id="pack-status" class="panel-note" hidden></div>
   </section>
 
   <!-- Costa: marea, oleaje y estado de tsunami del punto costero más cercano -->
@@ -377,6 +379,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=58"></script>
+<script src="app.js?v=59"></script>
 </body>
 </html>
