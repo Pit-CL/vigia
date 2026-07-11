@@ -249,6 +249,14 @@ let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
 let tileLayer = null;
+// Capa satelital GOES-East: tileLayers persistentes fuera de layerGroups
+// (ver nota crítica junto a renderMapa) para sobrevivir al clearLayers() de
+// cada render sin parpadeo. sateliteFrames es la ventana de los últimos
+// timestamps disponibles (ascendente, el más reciente al final).
+let sateliteFrames = [];
+let sateliteLayers = new Map(); // timestamp ISO (o 'default') → L.tileLayer
+let sateliteFrameIdx = -1;
+let sateliteTimer = null;
 
 function savedPlace() {
   try {
@@ -1052,6 +1060,17 @@ const TILES = {
 };
 const TILES_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>';
 
+// Capa satelital: NASA GIBS, GOES-East ABI GeoColor (WMTS RESTful, sin API key).
+// Ojo con el orden del path: es {z}/{y}/{x} (TileMatrix/TileRow/TileCol), no
+// el {z}/{x}/{y} habitual de Leaflet — el template solo cambia DÓNDE va cada
+// token, Leaflet igual sustituye {x}/{y} por columna/fila respectivamente.
+const SATELITE_TILE_TMPL = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/{time}/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png';
+const SATELITE_DOMAINS_URL = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/all/all.xml';
+const SATELITE_ATTR = 'NASA GIBS · NOAA GOES-East';
+const SATELITE_MAX_FRAMES = 6;
+const SATELITE_PLAY_MS = 800;
+const sateliteTileUrl = (t) => SATELITE_TILE_TMPL.replace('{time}', t);
+
 async function loadMapa() {
   try {
     const res = await fetch('estaciones.json', { cache: 'no-store' });
@@ -1173,6 +1192,115 @@ async function loadRemociones() {
   if (capasActivas.has('remociones')) renderMapa();
 }
 
+// Satélite GOES-East: DescribeDomains devuelve el historial completo de
+// disponibilidad (~5 años) como UN solo <Domain>rango1,rango2,...</Domain>,
+// cada rango "inicio/fin/PT10M" (huecos entre rangos, y rangos de un solo
+// instante cuando inicio == fin). Se recorren los rangos desde el final
+// (los más recientes) expandiendo cada uno en pasos de 10 min hasta juntar
+// SATELITE_MAX_FRAMES timestamps. Si el fetch o el parseo fallan, cae a un
+// solo frame con TIME=default (la imagen más reciente) sin romper la capa.
+async function loadSatelite() {
+  let frames;
+  try {
+    const res = await fetch(SATELITE_DOMAINS_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const xml = await res.text();
+    const dominio = xml.match(/<Domain>([^<]+)<\/Domain>/);
+    if (!dominio) throw new Error('sin dominio de tiempo GIBS');
+    const rangos = dominio[1].split(',');
+    frames = [];
+    for (let i = rangos.length - 1; i >= 0 && frames.length < SATELITE_MAX_FRAMES; i--) {
+      const [inicio, fin] = rangos[i].split('/');
+      for (let t = new Date(fin); t >= new Date(inicio) && frames.length < SATELITE_MAX_FRAMES; t = new Date(t - 10 * 60000)) {
+        frames.unshift(t.toISOString().replace(/\.\d{3}Z$/, 'Z'));
+      }
+    }
+    if (!frames.length) throw new Error('rango de tiempo vacío');
+  } catch (_) {
+    frames = ['default'];
+  }
+  sateliteFrames = frames;
+  sateliteFrameIdx = frames.length - 1;
+  // Descarta del mapa y de la caché los frames que salieron de la ventana
+  // vigente: si no, cada refresco de 10 min deja un tileLayer invisible más
+  // acumulado indefinidamente mientras la capa siga activa.
+  sateliteLayers.forEach((layer, t) => {
+    if (!frames.includes(t)) {
+      if (map && map.hasLayer(layer)) map.removeLayer(layer);
+      sateliteLayers.delete(t);
+    }
+  });
+  if (capasActivas.has('satelite')) renderMapa();
+}
+
+function getOrCreateSateliteLayer(t) {
+  let layer = sateliteLayers.get(t);
+  if (!layer) {
+    layer = L.tileLayer(sateliteTileUrl(t), {
+      maxNativeZoom: 7, maxZoom: 18, opacity: 0, zIndex: 5, attribution: SATELITE_ATTR,
+    });
+    sateliteLayers.set(t, layer);
+  }
+  if (!map.hasLayer(layer)) layer.addTo(map);
+  return layer;
+}
+
+function actualizarBotonPlaySatelite() {
+  const btn = document.getElementById('satelite-play');
+  if (!btn) return;
+  const activo = !!sateliteTimer;
+  btn.disabled = sateliteFrames.length < 2;
+  btn.textContent = activo ? '⏸' : '▶';
+  btn.setAttribute('aria-pressed', String(activo));
+}
+
+function actualizarEtiquetaSatelite() {
+  const label = document.getElementById('satelite-hora');
+  if (!label) return;
+  const t = sateliteFrames[sateliteFrameIdx];
+  label.textContent = !t || t === 'default' ? 'imagen más reciente' : horaLocal(t);
+}
+
+function mostrarFrameSatelite(idx) {
+  sateliteFrameIdx = idx;
+  const actual = getOrCreateSateliteLayer(sateliteFrames[idx]);
+  sateliteLayers.forEach((layer) => layer.setOpacity(layer === actual ? 0.7 : 0));
+  actualizarEtiquetaSatelite();
+}
+
+function detenerReproduccionSatelite() {
+  if (sateliteTimer) { clearInterval(sateliteTimer); sateliteTimer = null; }
+  actualizarBotonPlaySatelite();
+}
+
+function toggleReproduccionSatelite() {
+  if (sateliteTimer) { detenerReproduccionSatelite(); return; }
+  if (sateliteFrames.length < 2) return;
+  sateliteTimer = setInterval(() => {
+    mostrarFrameSatelite((sateliteFrameIdx + 1) % sateliteFrames.length);
+  }, SATELITE_PLAY_MS);
+  actualizarBotonPlaySatelite();
+}
+
+// Retira del mapa los tileLayers persistentes del satélite y detiene la
+// reproducción; se llama al apagar la capa (renderMapa no lo hace solo
+// porque estos tileLayers viven fuera de layerGroups['satelite']).
+function limpiarSatelite() {
+  detenerReproduccionSatelite();
+  sateliteLayers.forEach((layer) => { if (map.hasLayer(layer)) map.removeLayer(layer); });
+}
+
+function paintSatelite() {
+  if (!sateliteFrames.length) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'cargando imagen satelital…';
+    return;
+  }
+  if (sateliteFrameIdx < 0 || sateliteFrameIdx >= sateliteFrames.length) sateliteFrameIdx = sateliteFrames.length - 1;
+  mostrarFrameSatelite(sateliteFrameIdx);
+  actualizarBotonPlaySatelite();
+  $('#map-meta').textContent = 'Satélite GOES-East · retraso típico 20–60 min';
+}
+
 // Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
 // una a la vez); 'sismos', 'incendios', 'alertas', 'volcanes', 'remociones',
 // 'evacuacion' y 'emergencia' son independientes y se pueden combinar con
@@ -1194,6 +1322,7 @@ const CAPAS = {
   marea:         { paint: paintMarea },
   evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
   emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
+  satelite:      { paint: paintSatelite, lazy: loadSatelite, tieneData: () => sateliteFrames.length > 0 },
 };
 // Orden de pintado (no el de declaración de CAPAS): la capa de medición se
 // pinta al final para que su texto en #map-meta prevalezca sobre las demás.
@@ -1202,8 +1331,10 @@ const CAPAS = {
 // 'emergencia' y 'evacuacion' van al final de todo: en una emergencia real
 // son lo que se busca, así que su texto y sus íconos deben quedar encima de
 // cualquier otra capa. 'evacuacion' cierra la lista porque sus vías son la
-// acción más urgente (hacia dónde ir), por sobre el resto.
-const ORDEN_PINTADO = ['volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
+// acción más urgente (hacia dónde ir), por sobre el resto. 'satelite' va
+// primero: es la capa menos accionable, su texto en #map-meta no debe pisar
+// el de ninguna otra.
+const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1287,6 +1418,10 @@ function renderMapa() {
   tileLayer = L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
     attribution: TILES_ATTR, maxZoom: 18, subdomains: 'abcd',
   }).addTo(map);
+  // Este tileLayer base se recrea en cada render (igual que layerGroups[k]
+  // más abajo se vacía con clearLayers): por eso los tileLayers del satélite
+  // NO viven en layerGroups['satelite'] sino en la variable de módulo
+  // sateliteLayers, con zIndex 5 para quedar sobre este base recreado.
 
   for (const k of ORDEN_PINTADO) {
     layerGroups[k].clearLayers();
@@ -1318,6 +1453,11 @@ function renderMapa() {
   document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
+  document.getElementById('map-note-satelite').hidden = !capasActivas.has('satelite');
+  document.getElementById('satelite-control').hidden = !capasActivas.has('satelite');
+  // Los tileLayers del satélite viven fuera de layerGroups['satelite'] (ver
+  // nota crítica arriba): al apagar la capa hay que retirarlos a mano.
+  if (!capasActivas.has('satelite')) limpiarSatelite();
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
 
@@ -2035,6 +2175,8 @@ function setupCapas() {
       map.fitBounds(bounds.pad(0.12), { maxZoom: 9 });
     });
   }
+  const playBtn = document.getElementById('satelite-play');
+  if (playBtn) playBtn.addEventListener('click', toggleReproduccionSatelite);
 }
 
 // Pantalla completa: sobre el panel entero (no solo #map) para que la
@@ -2960,11 +3102,16 @@ async function refreshAll() {
   loadAvisos();        // avisos.json (derivado propio)
   loadMarea();         // marea.json (Open-Meteo Marine, no oficial)
   loadTsunami();       // tsunami.json (PTWC + catálogo sísmico propio)
+  // El satélite no tiene JSON propio (fetch cross-origin a GIBS) y solo se
+  // recarga si la capa está activa: sin esto no habría forma de ver frames
+  // nuevos sin apagar y prender la capa a mano.
+  if (capasActivas.has('satelite')) loadSatelite();
   refreshing = false;
 }
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') refreshAll();
+  else detenerReproduccionSatelite(); // pestaña oculta: no seguir animando en segundo plano
 });
 setInterval(() => {
   if (document.visibilityState === 'visible') refreshAll();
