@@ -10,6 +10,7 @@ checks pasan, 1 si alguno falla (imprime el detalle de cada FALLA).
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
@@ -148,11 +149,20 @@ def check_json_fresco_laxo(base, archivo, maximo):
     en aviso; cualquier otro error HTTP o un JSON fresco vencido sí fallan."""
     try:
         status, _headers, body = get(f"{base}/{archivo}")
+    except urllib.error.HTTPError as e:
+        # urllib lanza HTTPError ANTES de que podamos mirar status: el 404
+        # (capa aún sin datos: satélite sin instalar o API key pendiente)
+        # debe caer en aviso, no en falla.
+        if e.code == 404:
+            print(f"AVISO {archivo}: no existe todavía (fuente externa pendiente) — no bloquea el deploy")
+        else:
+            falla(f"GET /{archivo} -> status {e.code} (esperado 200)")
+        return
     except Exception as e:
         falla(f"GET /{archivo} -> excepción: {e}")
         return
     if status == 404:
-        print(f"AVISO {archivo}: no existe todavía (satélite sin instalar) — no bloquea el deploy")
+        print(f"AVISO {archivo}: no existe todavía (fuente externa pendiente) — no bloquea el deploy")
         return
     if status != 200:
         falla(f"GET /{archivo} -> status {status} (esperado 200)")
