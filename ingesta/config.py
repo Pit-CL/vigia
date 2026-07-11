@@ -80,7 +80,8 @@ COMBUSTIBLE_PATH = Path(os.environ.get("CLIMA_COMBUSTIBLE", ROOT / "web" / "comb
 CNE_API_KEY = os.environ.get("CNE_API_KEY", "")
 CNE_API_URL = os.environ.get(
     "CNE_API_URL",
-    "http://cne.cloudapi.junar.com/api/v2/datastreams/BENCI-EN-LINEA-V2-80280/data.json/")
+    # https obligatorio: la auth_key viaja en la query string.
+    "https://cne.cloudapi.junar.com/api/v2/datastreams/BENCI-EN-LINEA-V2-80280/data.json/")
 
 ALERTAS_PATH = Path(os.environ.get("CLIMA_ALERTAS", ROOT / "web" / "alertas.json"))
 VOLCANES_PATH = Path(os.environ.get("CLIMA_VOLCANES", ROOT / "web" / "volcanes.json"))

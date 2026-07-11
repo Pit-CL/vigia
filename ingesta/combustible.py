@@ -105,8 +105,9 @@ def update(con, fetched_at: str) -> int:
         return 0
 
     data, url = sources.http_get_json(config.CNE_API_URL, {"auth_key": config.CNE_API_KEY})
-    # La auth_key va en la URL: jamás persistirla, ni en raw_payloads.
-    masked_url = url.replace(config.CNE_API_KEY, "***")
+    # La auth_key va en la query string: se descarta entera antes de persistir
+    # (un replace de la key cruda falla si urlencode la percent-codificó).
+    masked_url = url.split("?")[0]
     con.execute(
         "INSERT INTO raw_payloads(fetched_at, source, url, payload) VALUES (?,?,?,?)",
         (fetched_at, "combustible", masked_url, json.dumps(data, ensure_ascii=False)))

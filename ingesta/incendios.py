@@ -67,7 +67,8 @@ def _fetch_producto(con, fetched_at: str, producto: str, sat: str) -> tuple[list
     try:
         text, fetched_url = sources.http_get_text(url)
     except RuntimeError as err:
-        return [], str(err)
+        # La MAP_KEY va en el path de la URL y este texto termina en logs.
+        return [], str(err).replace(config.FIRMS_MAP_KEY, "***")
     if text.strip().startswith("Invalid"):
         return [], f"FIRMS rechazó la solicitud ({producto}): {text.strip()[:120]}"
     # La MAP_KEY va en el path: jamás persistirla, ni en raw_payloads.
