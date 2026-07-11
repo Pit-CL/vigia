@@ -1,4 +1,4 @@
-# Vigía — clima.cavara.cl
+# Vigía — vigia.cavara.cl
 # web:     nginx estático endurecido, solo expuesto en 127.0.0.1 (entra por
 #          Cloudflare Tunnel; nada abierto a LAN ni a internet).
 # ingesta: crond + Python stdlib, sin puertos; archiva pronósticos y

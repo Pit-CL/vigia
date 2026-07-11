@@ -36,6 +36,8 @@ ingress:
 
 Cloudflare aporta el TLS y la CDN del borde; el origen nunca queda expuesto directamente a internet.
 
+**Dominio canónico:** `vigia.cavara.cl`. El dominio anterior, `clima.cavara.cl`, sigue activo en paralelo (mismo ingress, mismo servicio) para no romper las PWAs ya instaladas — un redirect 301 no las actualiza porque el service worker y la CSP `connect-src 'self'` no siguen redirects entre orígenes. Su retiro queda para más adelante.
+
 ## Seguridad
 
 - nginx **solo** en `127.0.0.1` — el único camino de entrada es el túnel.

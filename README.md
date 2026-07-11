@@ -4,11 +4,11 @@
 
 **Clima verificable y centro de riesgos naturales para todo Chile — gratis, sin publicidad, sin tracking.**
 
-[![Ver en vivo](https://img.shields.io/badge/▞_ver_en_vivo-clima.cavara.cl-c8451f?style=for-the-badge)](https://clima.cavara.cl)
+[![Ver en vivo](https://img.shields.io/badge/▞_ver_en_vivo-vigia.cavara.cl-c8451f?style=for-the-badge)](https://vigia.cavara.cl)
 [![Licencia MIT](https://img.shields.io/badge/licencia-MIT-2456c9?style=for-the-badge)](LICENSE)
-[![PWA](https://img.shields.io/badge/PWA-instalable-0e9888?style=for-the-badge)](https://clima.cavara.cl)
+[![PWA](https://img.shields.io/badge/PWA-instalable-0e9888?style=for-the-badge)](https://vigia.cavara.cl)
 [![Python stdlib](https://img.shields.io/badge/python-solo_stdlib-3776ab?style=for-the-badge)](ingesta/)
-[![Hecho en Chile](https://img.shields.io/badge/hecho_en-Chile-d52b1e?style=for-the-badge)](https://clima.cavara.cl)
+[![Hecho en Chile](https://img.shields.io/badge/hecho_en-Chile-d52b1e?style=for-the-badge)](https://vigia.cavara.cl)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/hero-dark.png">
@@ -110,7 +110,7 @@ ingesta/ (Python stdlib, cron)              push/ (pywebpush, cron)
    web/ (PWA: Chart.js · Leaflet · vanilla JS)
         │
         ▼ sin puertos abiertos
-   Cloudflare Tunnel → clima.cavara.cl
+   Cloudflare Tunnel → vigia.cavara.cl
 ```
 
 Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingesta`** (Python stdlib + cron, produce los 16 JSON en `/data`) y **`push`** (servidor de suscripciones + cron de envío, la única dependencia externa del proyecto: `pywebpush`). Detalle completo, incluida la cadencia de cada capa, en [`docs/DEPLOY.md`](docs/DEPLOY.md).

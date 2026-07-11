@@ -4,7 +4,7 @@
 Uso:
     python3 deploy/smoke.py [url_base]
 
-Por defecto revisa https://clima.cavara.cl. Sale con código 0 si todos los
+Por defecto revisa https://vigia.cavara.cl. Sale con código 0 si todos los
 checks pasan, 1 si alguno falla (imprime el detalle de cada FALLA).
 """
 import json
@@ -153,7 +153,7 @@ def check_emergencia(base):
 
 
 def main():
-    base = (sys.argv[1] if len(sys.argv) > 1 else "https://clima.cavara.cl").rstrip("/")
+    base = (sys.argv[1] if len(sys.argv) > 1 else "https://vigia.cavara.cl").rstrip("/")
     print(f"Smoke test contra {base}\n")
 
     n_index = None

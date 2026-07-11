@@ -8,7 +8,7 @@ import urllib.request
 
 import config
 
-UA = "vigia-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
+UA = "vigia-ingesta/1.0 (proyecto open source; vigia.cavara.cl)"
 
 
 def _get(url: str, params: dict | None, retries: int, parse_json: bool):
