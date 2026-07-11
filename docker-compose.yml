@@ -43,6 +43,8 @@ services:
       CLIMA_TSUNAMI_AREAS: /data/tsunami_areas.json
       CLIMA_MAREA: /data/marea.json
       CLIMA_TSUNAMI: /data/tsunami.json
+      CLIMA_CORTES: /data/cortes.json
+      CLIMA_INCOMING: /data/incoming
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}

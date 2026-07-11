@@ -140,6 +140,39 @@ def check_json_fresco(base, archivo, maximo):
         ok(f"/{archivo}: actualizado hace {edad} (máximo {maximo})")
 
 
+def check_json_fresco_laxo(base, archivo, maximo):
+    """Como check_json_fresco pero tolerante con cortes.json: depende de un
+    satélite fuera del VPS (ver satelite/README.md) que puede no estar
+    instalado todavía o llevar rato caído — eso es un aviso, no una falla
+    del deploy. `stale: true` (o el archivo directamente ausente, 404) caen
+    en aviso; cualquier otro error HTTP o un JSON fresco vencido sí fallan."""
+    try:
+        status, _headers, body = get(f"{base}/{archivo}")
+    except Exception as e:
+        falla(f"GET /{archivo} -> excepción: {e}")
+        return
+    if status == 404:
+        print(f"AVISO {archivo}: no existe todavía (satélite sin instalar) — no bloquea el deploy")
+        return
+    if status != 200:
+        falla(f"GET /{archivo} -> status {status} (esperado 200)")
+        return
+    try:
+        data = json.loads(body)
+        updated = datetime.strptime(data["updated"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc)
+    except Exception as e:
+        falla(f"/{archivo}: no se pudo parsear el campo 'updated' ({e})")
+        return
+    edad = datetime.now(timezone.utc) - updated
+    if edad > maximo:
+        if data.get("stale"):
+            print(f"AVISO {archivo}: stale (satélite sin refrescar) hace {edad} (máximo {maximo}) — no bloquea el deploy")
+        else:
+            falla(f"/{archivo}: 'updated' tiene {edad} de antigüedad (máximo {maximo})")
+    else:
+        ok(f"/{archivo}: actualizado hace {edad} (máximo {maximo})")
+
+
 def check_emergencia(base):
     try:
         status, _headers, _body = get(base + "/emergencia.html")
@@ -185,6 +218,7 @@ def main():
     check_sw(base, n_index)
     check_json_fresco(base, "estaciones.json", timedelta(hours=4))
     check_json_fresco(base, "sismos.json", timedelta(hours=2))
+    check_json_fresco_laxo(base, "cortes.json", timedelta(hours=24))
     check_emergencia(base)
 
     print()

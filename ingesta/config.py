@@ -93,3 +93,11 @@ TSUNAMI_AREAS_PATH = Path(os.environ.get("CLIMA_TSUNAMI_AREAS", ROOT / "web" / "
 
 MAREA_PATH = Path(os.environ.get("CLIMA_MAREA", ROOT / "web" / "marea.json"))
 TSUNAMI_PATH = Path(os.environ.get("CLIMA_TSUNAMI", ROOT / "web" / "tsunami.json"))
+
+# ── Satélite (omen): fuentes que bloquean IPs de datacenter ─────
+# INCOMING_DIR es donde satelite/fetch_cl.py sube los JSON crudos por scp
+# (sec.json, farmacias_raw.json); ingesta/cortes.py solo los lee, nunca
+# fetchea la red (ver satelite/README.md).
+INCOMING_DIR = Path(os.environ.get("CLIMA_INCOMING", ROOT / "data" / "incoming"))
+CORTES_PATH = Path(os.environ.get("CLIMA_CORTES", ROOT / "web" / "cortes.json"))
+COMUNAS_PATH = ROOT / "web" / "comunas.json"  # catastro INE versionado, no lo genera la ingesta
