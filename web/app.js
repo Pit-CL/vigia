@@ -241,7 +241,7 @@ let avisosData = null;   // avisos meteo derivados del pronóstico propio (NO of
 let mareaData = null;    // marea, oleaje y temperatura del mar por punto costero (Open-Meteo Marine, no oficial)
 let tsunamiData = null;  // estado de amenaza de tsunami (PTWC + catálogo sísmico propio)
 let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
-let emergenciaCargando = false;
+let emergenciaPromise = null; // promesa del fetch en vuelo, para que llamadas concurrentes la esperen en vez de perderla
 let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let remocionesData = null; // catastro de remociones en masa (SENAPRED), capa 'remociones', carga lazy propia
@@ -1142,17 +1142,18 @@ async function loadTsunami() {
 // tsunami_areas.json (capa evacuacion) se cargan junto en el mismo
 // Promise.all: distinta capa, mismo gatillo.
 async function loadEmergencia() {
-  if (emergenciaData || emergenciaCargando) return;
-  emergenciaCargando = true;
-  const [emg, vias, areas] = await Promise.all([
+  if (emergenciaData) return;
+  if (emergenciaPromise) { await emergenciaPromise; return; }
+  emergenciaPromise = Promise.all([
     fetch('emergencia.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch('tsunami_vias.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch('tsunami_areas.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
+  const [emg, vias, areas] = await emergenciaPromise;
   if (emg) emergenciaData = emg;
   tsunamiViasData = vias;
   tsunamiAreasData = areas;
-  emergenciaCargando = false;
+  emergenciaPromise = null;
   if (capasActivas.has('emergencia') || capasActivas.has('evacuacion')) renderMapa();
 }
 
@@ -2271,19 +2272,22 @@ function renderRiesgoEventos() {
 
 function renderRiskBadge(c) {
   const badge = $('#risk-badge');
-  let texto = null, aria = null;
+  let texto = null, aria = null, capa = null;
   if (c.rojas > 0) {
     texto = `⚠ ${c.rojas} alerta${c.rojas > 1 ? 's' : ''} roja${c.rojas > 1 ? 's' : ''}`;
     aria = `${c.rojas} alerta(s) roja(s) de SENAPRED vigentes`;
+    capa = 'alertas';
   } else if (c.volPeor === 'naranja' || c.volPeor === 'roja') {
     texto = `🌋 volcán en ${c.volPeor}`;
     aria = `Volcán en alerta técnica ${c.volPeor}`;
+    capa = 'volcanes';
   } else if (c.sismoMax6) {
     texto = `〰️ sismo M${c.sismoMax6.mag} hoy`;
     aria = `Sismo de magnitud ${c.sismoMax6.mag} en las últimas 24 horas`;
+    capa = 'sismos';
   }
   badge.hidden = !texto;
-  if (texto) { badge.textContent = texto; badge.setAttribute('aria-label', aria); }
+  if (texto) { badge.textContent = texto; badge.setAttribute('aria-label', aria); badge.dataset.capa = capa; }
 }
 
 function renderRiesgos() {
@@ -2306,9 +2310,10 @@ function renderRiesgos() {
 
   renderRiesgoTiles(riesgoCounts());
   renderRiesgoEventos();
-  // El badge es siempre nacional: una alerta roja en otra región igual merece
-  // el aviso, aunque el panel esté filtrado a "cerca de <ciudad>".
-  renderRiskBadge(riesgoCounts('chile'));
+  // El badge respeta el ámbito elegido por el usuario: si el panel está
+  // filtrado a "cerca de <ciudad>", el badge no debe anunciar una alerta de
+  // otra región que después no aparezca al hacer clic en él.
+  renderRiskBadge(riesgoCounts());
 }
 
 function actualizarLabelCerca() {
@@ -2324,29 +2329,42 @@ function setupRiesgos() {
     });
   });
   $('#risk-badge').addEventListener('click', () => {
-    document.querySelector('.panel-riesgos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const capa = $('#risk-badge').dataset.capa;
+    if (capa && !capasActivas.has(capa)) toggleCapa(capa);
+    document.querySelector('#map').closest('.panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
-  document.querySelectorAll('.rf-btn').forEach((btn) => {
+  document.querySelectorAll('#riesgo-filtro-ambito .rf-btn').forEach((btn) => {
     btn.setAttribute('aria-pressed', String(btn.dataset.ambito === riesgoAmbito));
     btn.addEventListener('click', () => {
       riesgoAmbito = btn.dataset.ambito;
       try { localStorage.setItem('sinoptica.riesgoAmbito', riesgoAmbito); } catch (_) { /* opcional */ }
-      document.querySelectorAll('.rf-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      document.querySelectorAll('#riesgo-filtro-ambito .rf-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
       renderRiesgos();
     });
   });
   actualizarLabelCerca();
 }
 
-// Punto de encuentro ante tsunami más cercano a la posición real del usuario.
-// La geolocalización se pide solo con este gesto explícito (nunca automática)
-// y se usa una única vez para calcular la distancia: no se guarda en
-// localStorage ni en ninguna otra parte, por privacidad.
+// Punto de encuentro más cercano a la posición real del usuario, ante tsunami
+// o ante erupción volcánica según el tipo elegido en el selector. Siempre se
+// muestra el punto más cercano con su distancia (nunca se oculta por estar
+// lejos): lejos solo agrega una nota aclaratoria. La geolocalización se pide
+// solo con este gesto explícito (nunca automática) y se usa una única vez
+// para calcular la distancia: no se guarda en localStorage ni en ninguna otra
+// parte, por privacidad.
 function setupPuntoCercano() {
   const btn = $('#btn-punto-cercano');
   const out = $('#punto-cercano-resultado');
   if (!btn || !out) return;
+  let tipo = 'tsunami';
+
+  document.querySelectorAll('#punto-tipo-filtro .rf-btn').forEach((b) => {
+    b.addEventListener('click', () => {
+      tipo = b.dataset.tipo;
+      document.querySelectorAll('#punto-tipo-filtro .rf-btn').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    });
+  });
 
   btn.addEventListener('click', () => {
     out.hidden = false;
@@ -2363,7 +2381,8 @@ function setupPuntoCercano() {
           out.textContent = 'Cargando puntos de encuentro…';
           await loadEmergencia();
         }
-        const puntos = (emergenciaData && emergenciaData.categorias && emergenciaData.categorias.encuentro_tsunami) || [];
+        const categoria = tipo === 'volcan' ? 'encuentro_volcan' : 'encuentro_tsunami';
+        const puntos = (emergenciaData && emergenciaData.categorias && emergenciaData.categorias[categoria]) || [];
         if (!puntos.length) {
           out.textContent = 'No hay datos de puntos de encuentro disponibles ahora mismo.';
           return;
@@ -2374,13 +2393,18 @@ function setupPuntoCercano() {
           if (d < dist) { dist = d; cercano = p; }
         }
         out.innerHTML = '';
-        if (dist > 30) {
-          out.textContent = 'Estás lejos de la costa: sin riesgo directo de tsunami en tu ubicación.';
-          return;
-        }
         const texto = document.createElement('span');
         texto.textContent = `Tu punto de encuentro más cercano: ${cercano.n}${cercano.d ? ' · ' + cercano.d : ''} — a ${dist.toFixed(1)} km. `;
         out.appendChild(texto);
+        if (tipo === 'tsunami' && dist > 30) {
+          const nota = document.createElement('p');
+          nota.textContent = `Estás a ~${Math.round(dist)} km de la costa: sin riesgo directo de tsunami en tu ubicación.`;
+          out.appendChild(nota);
+        } else if (tipo === 'volcan' && dist > 100) {
+          const nota = document.createElement('p');
+          nota.textContent = 'No estás cerca de una zona con rutas de evacuación volcánica.';
+          out.appendChild(nota);
+        }
         const verBtn = document.createElement('button');
         verBtn.className = 'chip';
         verBtn.textContent = 'ver en el mapa';
