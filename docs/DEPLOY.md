@@ -63,11 +63,20 @@ Definición en [`deploy/crontab`](../deploy/crontab) y [`push/crontab`](../push/
 
 ## Actualizar
 
-Sube los archivos al servidor y reinicia el contenedor web:
+```bash
+bash deploy/deploy.sh          # despliega origin/main
+bash deploy/deploy.sh <ref>    # despliega un ref específico (rama, tag, commit)
+```
+
+El script hace, en orden: `git archive` del ref a un export temporal → verifica que el export tenga `docker-compose.yml`, `deploy/nginx.conf`, `web/app.js` y que `index.html`/`sw.js` compartan el mismo `?v=N` → `rsync --delete` del export a `omen:/opt/clima/` → `docker compose up -d && docker compose restart web` → smoke test (ver abajo). Si cualquier verificación o el smoke test falla, el script sale con código 1 y no queda en un estado a medias silencioso.
+
+> **Importante:** si cambiaste `app.js` o `app.css`, sube el sufijo `?v=N` en `index.html` (y en `sw.js`). Cloudflare cachea JS/CSS por extensión; sin el bump seguiría sirviendo la versión anterior. Los JSON de datos y `sw.js` se sirven con `no-cache` para evitar justamente eso. El propio `deploy.sh` corta el deploy si detecta esta desincronización.
+
+Referencia — el rsync manual que hace `deploy.sh` por debajo (útil si necesitas subir sin el script):
 
 ```bash
 rsync -a --delete \
-  --exclude data/ --exclude .git/ --exclude .env \
+  --exclude data/ --exclude .git/ --exclude .env --exclude .claude/ \
   --exclude 'web/status.json' --exclude 'web/verificacion.json' --exclude 'web/estaciones.json' \
   --exclude 'web/aire.json' --exclude 'web/bias.json' --exclude 'web/avisos.json' \
   --exclude 'web/sismos.json' --exclude 'web/incendios.json' --exclude 'web/alertas.json' \
@@ -78,9 +87,16 @@ rsync -a --delete \
 docker compose restart web
 ```
 
-> **Importante:** si cambiaste `app.js` o `app.css`, sube el sufijo `?v=N` en `index.html` (y en `sw.js`). Cloudflare cachea JS/CSS por extensión; sin el bump seguiría sirviendo la versión anterior. Los JSON de datos y `sw.js` se sirven con `no-cache` para evitar justamente eso.
-
 > Los dieciséis JSON de arriba se excluyen porque son **generados**: en dev la ingesta los escribe en `web/` (defaults de `ingesta/config.py`); en prod van a `/data` (envs del compose) y nginx los sirve por `alias`. Antes de correr el `rsync --delete`, verifica que la ruta de destino sea la correcta — `--delete` borra en el servidor cualquier archivo que no exista en el origen.
+
+### Smoke test
+
+Dos scripts en `deploy/`, pensados para atrapar justo los bugs que un deploy manual dejó pasar (mapa en blanco por CSP incompleta, geolocalización bloqueada por Permissions-Policy, capas restauradas vacías, `?v=N` desincronizado):
+
+- **`smoke.py`** — solo librería estándar de Python, puede correr en el propio servidor. Verifica que `index.html`/`sw.js` compartan versión, que la CSP y el Permissions-Policy tengan los hosts/permisos correctos, que `sismos.json`/`estaciones.json` estén frescos y que `emergencia.html` responda.
+- **`smoke_browser.py`** — requiere Playwright, corre en la máquina de desarrollo (`~/.venvs/playwright/bin/python`). Abre un Chromium headless real: recarga la página bajo el service worker y confirma que los tiles del mapa cargan, activa la capa satelital y espera sus tiles, simula un permiso de geolocalización y prueba el botón de punto de encuentro más cercano, y falla si aparece cualquier error de JavaScript.
+
+`deploy.sh` corre ambos automáticamente al final; `smoke_browser.py` se omite si no encuentra el intérprete de Playwright.
 
 ## Verificar estado
 

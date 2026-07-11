@@ -1,0 +1,74 @@
+#!/bin/bash
+# Deploy versionado de Vigía a producción (omen:/opt/clima), con smoke test
+# al final. Reemplaza el rsync manual documentado en docs/DEPLOY.md.
+#
+# Uso: bash deploy/deploy.sh [ref]   (ref por defecto: origin/main)
+set -e
+
+REF="${1:-origin/main}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SERVIDOR="omen"
+DESTINO="/opt/clima/"
+
+EXPORT_DIR="$(mktemp -d)"
+trap 'rm -rf "$EXPORT_DIR"' EXIT
+
+echo "==> Exportando $REF..."
+git -C "$REPO_ROOT" archive "$REF" | tar -x -C "$EXPORT_DIR"
+
+echo "==> Verificando el export..."
+for f in docker-compose.yml deploy/nginx.conf web/app.js; do
+  if [ ! -f "$EXPORT_DIR/$f" ]; then
+    echo "ERROR: falta $f en el export de $REF" >&2
+    exit 1
+  fi
+done
+
+N_INDEX="$(grep -oE 'app\.js\?v=[0-9]+' "$EXPORT_DIR/web/index.html" | head -1 | grep -oE '[0-9]+$')"
+if [ -z "$N_INDEX" ]; then
+  echo "ERROR: no se encontró app.js?v=N en web/index.html" >&2
+  exit 1
+fi
+N_SW="$(grep -oE 'app\.js\?v=[0-9]+' "$EXPORT_DIR/web/sw.js" | head -1 | grep -oE '[0-9]+$')"
+if [ "$N_INDEX" != "$N_SW" ]; then
+  echo "ERROR: index.html usa v=$N_INDEX pero el array SHELL de sw.js usa v=$N_SW — cache-busting desincronizado" >&2
+  exit 1
+fi
+echo "    versión v=$N_INDEX consistente entre index.html y sw.js"
+
+echo "==> Subiendo a $SERVIDOR:$DESTINO..."
+rsync -a --delete \
+  --exclude data/ --exclude .git/ --exclude .env --exclude .claude/ \
+  --exclude 'web/status.json' --exclude 'web/verificacion.json' --exclude 'web/estaciones.json' \
+  --exclude 'web/aire.json' --exclude 'web/bias.json' --exclude 'web/avisos.json' \
+  --exclude 'web/sismos.json' --exclude 'web/incendios.json' --exclude 'web/alertas.json' \
+  --exclude 'web/volcanes.json' --exclude 'web/emergencia.json' --exclude 'web/remociones.json' \
+  --exclude 'web/tsunami_vias.json' --exclude 'web/tsunami_areas.json' \
+  --exclude 'web/marea.json' --exclude 'web/tsunami.json' \
+  "$EXPORT_DIR/" "$SERVIDOR:$DESTINO"
+
+echo "==> Reiniciando contenedores..."
+ssh "$SERVIDOR" "cd $DESTINO && docker compose up -d && docker compose restart web"
+
+echo "==> Esperando 3 s antes del smoke test..."
+sleep 3
+
+echo "==> Corriendo smoke test (stdlib)..."
+if ! python3 "$REPO_ROOT/deploy/smoke.py"; then
+  echo "DEPLOY CON FALLAS EN SMOKE TEST" >&2
+  exit 1
+fi
+
+PLAYWRIGHT_PY="$HOME/.venvs/playwright/bin/python"
+if [ -x "$PLAYWRIGHT_PY" ]; then
+  echo "==> Corriendo smoke test de navegador (Playwright)..."
+  if ! "$PLAYWRIGHT_PY" "$REPO_ROOT/deploy/smoke_browser.py"; then
+    echo "DEPLOY CON FALLAS EN SMOKE TEST" >&2
+    exit 1
+  fi
+else
+  echo "    Playwright no disponible en $PLAYWRIGHT_PY — se omite el smoke test de navegador"
+fi
+
+echo "==> Deploy completo y verificado."
