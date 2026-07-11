@@ -1,18 +1,22 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v30';
+const SHELL_CACHE = 'vigia-shell-v31';
 const DATA_CACHE = 'vigia-data-v21';
 // Tiles del mapa base (CARTO): caché propia con límite LRU aproximado, para
 // que el mapa siga siendo usable sin conexión (ver fetch handler abajo).
 const TILES_CACHE = 'vigia-tiles-v1';
 const TILES_MAX = 400;
 const TILES_TRIM = 50;
+// Tiles fijados a mano por "Preparar mi zona" (app.js): sin límite LRU, no se
+// purga en activate. El usuario decide qué guarda; "Preparar de nuevo" la
+// borra y repuebla explícitamente (mensaje pin-clear más abajo).
+const PACK_CACHE = 'vigia-tiles-pack-v1';
 const SHELL = [
   './',
   'index.html',
   'emergencia.html',
   'theme.js?v=1',
-  'app.css?v=58',
-  'app.js?v=58',
+  'app.css?v=59',
+  'app.js?v=59',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -33,9 +37,47 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE && k !== TILES_CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE && k !== TILES_CACHE && k !== PACK_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+// Mensajes desde app.js para "Preparar mi zona": fijar tiles a mano en
+// PACK_CACHE (sin límite LRU) y avisar progreso a la pestaña que preguntó.
+self.addEventListener('message', (e) => {
+  const data = e.data || {};
+
+  if (data.type === 'pin-clear') {
+    e.waitUntil(
+      caches.delete(PACK_CACHE)
+        .then(() => caches.open(PACK_CACHE))
+        .then(() => { if (e.source) e.source.postMessage({ type: 'pin-cleared' }); })
+    );
+    return;
+  }
+
+  if (data.type === 'pin-tiles') {
+    const urls = Array.isArray(data.urls) ? data.urls : [];
+    const client = e.source;
+    const LOTE = 8;
+    e.waitUntil((async () => {
+      const cache = await caches.open(PACK_CACHE);
+      const total = urls.length;
+      let done = 0;
+      let fallidos = 0;
+      for (let i = 0; i < urls.length; i += LOTE) {
+        const lote = urls.slice(i, i + LOTE);
+        await Promise.all(lote.map((url) =>
+          fetch(url)
+            .then((res) => { if (res.ok) return cache.put(url, res); fallidos++; })
+            .catch(() => { fallidos++; })
+        ));
+        done += lote.length;
+        if (client) client.postMessage({ type: 'pin-progress', done, total });
+      }
+      if (client) client.postMessage({ type: 'pin-done', ok: total - fallidos, fallidos });
+    })());
+  }
 });
 
 // LRU aproximado: keys() conserva el orden de inserción razonablemente, así
@@ -63,13 +105,17 @@ self.addEventListener('fetch', (e) => {
   // tile roto, aceptable en modo offline (mejor que romper todo el mapa).
   if (url.hostname.endsWith('.basemaps.cartocdn.com')) {
     e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(TILES_CACHE).then((c) => { c.put(e.request, copy); trimTilesCache(c); });
-          return res;
-        })
-        .catch(() => caches.match(e.request))
+      caches.open(PACK_CACHE).then((pack) => pack.match(e.request)).then((pinned) => {
+        // Tile fijado a mano por "Preparar mi zona": cache-first, nunca expira.
+        if (pinned) return pinned;
+        return fetch(e.request)
+          .then((res) => {
+            const copy = res.clone();
+            caches.open(TILES_CACHE).then((c) => { c.put(e.request, copy); trimTilesCache(c); });
+            return res;
+          })
+          .catch(() => caches.match(e.request));
+      })
     );
     return;
   }
@@ -81,7 +127,7 @@ self.addEventListener('fetch', (e) => {
 
   // APIs de datos: red primero, respaldo en caché (último pronóstico visto offline).
   const isData = isOpenMeteo ||
-    /\/(status|verificacion|estaciones|aire|bias|avisos|sismos|incendios|alertas|volcanes|emergencia|remociones|tsunami_vias|tsunami_areas|marea|tsunami)\.json$/.test(url.pathname);
+    /\/(status|verificacion|estaciones|aire|bias|avisos|sismos|incendios|alertas|volcanes|emergencia|remociones|tsunami_vias|tsunami_areas|marea|tsunami|comunas)\.json$/.test(url.pathname);
   if (isData) {
     e.respondWith(
       fetch(e.request)

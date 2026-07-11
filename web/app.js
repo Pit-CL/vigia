@@ -3089,6 +3089,151 @@ async function setupPush() {
     }
   });
 }
+
+// ── "Preparar mi zona": pack offline de emergencia + tiles ─────
+// Los 4 JSON de emergencia (nacionales), comunas, y los "vivos" (sismos,
+// alertas, avisos, estaciones, status) pasan por fetch normal (sin
+// cache:'no-store') para que el fetch handler de sw.js los persista en
+// DATA_CACHE tal como ya hace con el resto de la app (ver sw.js:129-142;
+// comunas.json se agregó al regex isData ahí mismo). Los tiles van aparte,
+// fijados a mano en PACK_CACHE vía postMessage (sin límite LRU).
+const PACK_JSON = [
+  'emergencia.json', 'tsunami_vias.json', 'tsunami_areas.json', 'remociones.json',
+  'comunas.json', 'sismos.json', 'alertas.json', 'avisos.json', 'estaciones.json', 'status.json',
+];
+const PACK_ZOOMS = [11, 12, 13, 14];
+// 0.15° (el radio "natural" para cubrir una comuna) da ~370 tiles en 4 zooms:
+// muy por sobre el presupuesto. 0.08° da ~110, dentro del rango buscado
+// (60-120) y ya cubre holgadamente el radio urbano de una comuna.
+const PACK_RADIO_DEG = 0.08;
+const PACK_MAX_DIAS = 30;
+
+function lonATileX(lon, z) { return Math.floor(((lon + 180) / 360) * 2 ** z); }
+function latATileY(lat, z) {
+  const rad = (lat * Math.PI) / 180;
+  return Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * 2 ** z);
+}
+// Misma fórmula que Leaflet (_getSubdomain) para que la URL fijada coincida
+// exacto con la que el tileLayer en vivo va a pedir — si no coinciden, el
+// cache-first de PACK_CACHE en sw.js nunca hace match y el pack no sirve de nada.
+function tileSubdomain(x, y) {
+  const subs = 'abcd';
+  return subs[Math.abs(x + y) % subs.length];
+}
+
+function packTileUrls(lat, lon) {
+  const tmpl = TILES[isDark() ? 'dark' : 'light'];
+  const r = (window.devicePixelRatio || 1) > 1 ? '@2x' : ''; // igual que b.retina en Leaflet
+  const urls = [];
+  for (const z of PACK_ZOOMS) {
+    const [x1, x2] = [lonATileX(lon - PACK_RADIO_DEG, z), lonATileX(lon + PACK_RADIO_DEG, z)].sort((a, b) => a - b);
+    const [y1, y2] = [latATileY(lat + PACK_RADIO_DEG, z), latATileY(lat - PACK_RADIO_DEG, z)].sort((a, b) => a - b);
+    for (let x = x1; x <= x2; x++) {
+      for (let y = y1; y <= y2; y++) {
+        urls.push(tmpl.replace('{s}', tileSubdomain(x, y)).replace('{z}', z).replace('{x}', x).replace('{y}', y).replace('{r}', r));
+      }
+    }
+  }
+  return urls;
+}
+
+function savedPack() {
+  try {
+    const raw = localStorage.getItem('sinoptica.pack');
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && typeof p.fecha === 'string' && typeof p.name === 'string') return p;
+    }
+  } catch (_) { /* localStorage puede no estar disponible */ }
+  return null;
+}
+
+function pintarPackStatus() {
+  const btn = $('#pack-btn');
+  const status = $('#pack-status');
+  if (!btn || !status) return;
+  const pack = savedPack();
+  if (!pack) {
+    status.hidden = true;
+    btn.textContent = '📦 Preparar mi zona (offline)';
+    return;
+  }
+  const dias = Math.floor((Date.now() - new Date(pack.fecha).getTime()) / 86400000);
+  status.hidden = false;
+  status.textContent = dias > PACK_MAX_DIAS
+    ? `Tu zona (${pack.name}) se preparó hace ${dias} días — prepárala de nuevo.`
+    : `Tu zona (${pack.name}) quedó lista para usarse sin conexión (preparada el ${new Date(pack.fecha).toLocaleDateString('es-CL')}). El pronóstico offline es el último visto; los datos en vivo requieren conexión.`;
+  btn.textContent = '📦 Preparar de nuevo';
+}
+
+async function prepararZona() {
+  const btn = $('#pack-btn');
+  const status = $('#pack-status');
+  if (!btn || !status || !('serviceWorker' in navigator)) return;
+  let reg;
+  try {
+    reg = await navigator.serviceWorker.ready;
+  } catch (_) {
+    return;
+  }
+  if (!reg.active) return;
+
+  btn.disabled = true;
+  status.hidden = false;
+  status.textContent = 'Preparando tu zona…';
+
+  if (savedPack()) {
+    // "Preparar de nuevo": espera la confirmación del borrado antes de
+    // repoblar, para no repoblar en la caché que está por desaparecer.
+    await new Promise((resolve) => {
+      const onClear = (e) => {
+        if (e.data && e.data.type === 'pin-cleared') {
+          navigator.serviceWorker.removeEventListener('message', onClear);
+          resolve();
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', onClear);
+      reg.active.postMessage({ type: 'pin-clear' });
+      setTimeout(resolve, 3000); // no bloquear indefinidamente si el SW no respondió
+    });
+  }
+
+  await Promise.allSettled(PACK_JSON.map((f) => fetch(f)));
+
+  const urls = packTileUrls(place.lat, place.lon);
+  await new Promise((resolve) => {
+    const onMsg = (e) => {
+      const d = e.data || {};
+      if (d.type === 'pin-progress') {
+        status.textContent = `Preparando tu zona… ${d.done}/${d.total}`;
+      } else if (d.type === 'pin-done') {
+        navigator.serviceWorker.removeEventListener('message', onMsg);
+        try {
+          localStorage.setItem('sinoptica.pack', JSON.stringify({ fecha: new Date().toISOString(), name: place.name }));
+        } catch (_) { /* opcional */ }
+        pintarPackStatus();
+        if (d.fallidos > 0) status.textContent += ` (${d.fallidos} tiles no se pudieron guardar)`;
+        resolve();
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onMsg);
+    reg.active.postMessage({ type: 'pin-tiles', urls });
+  });
+
+  btn.disabled = false;
+}
+
+function setupPack() {
+  const btn = $('#pack-btn');
+  if (!btn || !('serviceWorker' in navigator)) { if (btn) btn.hidden = true; return; }
+  pintarPackStatus();
+  btn.addEventListener('click', () => {
+    prepararZona().catch(() => { btn.disabled = false; });
+  });
+}
+
+setupPack();
+
 renderChips();
 loadAll().catch(showError);
 loadArchiveStatus();
