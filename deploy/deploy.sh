@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy versionado de Vigía a producción (omen:/opt/clima), con smoke test
+# Deploy versionado de Vigía a producción (erp-rollitos:/opt/vigia), con smoke test
 # al final. Reemplaza el rsync manual documentado en docs/DEPLOY.md.
 #
 # Uso: bash deploy/deploy.sh [ref]   (ref por defecto: origin/main)
@@ -8,8 +8,8 @@ set -e
 REF="${1:-origin/main}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVIDOR="omen"
-DESTINO="/opt/clima/"
+SERVIDOR="erp-rollitos"
+DESTINO="/opt/vigia/"
 
 EXPORT_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPORT_DIR"' EXIT

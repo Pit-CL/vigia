@@ -38,6 +38,8 @@ Cloudflare aporta el TLS y la CDN del borde; el origen nunca queda expuesto dire
 
 **Dominio canónico:** `vigia.cavara.cl`. El dominio anterior, `clima.cavara.cl`, sigue activo en paralelo (mismo ingress, mismo servicio) para no romper las PWAs ya instaladas — un redirect 301 no las actualiza porque el service worker y la CSP `connect-src 'self'` no siguen redirects entre orígenes. Su retiro queda para más adelante.
 
+**Servidor:** prod corre en el VPS compartido `erp-rollitos` (Vultr, `/opt/vigia`), no en omen (retirado tras el cutover). nginx escucha en `127.0.0.1:${VIGIA_HTTP_PORT:-8100}` — el VPS fija `VIGIA_HTTP_PORT=8200` en su `.env` porque el 8100 ya lo usa `modulo.cavara.cl`. El Cloudflare Tunnel del VPS es compartido con el ERP: el mismo túnel enruta `vigia.cavara.cl`/`clima.cavara.cl` (a `http://127.0.0.1:8200`) además de `erp.cavara.cl` y `modulo.cavara.cl`; su configuración vive en `/etc/cloudflared/config.yml` del VPS, no en este repo.
+
 ## Seguridad
 
 - nginx **solo** en `127.0.0.1` — el único camino de entrada es el túnel.
@@ -70,7 +72,7 @@ bash deploy/deploy.sh          # despliega origin/main
 bash deploy/deploy.sh <ref>    # despliega un ref específico (rama, tag, commit)
 ```
 
-El script hace, en orden: `git archive` del ref a un export temporal → verifica que el export tenga `docker-compose.yml`, `deploy/nginx.conf`, `web/app.js` y que `index.html`/`sw.js` compartan el mismo `?v=N` → `rsync --delete` del export a `omen:/opt/clima/` → `docker compose up -d && docker compose restart web` → smoke test (ver abajo). Si cualquier verificación o el smoke test falla, el script sale con código 1 y no queda en un estado a medias silencioso.
+El script hace, en orden: `git archive` del ref a un export temporal → verifica que el export tenga `docker-compose.yml`, `deploy/nginx.conf`, `web/app.js` y que `index.html`/`sw.js` compartan el mismo `?v=N` → `rsync --delete` del export a `erp-rollitos:/opt/vigia/` → `docker compose up -d && docker compose restart web` → smoke test (ver abajo). Si cualquier verificación o el smoke test falla, el script sale con código 1 y no queda en un estado a medias silencioso.
 
 > **Importante:** si cambiaste `app.js` o `app.css`, sube el sufijo `?v=N` en `index.html` (y en `sw.js`). Cloudflare cachea JS/CSS por extensión; sin el bump seguiría sirviendo la versión anterior. Los JSON de datos y `sw.js` se sirven con `no-cache` para evitar justamente eso. El propio `deploy.sh` corta el deploy si detecta esta desincronización.
 
