@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 import alertas
 import avisos
 import config
+import cortes
 import db
 import emergencia
 import incendios
@@ -118,8 +119,10 @@ def main() -> int:
     ap.add_argument("--volcanes", action="store_true", help="alerta técnica volcánica (SERNAGEOMIN RNVV)")
     ap.add_argument("--marea", action="store_true", help="marea, oleaje y temperatura del mar (Open-Meteo Marine)")
     ap.add_argument("--tsunami", action="store_true", help="estado de amenaza de tsunami (PTWC + catálogo sísmico)")
+    ap.add_argument("--cortes", action="store_true",
+                     help="cortes de luz SEC (best effort, vía satélite en omen — solo lee incoming/, sin red)")
     ap.add_argument("--hazards", action="store_true",
-                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami)")
+                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + cortes)")
     ap.add_argument("--emergencia", action="store_true",
                      help="infraestructura de emergencia comunitaria (SENAPRED, cuasi-estático semanal)")
     ap.add_argument("--remociones", action="store_true",
@@ -130,13 +133,15 @@ def main() -> int:
     do_obs = args.obs or args.all or not (
         args.forecasts or args.all or args.sismos or args.incendios
         or args.alertas or args.volcanes or args.hazards or args.emergencia
-        or args.remociones or args.avisos or args.marea or args.tsunami)
+        or args.remociones or args.avisos or args.marea or args.tsunami
+        or args.cortes)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
     do_volcanes = args.volcanes or args.hazards or args.all
     do_marea = args.marea or args.all
     do_tsunami = args.tsunami or args.hazards or args.all
+    do_cortes = args.cortes or args.hazards or args.all
     do_emergencia = args.emergencia or args.all
     do_remociones = args.remociones or args.emergencia or args.all
     # Avisos son baratos (SQL local + mediana, sin red): se recalculan en toda
@@ -171,6 +176,8 @@ def main() -> int:
         # Depende de la tabla `quakes` (sismos.py): si corre solo, sin
         # --sismos en esta misma invocación, usa la tabla de una corrida previa.
         ok &= step(con, run_at, "tsunami", lambda: tsunami.update(con, run_at))
+    if do_cortes:
+        ok &= step(con, run_at, "cortes", lambda: cortes.update(con, run_at))
     if do_emergencia:
         ok &= step(con, run_at, "emergencia", lambda: emergencia.update(con, run_at))
     if do_remociones:

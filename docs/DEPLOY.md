@@ -63,9 +63,26 @@ Cloudflare aporta el TLS y la CDN del borde; el origen nunca queda expuesto dire
 | Marea, oleaje y temperatura del mar (Open-Meteo Marine) | 4 veces al día | `marea.json` |
 | Infraestructura de emergencia (Chile Preparado) | 1 vez por semana (cuasi-estática) | `emergencia.json`, `tsunami_vias.json`, `tsunami_areas.json` |
 | Catastro de remociones en masa (SENAPRED) | 1 vez por semana (cuasi-estática) | `remociones.json` |
+| Cortes de luz SEC (best effort, requiere satélite en omen) | cada 15 min | `cortes.json` |
 | Envío de Web Push (contenedor `push`) | cada 5 min | notifica sismos/alertas/volcanes/tsunami nuevos a los suscriptores |
 
 Definición en [`deploy/crontab`](../deploy/crontab) y [`push/crontab`](../push/crontab).
+
+## Satélite omen (fuentes que bloquean IPs de datacenter)
+
+SEC (cortes de luz) y MINSAL (farmacias de turno) responden solo desde IPs
+residenciales chilenas: fallan desde este VPS (Hostinger, datacenter) y
+funcionan desde `omen` (verificado). `ingesta/cortes.py` en el VPS **no
+fetchea la red**: solo lee `data/incoming/sec.json`, subido por scp desde
+`satelite/fetch_cl.py` corriendo en cron en omen. Instalación completa,
+generación de la clave ssh dedicada (restringida por `command=` a solo scp
+sobre `incoming/`) y la crontab de omen: [`satelite/README.md`](../satelite/README.md).
+
+Degradación aceptada: si omen cae, `cortes.json` deja de refrescarse y
+queda marcado `"stale": true` con el último dato bueno — el resto de Vigía
+no se afecta. `deploy/smoke.py` avisa (no bloquea el deploy) si `cortes.json`
+lleva más de 24 h sin actualizarse o si el archivo todavía no existe (antes
+de instalar el satélite por primera vez).
 
 ## Actualizar
 

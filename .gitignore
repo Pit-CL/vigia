@@ -29,6 +29,7 @@ web/tsunami_vias.json
 web/tsunami_areas.json
 web/marea.json
 web/tsunami.json
+web/cortes.json
 
 # Secretos: jamás al repo
 .env

@@ -209,6 +209,7 @@ const INFO = {
 <p><strong>Volcanes (SERNAGEOMIN).</strong> El Servicio Nacional de Geología y Minería opera la Red Nacional de Vigilancia Volcánica (RNVV) y publica el semáforo técnico de cada volcán activo: verde, amarilla, naranja o roja.</p>
 <p><strong>Incendios (NASA FIRMS).</strong> Focos de calor detectados por satélite (sensor VIIRS, 375 m de resolución) en las últimas 48 horas — no todo foco es un incendio confirmado en terreno.</p>
 <p><strong>Avisos meteorológicos (Vigía, no oficiales).</strong> A diferencia de las tres fuentes anteriores, estos avisos de viento, helada, lluvia, calor y riesgo aluvional NO vienen de un organismo oficial: los calculamos nosotros aplicando umbrales propios —inspirados en los criterios públicos de la DMC, pero sin relación operativa con ella— a la mediana de nuestro propio pronóstico multi-modelo. El aviso aluvional combina lluvia intensa con una isoterma 0° alta: cuando la nieve que normalmente retendría el agua en la cordillera cae como lluvia, las cuencas reciben agua líquida de golpe y crece el riesgo de crecidas repentinas y aluviones en quebradas y laderas. Trátalos como una señal de alerta temprana, no como un aviso oficial.</p>
+<p><strong>Cortes de luz (SEC, best effort).</strong> El listado de interrupciones en línea de la Superintendencia de Electricidad y Combustibles no es una API pública documentada: la leemos igual porque es el dato más cercano a tiempo real que existe, pero puede fallar o quedar desactualizada sin aviso previo de la SEC. Se obtiene desde un equipo fuera del VPS (bloqueos de IP de datacenter) y se refresca cada 15 minutos cuando todo funciona.</p>
 <p class="info-fine">Los sismos no se pueden predecir: mostramos lo ya ocurrido y, tras un sismo mayor, la tasa estadística esperada de réplicas (ley de Omori) — nunca una proyección de cuándo o dónde ocurrirá el próximo.</p>
 <p><strong>Los tres niveles de alerta SENAPRED:</strong></p>
 <p class="info-fine">${EXPLICA_NIVEL.temprana_preventiva}<br>${EXPLICA_NIVEL.amarilla}<br>${EXPLICA_NIVEL.roja}</p>`,
@@ -245,6 +246,7 @@ let emergenciaPromise = null; // promesa del fetch en vuelo, para que llamadas c
 let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let remocionesData = null; // catastro de remociones en masa (SENAPRED), capa 'remociones', carga lazy propia
+let cortesData = null;   // cortes de luz SEC (best effort, vía satélite en omen)
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
 let map = null;
@@ -1145,6 +1147,16 @@ async function loadAvisos() {
   } catch (_) { /* sin avisos: la capa queda vacía */ }
 }
 
+async function loadCortes() {
+  try {
+    const res = await fetch('cortes.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    cortesData = await res.json();
+    if (capasActivas.has('cortes')) renderMapa();
+    renderRiesgos();
+  } catch (_) { /* sin cortes: la capa queda vacía */ }
+}
+
 async function loadMarea() {
   try {
     const res = await fetch('marea.json', { cache: 'no-store' });
@@ -1344,6 +1356,7 @@ const CAPAS = {
   volcanes:      { paint: paintVolcanes },
   avisos:        { paint: paintAvisos },
   remociones:    { paint: paintRemociones, lazy: loadRemociones, tieneData: () => remocionesData !== null },
+  cortes:        { paint: paintCortes },
   marea:         { paint: paintMarea },
   evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
   emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
@@ -1359,7 +1372,7 @@ const CAPAS = {
 // acción más urgente (hacia dónde ir), por sobre el resto. 'satelite' va
 // primero: es la capa menos accionable, su texto en #map-meta no debe pisar
 // el de ninguna otra.
-const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'cortes', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1482,6 +1495,7 @@ function renderMapa() {
   document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-note-avisos').hidden = !capasActivas.has('avisos');
   document.getElementById('map-note-remociones').hidden = !capasActivas.has('remociones');
+  document.getElementById('map-note-cortes').hidden = !capasActivas.has('cortes');
   document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
@@ -2191,6 +2205,40 @@ function paintRemociones(group) {
   $('#map-meta').textContent = `${puntos.length} remociones registradas · catastro SENAPRED`;
 }
 
+// Círculo escalado por clientes afectados (mismo patrón que paintSismos con
+// la magnitud): raíz cuadrada para que comunas con miles de clientes no
+// tapen el mapa completo, tope de radio para que sigan siendo comparables.
+function paintCortes(group) {
+  const cortes = (cortesData && cortesData.cortes) || [];
+  if (!cortes.length) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'sin cortes de luz reportados';
+    return;
+  }
+  const color = css('--alerta-amarilla');
+  cortes.forEach((c) => {
+    if (c.lat == null || c.lon == null) return;
+    const radius = Math.min(6 + Math.sqrt(c.clientes) * 0.9, 40);
+    const marker = L.circleMarker([c.lat, c.lon], {
+      radius, color, fillColor: color, fillOpacity: 0.45, weight: 1.5,
+    }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong');
+    h.textContent = `${c.comuna} — ${c.clientes.toLocaleString('es-CL')} clientes afectados`;
+    box.appendChild(h);
+    if (c.empresas.length) {
+      const small = document.createElement('small');
+      small.textContent = c.empresas.join(' · ');
+      box.appendChild(small);
+    }
+    marker.bindPopup(box, { maxWidth: 260 });
+  });
+  const stale = cortesData.stale ? ' · datos antiguos (satélite sin actualizar)' : '';
+  $('#map-meta').textContent = cortesData.updated
+    ? `${cortesData.n_comunas} comunas con cortes · SEC best effort · ${horaLocal(cortesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${stale}`
+    : `${cortesData.n_comunas} comunas con cortes · SEC best effort${stale}`;
+}
+
 function setupCapas() {
   document.querySelectorAll('.map-mode[data-capa]').forEach((btn) => {
     btn.addEventListener('click', () => toggleCapa(btn.dataset.capa));
@@ -2328,9 +2376,14 @@ function riesgoCounts(ambito = riesgoAmbito) {
   // oficiales de arriba — son una derivación propia, no un aviso oficial.
   const avisos = avisosData ? avisosData.avisos.filter((a) => enAmbito(a, ambito)) : [];
   const avisoAlto = avisos.some((a) => a.nivel === 'naranja');
+  // Cortes SEC: conteo de comunas afectadas (no de clientes, para que el
+  // número calce con "toca para ver el detalle" del tile). Alto si alguna
+  // comuna del ámbito supera 10.000 clientes afectados.
+  const cortes = cortesData ? cortesData.cortes.filter((c) => enAmbito(c, ambito)) : [];
+  const cortesAlto = cortes.some((c) => c.clientes > 10000);
   return {
     sismos24, sismoMax6, rojas, amarillas, alertaRoja, volcanesAlerta, volPeor, volcanPeor,
-    incendiosN, avisosN: avisos.length, avisoAlto,
+    incendiosN, avisosN: avisos.length, avisoAlto, cortesN: cortes.length, cortesAlto,
   };
 }
 
@@ -2349,6 +2402,7 @@ function renderRiesgoTiles(c) {
   const volAlto = c.volPeor === 'naranja' || c.volPeor === 'roja';
   set('#rt-volcanes', c.volcanesAlerta.length, volAlto ? 'rt-alto' : c.volPeor === 'amarilla' ? 'rt-medio' : 'rt-cero');
   set('#rt-avisos', c.avisosN, c.avisoAlto ? 'rt-alto' : c.avisosN > 0 ? 'rt-medio' : 'rt-cero');
+  set('#rt-cortes', c.cortesN, c.cortesAlto ? 'rt-alto' : c.cortesN > 0 ? 'rt-medio' : 'rt-cero');
 }
 
 // DD-MM-AAAA (formato de SENAPRED) → Date; null si no calza.
@@ -2484,7 +2538,7 @@ function renderRiskBadge(c) {
 function renderRiesgos() {
   const panel = document.querySelector('.panel-riesgos');
   if (!panel) return;
-  const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData || avisosData);
+  const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData || avisosData || cortesData);
   panel.hidden = !hayAlgo;
   if (!hayAlgo) { $('#risk-badge').hidden = true; return; }
 
@@ -2493,10 +2547,11 @@ function renderRiesgos() {
   panel.querySelector('[data-capa="alertas"]').hidden = !alertasData;
   panel.querySelector('[data-capa="volcanes"]').hidden = !volcanesData;
   panel.querySelector('[data-capa="avisos"]').hidden = !avisosData;
+  panel.querySelector('[data-capa="cortes"]').hidden = !cortesData;
 
   $('#riesgos-meta').textContent = [
     ['CSN', sismosData], ['SENAPRED', alertasData], ['SERNAGEOMIN', volcanesData], ['NASA FIRMS', incendiosData],
-    ['Vigía (no oficial)', avisosData],
+    ['Vigía (no oficial)', avisosData], ['SEC (best effort)', cortesData],
   ].filter(([, ok]) => ok).map(([nombre]) => nombre).join(' · ');
 
   renderRiesgoTiles(riesgoCounts());
@@ -3164,7 +3219,7 @@ async function setupPush() {
 // fijados a mano en PACK_CACHE vía postMessage (sin límite LRU).
 const PACK_JSON = [
   'emergencia.json', 'tsunami_vias.json', 'tsunami_areas.json', 'remociones.json',
-  'comunas.json', 'sismos.json', 'alertas.json', 'avisos.json', 'estaciones.json', 'status.json',
+  'comunas.json', 'sismos.json', 'alertas.json', 'avisos.json', 'cortes.json', 'estaciones.json', 'status.json',
 ];
 // Incluye 8-10 porque ensureMap() abre en zoom 8: sin esos niveles, offline
 // la vista inicial saldría con tiles rotos (a esa escala son 1-2 tiles por zoom).
@@ -3316,6 +3371,7 @@ loadVolcanes();
 loadAvisos();
 loadMarea();
 loadTsunami();
+loadCortes();
 
 // ── Refresco en vivo ───────────────────────────────────────────
 // Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
@@ -3332,7 +3388,7 @@ let refreshing = false;
 // El "última actualización" es el más reciente `updated` entre los JSON ya
 // cargados (mejor esfuerzo: no todos llegaron a existir necesariamente).
 function ultimaActualizacionLocal() {
-  const updates = [estacionesData, sismosData, incendiosData, alertasData, volcanesData, avisosData, biasData, mareaData, tsunamiData]
+  const updates = [estacionesData, sismosData, incendiosData, alertasData, volcanesData, avisosData, biasData, mareaData, tsunamiData, cortesData]
     .filter((d) => d && d.updated).map((d) => d.updated);
   if (!updates.length) return null;
   const masReciente = updates.sort().pop();   // "YYYY-MM-DD HH:MM UTC" ordena bien como texto
@@ -3371,6 +3427,7 @@ async function refreshAll() {
   loadAvisos();        // avisos.json (derivado propio)
   loadMarea();         // marea.json (Open-Meteo Marine, no oficial)
   loadTsunami();       // tsunami.json (PTWC + catálogo sísmico propio)
+  loadCortes();        // cortes.json (SEC, best effort vía satélite en omen)
   // El satélite no tiene JSON propio (fetch cross-origin a GIBS) y solo se
   // recarga si la capa está activa: sin esto no habría forma de ver frames
   // nuevos sin apagar y prender la capa a mano.
