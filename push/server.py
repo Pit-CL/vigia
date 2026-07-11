@@ -64,6 +64,9 @@ def _connect() -> sqlite3.Connection:
 # Rangos válidos de los campos opcionales de zona/kit. Fuera de rango o
 # ausente -> None; el UPSERT usa COALESCE(nuevo, actual) así que un
 # resubscribe sin (o con) campos inválidos jamás borra lo ya guardado.
+# Excepción explícita: si el body trae "zona": false (el usuario apagó
+# "solo mi zona" en la UI), sí hay que borrar lat/lon/radio_km/mag_min —
+# si no, COALESCE los dejaría pegados para siempre. Ver _borrar_zona().
 LAT_MIN, LAT_MAX = -56, -17    # bbox aproximado de Chile continental
 LON_MIN, LON_MAX = -76, -66
 RADIO_KM_MIN, RADIO_KM_MAX = 50, 500
@@ -100,6 +103,13 @@ def _campos_zona(payload: dict):
         kit_reminder = None
 
     return lat, lon, radio_km, mag_min, kit_reminder
+
+
+def _borrar_zona(payload: dict) -> bool:
+    """True si el body pide explícitamente apagar "solo mi zona" (checkbox
+    destildado en la UI) — la única señal que debe borrar lat/lon/radio_km/
+    mag_min en vez de preservarlos vía COALESCE."""
+    return payload.get("zona") is False
 
 
 def _client_ip(handler: BaseHTTPRequestHandler) -> str:
@@ -199,6 +209,11 @@ class Handler(BaseHTTPRequestHandler):
                     lat, lon, radio_km, mag_min, kit_reminder,
                 ),
             )
+            if _borrar_zona(payload):
+                con.execute(
+                    "UPDATE subs SET lat=NULL, lon=NULL, radio_km=NULL, mag_min=NULL WHERE endpoint=?",
+                    (payload["endpoint"],),
+                )
             con.commit()
             con.close()
             log.info("subscribe ok endpoint=%s...", payload["endpoint"][:48])

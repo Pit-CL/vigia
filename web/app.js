@@ -3075,7 +3075,10 @@ async function setupPush() {
       kit: !!(kitToggle && kitToggle.checked),
     };
     savePushPrefs(p);
-    const campos = { kit_reminder: p.kit ? 1 : 0 };
+    // `zona` va siempre explícito (true/false): así el servidor distingue
+    // "el usuario apagó la zona" (borra lat/lon) de "esta petición no dice
+    // nada de zona" (preserva lo ya guardado) — ver push/server.py.
+    const campos = { zona: p.zona, kit_reminder: p.kit ? 1 : 0 };
     if (p.zona) {
       campos.lat = r1(place.lat);
       campos.lon = r1(place.lon);
