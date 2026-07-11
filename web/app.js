@@ -1373,6 +1373,13 @@ function capasGuardadas() {
 }
 
 let capasActivas = capasGuardadas();
+// Las capas lazy restauradas desde localStorage también necesitan su carga:
+// toggleCapa no corre al restaurar, y sin esto una capa lazy que quedó
+// activa reaparece vacía tras recargar (bug real: satélite «no carga nada»).
+capasActivas.forEach((k) => {
+  const c = CAPAS[k];
+  if (c.lazy && !(c.tieneData && c.tieneData())) c.lazy();
+});
 const layerGroups = {};
 
 function toggleCapa(k) {
