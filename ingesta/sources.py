@@ -25,7 +25,10 @@ def _get(url: str, params: dict | None, retries: int, parse_json: bool):
             last_err = err
             if attempt < retries:
                 time.sleep(5 * (attempt + 1))
-    raise RuntimeError(f"GET {url} falló tras {retries + 1} intentos: {last_err}")
+    # Sin query string en el mensaje: puede llevar credenciales (auth_key CNE)
+    # y este error termina en ingest_log y en el log de la ingesta.
+    url_sin_query = urllib.parse.urlsplit(url)._replace(query="").geturl()
+    raise RuntimeError(f"GET {url_sin_query} falló tras {retries + 1} intentos: {last_err}")
 
 
 def http_get_json(url: str, params: dict | None = None, retries: int = 2):

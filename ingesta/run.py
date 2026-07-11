@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import alertas
 import avisos
+import combustible
 import config
 import cortes
 import db
@@ -124,8 +125,10 @@ def main() -> int:
                      help="cortes de luz SEC (best effort, vía satélite en omen — solo lee incoming/, sin red)")
     ap.add_argument("--farmacias", action="store_true",
                      help="farmacias de turno MINSAL (vía satélite en omen — solo lee incoming/, sin red)")
+    ap.add_argument("--combustible", action="store_true",
+                     help="precios de bencina en línea (CNE, dormida sin CNE_API_KEY — accesible directo desde el VPS)")
     ap.add_argument("--hazards", action="store_true",
-                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + cortes + farmacias)")
+                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + cortes + farmacias + combustible)")
     ap.add_argument("--emergencia", action="store_true",
                      help="infraestructura de emergencia comunitaria (SENAPRED, cuasi-estático semanal)")
     ap.add_argument("--remociones", action="store_true",
@@ -137,7 +140,7 @@ def main() -> int:
         args.forecasts or args.all or args.sismos or args.incendios
         or args.alertas or args.volcanes or args.hazards or args.emergencia
         or args.remociones or args.avisos or args.marea or args.tsunami
-        or args.cortes or args.farmacias)
+        or args.cortes or args.farmacias or args.combustible)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
@@ -146,6 +149,7 @@ def main() -> int:
     do_tsunami = args.tsunami or args.hazards or args.all
     do_cortes = args.cortes or args.hazards or args.all
     do_farmacias = args.farmacias or args.hazards or args.all
+    do_combustible = args.combustible or args.hazards or args.all
     do_emergencia = args.emergencia or args.all
     do_remociones = args.remociones or args.emergencia or args.all
     # Avisos son baratos (SQL local + mediana, sin red): se recalculan en toda
@@ -184,6 +188,8 @@ def main() -> int:
         ok &= step(con, run_at, "cortes", lambda: cortes.update(con, run_at))
     if do_farmacias:
         ok &= step(con, run_at, "farmacias", lambda: farmacias.update(con, run_at))
+    if do_combustible:
+        ok &= step(con, run_at, "combustible", lambda: combustible.update(con, run_at))
     if do_emergencia:
         ok &= step(con, run_at, "emergencia", lambda: emergencia.update(con, run_at))
     if do_remociones:
