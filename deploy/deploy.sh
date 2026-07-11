@@ -1,6 +1,6 @@
 #!/bin/bash
-# Deploy versionado de Vigía a producción (erp-rollitos:/opt/vigia), con smoke test
-# al final. Reemplaza el rsync manual documentado en docs/DEPLOY.md.
+# Deploy versionado de Vigía a producción (local, /opt/vigia en este mismo VPS),
+# con smoke test al final. Reemplaza el rsync manual documentado en docs/DEPLOY.md.
 #
 # Uso: bash deploy/deploy.sh [ref]   (ref por defecto: origin/main)
 set -e
@@ -8,7 +8,6 @@ set -e
 REF="${1:-origin/main}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVIDOR="erp-rollitos"
 DESTINO="/opt/vigia/"
 
 EXPORT_DIR="$(mktemp -d)"
@@ -37,7 +36,7 @@ if [ "$N_INDEX" != "$N_SW" ]; then
 fi
 echo "    versión v=$N_INDEX consistente entre index.html y sw.js"
 
-echo "==> Subiendo a $SERVIDOR:$DESTINO..."
+echo "==> Copiando a $DESTINO (local)..."
 rsync -a --delete \
   --exclude data/ --exclude .git/ --exclude .env --exclude .claude/ \
   --exclude 'web/status.json' --exclude 'web/verificacion.json' --exclude 'web/estaciones.json' \
@@ -46,10 +45,10 @@ rsync -a --delete \
   --exclude 'web/volcanes.json' --exclude 'web/emergencia.json' --exclude 'web/remociones.json' \
   --exclude 'web/tsunami_vias.json' --exclude 'web/tsunami_areas.json' \
   --exclude 'web/marea.json' --exclude 'web/tsunami.json' \
-  "$EXPORT_DIR/" "$SERVIDOR:$DESTINO"
+  "$EXPORT_DIR/" "$DESTINO"
 
 echo "==> Reiniciando contenedores..."
-ssh "$SERVIDOR" "cd $DESTINO && docker compose up -d && docker compose restart web"
+(cd "$DESTINO" && docker compose up -d && docker compose restart web)
 
 echo "==> Esperando 3 s antes del smoke test..."
 sleep 3
