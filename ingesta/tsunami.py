@@ -19,7 +19,7 @@ from xml.etree import ElementTree as ET
 
 import config
 
-UA = "vigia-ingesta/1.0 (proyecto open source; clima.cavara.cl)"
+UA = "vigia-ingesta/1.0 (proyecto open source; vigia.cavara.cl)"
 API_ATOM = "https://www.tsunami.gov/events/xml/PHEBAtom.xml"
 
 VENTANA_SISMO_H = 1

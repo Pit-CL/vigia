@@ -29,7 +29,7 @@ from datetime import datetime, timezone
 import config
 import calibrate
 
-UA = "vigia-bootstrap/1.0 (proyecto open source; clima.cavara.cl)"
+UA = "vigia-bootstrap/1.0 (proyecto open source; vigia.cavara.cl)"
 ASOS = "https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py"
 PREV = "https://previous-runs-api.open-meteo.com/v1/forecast"
 

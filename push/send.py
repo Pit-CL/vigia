@@ -21,7 +21,7 @@ ALERTAS_PATH = Path(os.environ.get("PUSH_ALERTAS", "/data/alertas.json"))
 VOLCANES_PATH = Path(os.environ.get("PUSH_VOLCANES", "/data/volcanes.json"))
 TSUNAMI_PATH = Path(os.environ.get("PUSH_TSUNAMI", "/data/tsunami.json"))
 
-SITE_URL = "https://clima.cavara.cl/"
+SITE_URL = "https://vigia.cavara.cl/"
 ACCION = "Revisa el mapa y tus vías de evacuación"
 
 VENTANA_SISMO_H = 2

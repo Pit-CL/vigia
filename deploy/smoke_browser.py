@@ -6,7 +6,7 @@ quien lo invoca decide con qué intérprete correrlo (ver deploy/deploy.sh).
 Uso:
     python3 deploy/smoke_browser.py [url_base]
 
-Por defecto revisa https://clima.cavara.cl. Sale con código 0 si todos los
+Por defecto revisa https://vigia.cavara.cl. Sale con código 0 si todos los
 checks pasan, 1 si alguno falla (imprime el detalle de cada FALLA).
 """
 import sys
@@ -100,7 +100,7 @@ def check_punto_cercano(page):
 
 
 def main():
-    base = (sys.argv[1] if len(sys.argv) > 1 else "https://clima.cavara.cl").rstrip("/")
+    base = (sys.argv[1] if len(sys.argv) > 1 else "https://vigia.cavara.cl").rstrip("/")
     print(f"Smoke test (navegador) contra {base}\n")
 
     errores_pagina = []

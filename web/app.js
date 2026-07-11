@@ -2622,7 +2622,7 @@ function setupPuntoCercano() {
           if (esAndroid) {
             guias.push(
               'En Chrome: toca el ícono junto a la dirección del sitio (arriba, el candado o los controles) → Permisos → Ubicación → Permitir, y vuelve a tocar el botón.',
-              'Si no aparece la opción: menú ⋮ (arriba a la derecha) → Configuración → Configuración de sitios → Ubicación → busca clima.cavara.cl y permítelo.',
+              'Si no aparece la opción: menú ⋮ (arriba a la derecha) → Configuración → Configuración de sitios → Ubicación → busca vigia.cavara.cl y permítelo.',
               'Revisa también que la Ubicación del teléfono esté encendida (desliza desde arriba y busca el ícono 📍 Ubicación).',
               'En Samsung Internet: menú ☰ → Ajustes → Sitios y descargas → Permisos de sitios → Ubicación.',
             );
