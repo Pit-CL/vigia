@@ -27,6 +27,11 @@ en el VPS — sube JSON crudos al VPS, que los procesa (`ingesta/cortes.py`,
    ```
    command="scp -t /opt/vigia/data/incoming/",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA... vigia-satelite
    ```
+   **OJO OpenSSH >= 9.0**: el `scp` moderno usa protocolo SFTP por defecto,
+   que NO calza con esta forced command (solo intercepta el protocolo scp
+   clásico, no la subsystem request de sftp) — el `scp` se queda colgado
+   sin transferir nada. `fetch_cl.py` ya invoca `scp -O` (protocolo legado)
+   para forzar el calce; verificado en omen (OpenSSH 9.6p1).
 4. Confirmar que `/opt/vigia/data/incoming/` existe en el VPS y es escribible
    por el usuario `vigia` (uid del contenedor `ingesta`, ver
    `docker-compose.yml` — el volumen `./data:/data` hereda el uid del host).

@@ -68,8 +68,13 @@ def _escribir_y_subir(nombre: str, fetch_fn, tmpdir: str) -> bool:
     path.write_text(json.dumps(envoltorio, ensure_ascii=False))
 
     try:
+        # -O fuerza el protocolo scp legado: OpenSSH >= 9.0 usa SFTP por
+        # defecto, que NO calza con la restricción `command="scp -t ..."`
+        # del authorized_keys en el VPS (esa forced command solo intercepta
+        # el protocolo scp clásico, no la subsystem request de sftp).
+        # Verificado en omen (OpenSSH 9.6p1): sin -O el scp cuelga.
         subprocess.run(
-            ["scp", "-o", "ConnectTimeout=15", str(path), f"{SSH_DEST}:{INCOMING_DIR}/{nombre}"],
+            ["scp", "-O", "-o", "ConnectTimeout=15", str(path), f"{SSH_DEST}:{INCOMING_DIR}/{nombre}"],
             check=True, capture_output=True, text=True, timeout=60,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as err:
