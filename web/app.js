@@ -3101,10 +3101,12 @@ const PACK_JSON = [
   'emergencia.json', 'tsunami_vias.json', 'tsunami_areas.json', 'remociones.json',
   'comunas.json', 'sismos.json', 'alertas.json', 'avisos.json', 'estaciones.json', 'status.json',
 ];
-const PACK_ZOOMS = [11, 12, 13, 14];
-// 0.15° (el radio "natural" para cubrir una comuna) da ~370 tiles en 4 zooms:
-// muy por sobre el presupuesto. 0.08° da ~110, dentro del rango buscado
-// (60-120) y ya cubre holgadamente el radio urbano de una comuna.
+// Incluye 8-10 porque ensureMap() abre en zoom 8: sin esos niveles, offline
+// la vista inicial saldría con tiles rotos (a esa escala son 1-2 tiles por zoom).
+const PACK_ZOOMS = [8, 9, 10, 11, 12, 13, 14];
+// 0.15° (el radio "natural" para cubrir una comuna) da ~370 tiles en los zooms
+// altos: muy por sobre el presupuesto. 0.08° da ~110-120, dentro del rango
+// buscado y ya cubre holgadamente el radio urbano de una comuna.
 const PACK_RADIO_DEG = 0.08;
 const PACK_MAX_DIAS = 30;
 
