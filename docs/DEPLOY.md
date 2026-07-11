@@ -38,7 +38,9 @@ Cloudflare aporta el TLS y la CDN del borde; el origen nunca queda expuesto dire
 
 **Dominio canónico:** `vigia.cavara.cl`. El dominio anterior, `clima.cavara.cl`, sigue activo en paralelo (mismo ingress, mismo servicio) para no romper las PWAs ya instaladas — un redirect 301 no las actualiza porque el service worker y la CSP `connect-src 'self'` no siguen redirects entre orígenes. Su retiro queda para más adelante.
 
-**Servidor:** prod corre en este mismo VPS (Hostinger, São Paulo, `/opt/vigia`), no en omen (retirado tras el cutover) ni en erp-rollitos. nginx escucha en `127.0.0.1:${VIGIA_HTTP_PORT:-8100}` — el puerto 8100 por defecto está libre en este VPS. El Cloudflare Tunnel de este VPS es compartido con Iktus: el mismo túnel enruta `vigia.cavara.cl`/`clima.cavara.cl` (a `http://localhost:8100`) además de `erpiktus.cavara.cl`, `iktus.cavara.cl` e `iktus2.cavara.cl`; su configuración vive en `/etc/cloudflared/config.yml` de este VPS, no en este repo.
+**Servidor:** repo y prod viven en la misma máquina (Hostinger, São Paulo, `/opt/vigia`); el deploy es local con `bash deploy/deploy.sh`, sin ssh de por medio. nginx escucha en `127.0.0.1:${VIGIA_HTTP_PORT:-8100}` — el puerto 8100 por defecto está libre en este VPS. El Cloudflare Tunnel de este VPS es compartido con Iktus: el mismo túnel enruta `vigia.cavara.cl`/`clima.cavara.cl` (a `http://localhost:8100`) además de `erpiktus.cavara.cl`, `iktus.cavara.cl` e `iktus2.cavara.cl`; su configuración vive en `/etc/cloudflared/config.yml` de este VPS, no en este repo. Reiniciar `cloudflared` corta esos sitios de Iktus por unos segundos — evita hacerlo salvo que sea necesario.
+
+**Backup:** respaldo histórico de `data/` (incluye `clima.db`) y `.env` en `/home/rafael/Backups/vigia/` de la máquina de desarrollo; no es automático, se genera a mano con `tar czf` cuando corresponda.
 
 ## Seguridad
 
