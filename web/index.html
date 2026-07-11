@@ -125,6 +125,20 @@
       <button id="pack-btn" class="chip">📦 Preparar mi zona (offline)</button>
     </div>
     <small id="push-info" class="panel-note" hidden>Solo emergencias mayores: sismos destructivos, alertas rojas y volcanes en naranja o rojo. Sin registro; puedes desactivarlo cuando quieras.</small>
+    <div id="push-zona" class="panel-note" hidden>
+      <label><input type="checkbox" id="push-zona-toggle"> Solo mi zona (avisos también con magnitud menor si están cerca)</label><br>
+      <label>Radio <select id="push-zona-radio">
+        <option value="100">100 km</option>
+        <option value="200" selected>200 km</option>
+        <option value="400">400 km</option>
+      </select></label>
+      <label>Magnitud mínima <select id="push-zona-mag">
+        <option value="5.5" selected>M5,5</option>
+        <option value="6.0">M6,0</option>
+      </select></label><br>
+      <label><input type="checkbox" id="push-kit-reminder"> Recordarme revisar el kit cada 6 meses</label><br>
+      <small>Si activas "solo mi zona", guardamos un punto aproximado (~11 km) de tu comuna junto a tu suscripción; nada más.</small>
+    </div>
     <div id="punto-cercano-resultado" class="panel-note" hidden></div>
     <div id="pack-status" class="panel-note" hidden></div>
   </section>
@@ -379,6 +393,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=59"></script>
+<script src="app.js?v=60"></script>
 </body>
 </html>
