@@ -1182,7 +1182,10 @@ async function loadTsunami() {
 // emergencia O la capa evacuacion (ambas comparten este loader), no en la
 // carga inicial ni en el refresco periódico de 10 min. tsunami_vias.json y
 // tsunami_areas.json (capa evacuacion) se cargan junto en el mismo
-// Promise.all: distinta capa, mismo gatillo.
+// Promise.all: distinta capa, mismo gatillo. farmacias.json (MINSAL, vía
+// satélite en omen) NO es infraestructura SENAPRED — es una fuente propia
+// que se fusiona como categoría 'farmacia' dentro de emergenciaData.categorias
+// porque es infraestructura de emergencia, no porque comparta origen.
 async function loadEmergencia() {
   if (emergenciaData) return;
   if (emergenciaPromise) { await emergenciaPromise; return; }
@@ -1190,9 +1193,28 @@ async function loadEmergencia() {
     fetch('emergencia.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch('tsunami_vias.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch('tsunami_areas.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch('farmacias.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
-  const [emg, vias, areas] = await emergenciaPromise;
+  const [emg, vias, areas, farm] = await emergenciaPromise;
   if (emg) emergenciaData = emg;
+  if (farm && Array.isArray(farm.farmacias) && farm.farmacias.length) {
+    if (!emergenciaData) emergenciaData = { categorias: {} };
+    if (!emergenciaData.categorias) emergenciaData.categorias = {};
+    emergenciaData.categorias.farmacia = farm.farmacias
+      .filter((f) => typeof f.lat === 'number' && typeof f.lon === 'number')
+      .map((f) => ({
+        n: f.nombre,
+        d: [f.direccion, f.comuna].filter(Boolean).join(', '),
+        h: (f.abre && f.cierra) ? `${f.abre} – ${f.cierra}` : null,
+        lat: f.lat,
+        lon: f.lon,
+      }));
+    // Las farmacias de turno rotan a diario: si el satélite lleva >26 h sin
+    // refrescar (farm.stale), las que muestra el mapa ya no están de turno.
+    // Mismo aviso que cortesData.stale (paintCortes) para no mostrar datos
+    // vencidos como si fueran vigentes.
+    emergenciaData.farmaciaStale = !!farm.stale;
+  }
   tsunamiViasData = vias;
   tsunamiAreasData = areas;
   emergenciaPromise = null;
@@ -1992,7 +2014,7 @@ function paintMarea(group) {
     : `${puntos.length} puntos costeros · marea de modelo (no oficial)`;
 }
 
-const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', encuentro_tsunami: '🟢', encuentro_volcan: '🔶' };
+const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', farmacia: '💊', encuentro_tsunami: '🟢', encuentro_volcan: '🔶' };
 
 function paintEmergencia(group) {
   if (!emergenciaData) {
@@ -2029,6 +2051,7 @@ function paintEmergencia(group) {
       box.className = 'stn-popup';
       const h = document.createElement('strong'); h.textContent = it.n; box.appendChild(h);
       if (it.d) { const small = document.createElement('small'); small.textContent = it.d; box.appendChild(small); }
+      if (it.h) { const smallH = document.createElement('small'); smallH.textContent = `Horario: ${it.h}`; box.appendChild(smallH); }
       if (it.cat === 'encuentro_tsunami') {
         const a = document.createElement('a');
         a.href = 'https://senapred.cl/visor-chile-preparado/';
@@ -2078,9 +2101,10 @@ function paintEmergencia(group) {
       });
     }
   });
+  const staleFarmacia = emergenciaData.farmaciaStale ? ' · farmacias: datos antiguos (satélite sin actualizar)' : '';
   $('#map-meta').textContent = emergenciaData.updated
-    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${todos.length} puntos de emergencia`;
+    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${staleFarmacia}`
+    : `${todos.length} puntos de emergencia${staleFarmacia}`;
 }
 
 // Bounding box de una geometría (área o vía), cacheado en el propio objeto

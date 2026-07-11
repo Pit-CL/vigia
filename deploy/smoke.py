@@ -219,6 +219,7 @@ def main():
     check_json_fresco(base, "estaciones.json", timedelta(hours=4))
     check_json_fresco(base, "sismos.json", timedelta(hours=2))
     check_json_fresco_laxo(base, "cortes.json", timedelta(hours=24))
+    check_json_fresco_laxo(base, "farmacias.json", timedelta(hours=26))
     check_emergencia(base)
 
     print()
