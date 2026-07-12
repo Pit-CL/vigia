@@ -189,6 +189,7 @@
       <button class="map-mode" data-capa="combustible" aria-pressed="false">⛽ Combustible</button>
       <button class="map-mode" data-capa="marea" aria-pressed="false">🌊 Costa</button>
       <button class="map-mode" data-capa="evacuacion" aria-pressed="false">🏃 Evacuación</button>
+      <button class="map-mode" data-capa="farmacias" aria-pressed="false">💊 Farmacias</button>
       <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
@@ -290,6 +291,7 @@
     <p id="map-note-marea" class="panel-note" hidden>Marea, oleaje y temperatura del mar de <strong>Open-Meteo Marine</strong> (modelo global ~8 km) · las tablas oficiales de marea son del <strong>SHOA</strong> (shoa.cl).</p>
     <p id="map-note-evacuacion" class="panel-note" hidden>Vías de evacuación y zona de inundación ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) a una zona costera o volcánica para verlas.</p>
     <p id="map-note-emergencia" class="panel-note" hidden>Infraestructura de emergencia y puntos de encuentro ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · farmacias de turno del día · MINSAL/Farmanet, vía un satélite fuera del VPS (best effort) · en emergencias llama 131 (SAMU) · 132 (Bomberos) · 133 (Carabineros).</p>
+    <p id="map-note-farmacias" class="panel-note" hidden>Farmacias de turno del día · MINSAL/Farmanet, vía un satélite fuera del VPS (best effort) · las mismas farmacias también aparecen dentro de la capa 🚑 Emergencia.</p>
     <p id="map-note-satelite" class="panel-note" hidden>Imagen satelital <strong>GOES-East GeoColor</strong> (NOAA vía NASA GIBS) · retraso típico 20–60 min respecto a la hora real · <strong>no es un radar</strong> — Chile no tiene red pública de radares meteorológicos, esta es la observación más cercana disponible.</p>
   </section>
 
@@ -403,6 +405,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=64"></script>
+<script src="app.js?v=65"></script>
 </body>
 </html>

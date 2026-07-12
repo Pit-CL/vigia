@@ -244,6 +244,8 @@ let mareaData = null;    // marea, oleaje y temperatura del mar por punto coster
 let tsunamiData = null;  // estado de amenaza de tsunami (PTWC + catálogo sísmico propio)
 let emergenciaData = null; // infraestructura de emergencia (SENAPRED), carga lazy
 let emergenciaPromise = null; // promesa del fetch en vuelo, para que llamadas concurrentes la esperen en vez de perderla
+let farmaciasData = null; // farmacias de turno (MINSAL/Farmanet, vía satélite), capa propia 'farmacias' Y categoría 'farmacia' dentro de emergenciaData
+let farmaciasPromise = null; // promesa del fetch en vuelo, compartida entre loadFarmacias() y loadEmergencia() para no duplicar el fetch
 let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let remocionesData = null; // catastro de remociones en masa (SENAPRED), capa 'remociones', carga lazy propia
@@ -1210,14 +1212,54 @@ async function loadTsunami() {
   } catch (_) { /* sin tsunami.json: el banner queda oculto */ }
 }
 
+// farmacias.json (MINSAL/Farmanet, vía satélite fuera del VPS) es una fuente
+// propia con loader propio: capa 'farmacias' la enciende sola, y loadEmergencia
+// la reutiliza (mismo farmaciasPromise) para fusionarla como categoría
+// 'farmacia' dentro de emergenciaData.categorias — un solo fetch, cualquiera
+// sea el orden en que el usuario encienda las dos capas.
+async function loadFarmacias() {
+  if (farmaciasData) return farmaciasData;
+  if (farmaciasPromise) return farmaciasPromise;
+  farmaciasPromise = fetch('farmacias.json', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .then((farm) => {
+      const lista = (farm && Array.isArray(farm.farmacias))
+        ? farm.farmacias
+          .filter((f) => typeof f.lat === 'number' && typeof f.lon === 'number')
+          .map((f) => ({
+            n: f.nombre,
+            d: [f.direccion, f.comuna].filter(Boolean).join(', '),
+            h: (f.abre && f.cierra) ? `${f.abre} – ${f.cierra}` : null,
+            lat: f.lat,
+            lon: f.lon,
+          }))
+        : [];
+      // Las farmacias de turno rotan a diario: si el satélite lleva >26 h sin
+      // refrescar (farm.stale), las que muestra el mapa ya no están de turno.
+      // Mismo aviso que cortesData.stale (paintCortes) para no mostrar datos
+      // vencidos como si fueran vigentes.
+      farmaciasData = {
+        lista,
+        stale: !!(farm && farm.stale),
+        updated: farm ? farm.updated : null,
+        fecha: diaMes(farm && farm.updated),
+      };
+      farmaciasPromise = null;
+      if (capasActivas.has('farmacias')) renderMapa();
+      return farmaciasData;
+    });
+  return farmaciasPromise;
+}
+
 // emergencia.json es cuasi-estático (~9.000 puntos, se refresca 1x/semana):
 // un solo fetch por sesión, disparado por toggleCapa al encender la capa
 // emergencia O la capa evacuacion (ambas comparten este loader), no en la
 // carga inicial ni en el refresco periódico de 10 min. tsunami_vias.json y
 // tsunami_areas.json (capa evacuacion) se cargan junto en el mismo
-// Promise.all: distinta capa, mismo gatillo. farmacias.json (MINSAL, vía
-// satélite en omen) NO es infraestructura SENAPRED — es una fuente propia
-// que se fusiona como categoría 'farmacia' dentro de emergenciaData.categorias
+// Promise.all: distinta capa, mismo gatillo. farmacias.json NO es
+// infraestructura SENAPRED — es una fuente propia (loadFarmacias) que se
+// fusiona como categoría 'farmacia' dentro de emergenciaData.categorias
 // porque es infraestructura de emergencia, no porque comparta origen.
 async function loadEmergencia() {
   if (emergenciaData) return;
@@ -1226,28 +1268,16 @@ async function loadEmergencia() {
     fetch('emergencia.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch('tsunami_vias.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch('tsunami_areas.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
-    fetch('farmacias.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    loadFarmacias(),
   ]);
   const [emg, vias, areas, farm] = await emergenciaPromise;
   if (emg) emergenciaData = emg;
-  if (farm && Array.isArray(farm.farmacias) && farm.farmacias.length) {
+  if (farm && farm.lista.length) {
     if (!emergenciaData) emergenciaData = { categorias: {} };
     if (!emergenciaData.categorias) emergenciaData.categorias = {};
-    emergenciaData.categorias.farmacia = farm.farmacias
-      .filter((f) => typeof f.lat === 'number' && typeof f.lon === 'number')
-      .map((f) => ({
-        n: f.nombre,
-        d: [f.direccion, f.comuna].filter(Boolean).join(', '),
-        h: (f.abre && f.cierra) ? `${f.abre} – ${f.cierra}` : null,
-        lat: f.lat,
-        lon: f.lon,
-      }));
-    // Las farmacias de turno rotan a diario: si el satélite lleva >26 h sin
-    // refrescar (farm.stale), las que muestra el mapa ya no están de turno.
-    // Mismo aviso que cortesData.stale (paintCortes) para no mostrar datos
-    // vencidos como si fueran vigentes.
-    emergenciaData.farmaciaStale = !!farm.stale;
-    emergenciaData.farmaciaFecha = diaMes(farm.updated);
+    emergenciaData.categorias.farmacia = farm.lista;
+    emergenciaData.farmaciaStale = farm.stale;
+    emergenciaData.farmaciaFecha = farm.fecha;
   }
   tsunamiViasData = vias;
   tsunamiAreasData = areas;
@@ -1434,6 +1464,7 @@ const CAPAS = {
   combustible:   { paint: paintCombustible, lazy: loadCombustible, tieneData: () => combustibleData !== null },
   marea:         { paint: paintMarea },
   evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
+  farmacias:     { paint: paintFarmacias, lazy: loadFarmacias, tieneData: () => farmaciasData !== null },
   emergencia:    { paint: paintEmergencia, lazy: loadEmergencia, tieneData: () => emergenciaData !== null },
   satelite:      { paint: paintSatelite, lazy: loadSatelite, tieneData: () => sateliteFrames.length > 0 },
 };
@@ -1441,13 +1472,15 @@ const CAPAS = {
 // pinta al final para que su texto en #map-meta prevalezca sobre las demás.
 // Los puntos de alerta van encima de los focos/eventos que resumen.
 // 'remociones' va junto a las demás capas de peligro, antes de 'avisos'.
-// 'emergencia' y 'evacuacion' van al final de todo: en una emergencia real
-// son lo que se busca, así que su texto y sus íconos deben quedar encima de
-// cualquier otra capa. 'evacuacion' cierra la lista porque sus vías son la
+// 'farmacias', 'emergencia' y 'evacuacion' van al final de todo: en una
+// emergencia real son lo que se busca, así que su texto y sus íconos deben
+// quedar encima de cualquier otra capa. 'farmacias' va justo antes que
+// 'emergencia' (misma familia, mismo ícono 💊 — el dedupe vive en
+// paintEmergencia). 'evacuacion' cierra la lista porque sus vías son la
 // acción más urgente (hacia dónde ir), por sobre el resto. 'satelite' va
 // primero: es la capa menos accionable, su texto en #map-meta no debe pisar
 // el de ninguna otra.
-const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'cortes', 'combustible', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'cortes', 'combustible', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'farmacias', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1577,6 +1610,7 @@ function renderMapa() {
   document.getElementById('map-note-combustible').hidden = !capasActivas.has('combustible');
   document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
+  document.getElementById('map-note-farmacias').hidden = !capasActivas.has('farmacias');
   document.getElementById('map-note-emergencia').hidden = !capasActivas.has('emergencia');
   document.getElementById('map-note-satelite').hidden = !capasActivas.has('satelite');
   document.getElementById('satelite-control').hidden = !capasActivas.has('satelite');
@@ -2073,6 +2107,80 @@ function paintMarea(group) {
 
 const EMG_EMOJI = { salud: '🏥', bomberos: '🚒', carabineros: '🚓', farmacia: '💊', encuentro_tsunami: '🟢', encuentro_volcan: '🔶' };
 
+// Ícono + popup de UN punto de infraestructura de emergencia (o farmacia):
+// compartido por paintEmergencia y paintFarmacias para no duplicar el
+// marcador ni el popup entre ambas capas.
+function pintarPuntoEmg(it, group) {
+  const icon = L.divIcon({
+    className: 'stn-icon',
+    html: `<span class="emg">${it.emoji}</span>`,
+    iconSize: [26, 26], iconAnchor: [13, 13],
+  });
+  const marker = L.marker([it.lat, it.lon], { icon, title: it.n }).addTo(group);
+  const box = document.createElement('div');
+  box.className = 'stn-popup';
+  const h = document.createElement('strong'); h.textContent = it.n; box.appendChild(h);
+  if (it.d) { const small = document.createElement('small'); small.textContent = it.d; box.appendChild(small); }
+  if (it.h) { const smallH = document.createElement('small'); smallH.textContent = `Horario: ${it.h}`; box.appendChild(smallH); }
+  if (it.cat === 'farmacia' && it.fecha) {
+    const turno = document.createElement('small');
+    turno.textContent = `De turno hoy ${it.fecha}`;
+    box.appendChild(turno);
+  }
+  if (it.cat === 'encuentro_tsunami') {
+    const a = document.createElement('a');
+    a.href = 'https://senapred.cl/visor-chile-preparado/';
+    a.rel = 'noopener'; a.target = '_blank';
+    a.textContent = 'ver vías de evacuación oficiales';
+    box.appendChild(a);
+  }
+  marker.bindPopup(box, { maxWidth: 260 });
+}
+
+// Grupo de N puntos en la misma celda: mismo patrón que pintarPuntoEmg pero
+// con contador y lista de los primeros MAX_LISTA. emojiGrupo/etiqueta
+// distinguen el glifo de cluster entre 'emergencia' (🚑) y 'farmacias' (💊).
+function pintarGrupoEmg(grupo, group, emojiGrupo, etiqueta) {
+  const lat = grupo.reduce((s, it) => s + it.lat, 0) / grupo.length;
+  const lon = grupo.reduce((s, it) => s + it.lon, 0) / grupo.length;
+  const icon = L.divIcon({
+    className: 'stn-icon',
+    html: `<span class="stn-label emg-grupo">${emojiGrupo}<b>${grupo.length}</b></span>`,
+    iconSize: [40, 26], iconAnchor: [20, 13],
+  });
+  const marker = L.marker([lat, lon], {
+    icon, title: `${grupo.length} ${etiqueta} — toca para ver`,
+  }).addTo(group);
+  const box = document.createElement('div');
+  box.className = 'stn-popup';
+  const h = document.createElement('strong');
+  h.textContent = `${grupo.length} en este punto`;
+  box.appendChild(h);
+  const ul = document.createElement('ul');
+  ul.className = 'grupo-lista';
+  const MAX_LISTA = 12;
+  grupo.slice(0, MAX_LISTA).forEach((it) => {
+    const li = document.createElement('li');
+    li.textContent = `${it.emoji} ${it.n}${it.d ? ` — ${it.d}` : ''}`;
+    ul.appendChild(li);
+  });
+  if (grupo.length > MAX_LISTA) {
+    const li = document.createElement('li');
+    li.textContent = `y ${grupo.length - MAX_LISTA} más`;
+    ul.appendChild(li);
+  }
+  box.appendChild(ul);
+  const popup = L.popup({ maxWidth: 280 }).setLatLng([lat, lon]).setContent(box);
+  // Mismo criterio que en incendios (paintIncendios): bajo zoom 16 el
+  // clic acerca el mapa y el grupo suele separarse; desde zoom 16 el +2
+  // ya llega al techo (maxZoom 18) y el grupo nunca se desagrega, así
+  // que el clic abre el detalle en un popup.
+  marker.on('click', () => {
+    if (map.getZoom() < 16) map.setView([lat, lon], map.getZoom() + 2);
+    else popup.openOn(map);
+  });
+}
+
 function paintEmergencia(group) {
   if (!emergenciaData) {
     if (capasActivas.size === 1) $('#map-meta').textContent = 'cargando infraestructura de emergencia…';
@@ -2081,7 +2189,13 @@ function paintEmergencia(group) {
   const categorias = emergenciaData.categorias || {};
   const todos = [];
   for (const [cat, emoji] of Object.entries(EMG_EMOJI)) {
-    for (const it of (categorias[cat] || [])) todos.push({ ...it, cat, emoji });
+    // La capa propia 'farmacias' pinta las mismas farmacias con su propio
+    // botón: si está activa a la vez que 'emergencia', se omiten aquí para
+    // no duplicar los marcadores (dedupe visual, ver spec del botón 💊).
+    if (cat === 'farmacia' && capasActivas.has('farmacias')) continue;
+    for (const it of (categorias[cat] || [])) {
+      todos.push({ ...it, cat, emoji, fecha: cat === 'farmacia' ? emergenciaData.farmaciaFecha : undefined });
+    }
   }
   if (!todos.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin datos de emergencia'; return; }
   // ~9.000 puntos en todo el país: pintarlos todos satura el DOM (9.292
@@ -2096,77 +2210,37 @@ function paintEmergencia(group) {
     ? visibles.map((it) => [it])
     : agruparPorCelda(visibles, 44).sort((a, b) => a.length - b.length);
   grupos.forEach((grupo) => {
-    if (grupo.length === 1) {
-      const it = grupo[0];
-      const icon = L.divIcon({
-        className: 'stn-icon',
-        html: `<span class="emg">${it.emoji}</span>`,
-        iconSize: [26, 26], iconAnchor: [13, 13],
-      });
-      const marker = L.marker([it.lat, it.lon], { icon, title: it.n }).addTo(group);
-      const box = document.createElement('div');
-      box.className = 'stn-popup';
-      const h = document.createElement('strong'); h.textContent = it.n; box.appendChild(h);
-      if (it.d) { const small = document.createElement('small'); small.textContent = it.d; box.appendChild(small); }
-      if (it.h) { const smallH = document.createElement('small'); smallH.textContent = `Horario: ${it.h}`; box.appendChild(smallH); }
-      if (it.cat === 'farmacia' && emergenciaData.farmaciaFecha) {
-        const turno = document.createElement('small');
-        turno.textContent = `De turno hoy ${emergenciaData.farmaciaFecha}`;
-        box.appendChild(turno);
-      }
-      if (it.cat === 'encuentro_tsunami') {
-        const a = document.createElement('a');
-        a.href = 'https://senapred.cl/visor-chile-preparado/';
-        a.rel = 'noopener'; a.target = '_blank';
-        a.textContent = 'ver vías de evacuación oficiales';
-        box.appendChild(a);
-      }
-      marker.bindPopup(box, { maxWidth: 260 });
-    } else {
-      const lat = grupo.reduce((s, it) => s + it.lat, 0) / grupo.length;
-      const lon = grupo.reduce((s, it) => s + it.lon, 0) / grupo.length;
-      const icon = L.divIcon({
-        className: 'stn-icon',
-        html: `<span class="stn-label emg-grupo">🚑<b>${grupo.length}</b></span>`,
-        iconSize: [40, 26], iconAnchor: [20, 13],
-      });
-      const marker = L.marker([lat, lon], {
-        icon, title: `${grupo.length} servicios de emergencia — toca para ver`,
-      }).addTo(group);
-      const box = document.createElement('div');
-      box.className = 'stn-popup';
-      const h = document.createElement('strong');
-      h.textContent = `${grupo.length} en este punto`;
-      box.appendChild(h);
-      const ul = document.createElement('ul');
-      ul.className = 'grupo-lista';
-      const MAX_LISTA = 12;
-      grupo.slice(0, MAX_LISTA).forEach((it) => {
-        const li = document.createElement('li');
-        li.textContent = `${it.emoji} ${it.n}${it.d ? ` — ${it.d}` : ''}`;
-        ul.appendChild(li);
-      });
-      if (grupo.length > MAX_LISTA) {
-        const li = document.createElement('li');
-        li.textContent = `y ${grupo.length - MAX_LISTA} más`;
-        ul.appendChild(li);
-      }
-      box.appendChild(ul);
-      const popup = L.popup({ maxWidth: 280 }).setLatLng([lat, lon]).setContent(box);
-      // Mismo criterio que en incendios (paintIncendios): bajo zoom 16 el
-      // clic acerca el mapa y el grupo suele separarse; desde zoom 16 el +2
-      // ya llega al techo (maxZoom 18) y el grupo nunca se desagrega, así
-      // que el clic abre el detalle en un popup.
-      marker.on('click', () => {
-        if (map.getZoom() < 16) map.setView([lat, lon], map.getZoom() + 2);
-        else popup.openOn(map);
-      });
-    }
+    if (grupo.length === 1) pintarPuntoEmg(grupo[0], group);
+    else pintarGrupoEmg(grupo, group, '🚑', 'servicios de emergencia');
   });
-  const staleFarmacia = emergenciaData.farmaciaStale ? ' · farmacias: datos antiguos (satélite sin actualizar)' : '';
+  const staleFarmacia = emergenciaData.farmaciaStale && !capasActivas.has('farmacias') ? ' · farmacias: datos antiguos (satélite sin actualizar)' : '';
   $('#map-meta').textContent = emergenciaData.updated
     ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${staleFarmacia}`
     : `${todos.length} puntos de emergencia${staleFarmacia}`;
+}
+
+// Farmacias de turno como capa propia: además de aparecer dentro de
+// 'emergencia' (como hasta ahora), tienen su botón 💊 independiente. Mismo
+// builder de marcador/popup que paintEmergencia (pintarPuntoEmg/
+// pintarGrupoEmg) — el dedupe cuando ambas capas están activas vive en
+// paintEmergencia, no acá.
+function paintFarmacias(group) {
+  if (!farmaciasData) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'cargando farmacias de turno…';
+    return;
+  }
+  const todos = farmaciasData.lista.map((it) => ({ ...it, cat: 'farmacia', emoji: '💊', fecha: farmaciasData.fecha }));
+  if (!todos.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin farmacias de turno reportadas'; return; }
+  const boundsPuntos = map.getBounds().pad(0.3);
+  const visibles = todos.filter((it) => boundsPuntos.contains([it.lat, it.lon]));
+  const grupos = map.getZoom() >= 13
+    ? visibles.map((it) => [it])
+    : agruparPorCelda(visibles, 44).sort((a, b) => a.length - b.length);
+  grupos.forEach((grupo) => {
+    if (grupo.length === 1) pintarPuntoEmg(grupo[0], group);
+    else pintarGrupoEmg(grupo, group, '💊', 'farmacias de turno');
+  });
+  $('#map-meta').textContent = metaConFecha(`${todos.length} farmacias de turno · MINSAL/Farmanet`, farmaciasData.updated, farmaciasData.stale);
 }
 
 // Bounding box de una geometría (área o vía), cacheado en el propio objeto
