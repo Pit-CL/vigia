@@ -115,6 +115,11 @@ def _mapear_estacion(row) -> dict | None:
     comuna = ubicacion.get("nombre_comuna")
     if comuna:
         item["comuna"] = str(comuna)
+    # Cada combustible trae su propia fecha_actualizacion ("YYYY-MM-DD"): en
+    # una misma estación el 93 puede venir de hoy y el diésel de hace meses
+    # (verificado contra la API real), así que la fecha va por precio, no
+    # una sola por estación. El frontend (paintCombustible) usa esa fecha
+    # para mostrarla en el popup y marcar como "antiguo" lo desactualizado.
     precios_raw = row.get("precios") or {}
     precios = {}
     for campo_out, clave_cne in _PRECIO_CAMPOS.items():
@@ -122,7 +127,11 @@ def _mapear_estacion(row) -> dict | None:
         if isinstance(entry, dict):
             v = _num_precio(entry.get("precio"))
             if v is not None:
-                precios[campo_out] = v
+                dato = {"precio": v}
+                fecha = entry.get("fecha_actualizacion")
+                if isinstance(fecha, str) and fecha:
+                    dato["fecha"] = fecha
+                precios[campo_out] = dato
     if precios:
         item["precios"] = precios
     return item
