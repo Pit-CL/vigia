@@ -31,6 +31,7 @@ web/marea.json
 web/tsunami.json
 web/cortes.json
 web/farmacias.json
+web/combustible.json
 
 # Secretos: jamás al repo
 .env

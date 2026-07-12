@@ -234,6 +234,7 @@ let verifData = null;
 let verifBucket = '24';
 let estacionesData = null;
 let aireStations = [];   // estaciones SINCA oficiales (calidad del aire)
+let aireData = null;     // aire.json completo (solo para su `updated`; las estaciones viven en aireStations)
 let sismosData = null;   // catálogo sísmico CSN + USGS
 let incendiosData = null; // focos de calor VIIRS (NASA FIRMS)
 let alertasData = null;   // alertas naturales vigentes (SENAPRED)
@@ -354,6 +355,37 @@ function haceCuanto(fecha) {
   if (horas < 1) return `hace ${Math.round(ms / 60000)} min`;
   if (horas < 24) return `hace ${Math.round(horas)} h`;
   return `hace ${Math.round(horas / 24)} d`;
+}
+
+// Todos los JSON de la ingesta traen `updated` como "YYYY-MM-DD HH:MM UTC":
+// centraliza el parseo a Date (antes repetido con .replace(' UTC', 'Z')
+// .replace(' ', 'T') en cada capa).
+function parseUpdated(updated) {
+  return new Date(updated.replace(' UTC', 'Z').replace(' ', 'T'));
+}
+
+// Fragmento "actualizado hace X" (o la nota de frescura cuando el satélite
+// no ha refrescado) a partir del `updated` global de un JSON — reutilizado
+// por metaConFecha() y por popups que solo tienen fecha global, no por ítem.
+function actualizadoTexto(updated, stale) {
+  if (!updated) return null;
+  if (stale) return `datos de ${haceCuanto(parseUpdated(updated))} — el satélite no ha refrescado`;
+  return `actualizado ${haceCuanto(parseUpdated(updated))}`;
+}
+
+// Meta uniforme de capa: "resumen · actualizado hace X". Helper mínimo para
+// no repetir el formateo en cada paintXxx que hoy no muestra fecha.
+function metaConFecha(resumen, updated, stale) {
+  const frag = actualizadoTexto(updated, stale);
+  return frag ? `${resumen} · ${frag}` : resumen;
+}
+
+// "DD-MM" en hora de Chile a partir de un `updated` global — usado por
+// farmacias.json (turno diario), que no trae fecha por local, solo global.
+function diaMes(updated) {
+  if (!updated) return null;
+  return new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: '2-digit', timeZone: TZ })
+    .format(parseUpdated(updated));
 }
 
 function destroyChart(id) {
@@ -1215,6 +1247,7 @@ async function loadEmergencia() {
     // Mismo aviso que cortesData.stale (paintCortes) para no mostrar datos
     // vencidos como si fueran vigentes.
     emergenciaData.farmaciaStale = !!farm.stale;
+    emergenciaData.farmaciaFecha = diaMes(farm.updated);
   }
   tsunamiViasData = vias;
   tsunamiAreasData = areas;
@@ -1475,9 +1508,11 @@ function ensureMap() {
   setTimeout(() => map.invalidateSize(), 200);
   for (const k of Object.keys(CAPAS)) layerGroups[k] = L.layerGroup().addTo(map);
   // Al cambiar de zoom, el dedup/agrupado por celda de paintTemp/paintAire/
-  // paintIncendios depende del zoom actual: hay que re-pintar la capa activa.
+  // paintIncendios/paintCombustible depende del zoom actual: hay que
+  // re-pintar la capa activa (combustible faltaba aquí: sus íconos se
+  // quedaban agrupados para siempre aunque el usuario acercara el mapa).
   map.on('zoomend', () => {
-    if (['temp', 'aire', 'precipitacion', 'incendios', 'remociones', 'emergencia', 'evacuacion'].some((k) => capasActivas.has(k))) renderMapa();
+    if (['temp', 'aire', 'precipitacion', 'incendios', 'remociones', 'combustible', 'emergencia', 'evacuacion'].some((k) => capasActivas.has(k))) renderMapa();
   });
   // Las vías de evacuación se filtran por el viewport visible (2.740 vías en
   // todo el país): al desplazar el mapa sin cambiar el zoom, también hay que
@@ -1630,7 +1665,7 @@ function paintAire(group) {
   });
   const resumen = est.length < todas.length ? `${est.length} de ${todas.length} estaciones SINCA` : `${est.length} estaciones SINCA`;
   const acerca = est.length < todas.length ? ' (acerca el mapa para ver más)' : '';
-  $('#map-meta').textContent = `${resumen} · MP2,5${acerca}`;
+  $('#map-meta').textContent = metaConFecha(`${resumen} · MP2,5${acerca}`, aireData && aireData.updated);
 }
 
 // Formato del acumulado: 1 decimal bajo 10 (precisión útil en valores chicos),
@@ -2074,6 +2109,11 @@ function paintEmergencia(group) {
       const h = document.createElement('strong'); h.textContent = it.n; box.appendChild(h);
       if (it.d) { const small = document.createElement('small'); small.textContent = it.d; box.appendChild(small); }
       if (it.h) { const smallH = document.createElement('small'); smallH.textContent = `Horario: ${it.h}`; box.appendChild(smallH); }
+      if (it.cat === 'farmacia' && emergenciaData.farmaciaFecha) {
+        const turno = document.createElement('small');
+        turno.textContent = `De turno hoy ${emergenciaData.farmaciaFecha}`;
+        box.appendChild(turno);
+      }
       if (it.cat === 'encuentro_tsunami') {
         const a = document.createElement('a');
         a.href = 'https://senapred.cl/visor-chile-preparado/';
@@ -2248,7 +2288,7 @@ function paintRemociones(group) {
       }
     });
   }
-  $('#map-meta').textContent = `${puntos.length} remociones registradas · catastro SENAPRED`;
+  $('#map-meta').textContent = metaConFecha(`${puntos.length} remociones registradas · catastro SENAPRED`, remocionesData.updated);
 }
 
 // Círculo escalado por clientes afectados (mismo patrón que paintSismos con
@@ -2277,6 +2317,12 @@ function paintCortes(group) {
       small.textContent = c.empresas.join(' · ');
       box.appendChild(small);
     }
+    const fragFecha = actualizadoTexto(cortesData.updated, cortesData.stale);
+    if (fragFecha) {
+      const fecha = document.createElement('small');
+      fecha.textContent = fragFecha;
+      box.appendChild(fecha);
+    }
     marker.bindPopup(box, { maxWidth: 260 });
   });
   const stale = cortesData.stale ? ' · datos antiguos (satélite sin actualizar)' : '';
@@ -2292,6 +2338,31 @@ const PRECIO_COMBUSTIBLE_LABEL = {
 function formatoClp(v) {
   return `$${Math.round(v).toLocaleString('es-CL')}`;
 }
+
+// precios[tipo] tolera dos formatos durante la transición: número plano (el
+// shape viejo, por si un combustible.json ya generado no se ha vuelto a
+// correr) o {precio, fecha} (el shape nuevo, con la fecha CNE de ESE precio).
+function precioValor(entry) {
+  if (entry == null) return null;
+  return typeof entry === 'number' ? entry : entry.precio;
+}
+
+// "YYYY-MM-DD" (fecha_actualizacion de la CNE, sin hora) -> "DD-MM".
+function ddmm(fechaYMD) {
+  const [, m, d] = fechaYMD.split('-');
+  return `${d}-${m}`;
+}
+
+// Días transcurridos desde una fecha "YYYY-MM-DD" (calendario, sin hora):
+// suficiente para el umbral de "precio antiguo", no necesita precisión TZ.
+function diasDesdeFecha(fechaYMD) {
+  const [y, m, d] = fechaYMD.split('-').map(Number);
+  return Math.floor((Date.now() - Date.UTC(y, m - 1, d)) / 86400000);
+}
+
+// Precio antiguo: más de 14 días desde que la CNE lo actualizó por última
+// vez para ese combustible en esa estación.
+const PRECIO_ANTIGUO_DIAS = 14;
 
 // combustible.json: dormida sin CNE_API_KEY (n=0 o archivo ausente) → misma
 // nota que "capa en preparación", no un error. Con datos, mismo patrón de
@@ -2322,7 +2393,7 @@ function paintCombustible(group) {
     });
   } else {
     estaciones.forEach((e) => {
-      const precio93 = e.precios && e.precios.gasolina_93;
+      const precio93 = precioValor(e.precios && e.precios.gasolina_93);
       const icon = L.divIcon({
         className: 'stn-icon',
         html: `<span class="stn-label">${precio93 != null ? Math.round(precio93) : '⛽'}</span>`,
@@ -2340,12 +2411,20 @@ function paintCombustible(group) {
       }
       const precios = e.precios || {};
       box.appendChild(popupRows(Object.keys(PRECIO_COMBUSTIBLE_LABEL)
-        .filter((k) => precios[k] != null)
-        .map((k) => [PRECIO_COMBUSTIBLE_LABEL[k], formatoClp(precios[k])])));
+        .filter((k) => precioValor(precios[k]) != null)
+        .map((k) => {
+          const entry = precios[k];
+          const valor = precioValor(entry);
+          const fecha = entry && typeof entry === 'object' ? entry.fecha : null;
+          if (!fecha) return [PRECIO_COMBUSTIBLE_LABEL[k], formatoClp(valor)];
+          const antiguo = diasDesdeFecha(fecha) > PRECIO_ANTIGUO_DIAS;
+          const texto = `${formatoClp(valor)} (al ${ddmm(fecha)})${antiguo ? ' ⚠ precio antiguo' : ''}`;
+          return [PRECIO_COMBUSTIBLE_LABEL[k], texto];
+        })));
       marker.bindPopup(box, { maxWidth: 260 });
     });
   }
-  $('#map-meta').textContent = `${estaciones.length} estaciones con precios · CNE Bencina en Línea`;
+  $('#map-meta').textContent = metaConFecha(`${estaciones.length} estaciones con precios · CNE Bencina en Línea`, combustibleData.updated);
 }
 
 function setupCapas() {
@@ -3152,6 +3231,7 @@ async function loadAireSinca() {
     if (!res.ok) return;
     const data = await res.json();
     aireStations = data.estaciones || [];
+    aireData = data;
     if (lastData) renderAire(lastData.aire);   // re-render con dato oficial
     if (capasActivas.has('aire')) renderMapa(); // repinta el mapa de aire
   } catch (_) { /* sin SINCA: el panel usa el pronóstico CAMS */ }

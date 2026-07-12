@@ -1103,7 +1103,9 @@ dialog::backdrop {
 }
 
 .stn-popup strong { display: block; font-size: 0.9rem; margin-bottom: 2px; }
-.stn-popup small { color: var(--ink-soft); font-family: var(--font-mono); font-size: 0.66rem; }
+/* display: block — dos <small> seguidos (p. ej. empresas + fecha de
+   actualización) deben quedar en líneas separadas, no pegados sin espacio. */
+.stn-popup small { display: block; color: var(--ink-soft); font-family: var(--font-mono); font-size: 0.66rem; }
 
 .stn-popup dl {
   display: grid;
