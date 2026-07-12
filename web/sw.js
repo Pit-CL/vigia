@@ -16,7 +16,7 @@ const SHELL = [
   'emergencia.html',
   'emergencia.js?v=1',
   'theme.js?v=1',
-  'app.css?v=64',
+  'app.css?v=65',
   'app.js?v=65',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
