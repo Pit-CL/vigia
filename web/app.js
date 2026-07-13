@@ -1547,11 +1547,11 @@ function ensureMap() {
   map.on('zoomend', () => {
     if (['temp', 'aire', 'precipitacion', 'incendios', 'remociones', 'combustible', 'emergencia', 'evacuacion'].some((k) => capasActivas.has(k))) renderMapa();
   });
-  // Las vías de evacuación se filtran por el viewport visible (2.740 vías en
-  // todo el país): al desplazar el mapa sin cambiar el zoom, también hay que
-  // re-pintar para que aparezcan las vías que entraron al encuadre.
+  // Las vías de evacuación y las estaciones de combustible se filtran por el
+  // viewport visible: al desplazar el mapa sin cambiar el zoom, también hay
+  // que re-pintar para que aparezcan las que entraron al encuadre.
   map.on('moveend', () => {
-    if (capasActivas.has('emergencia') || capasActivas.has('evacuacion')) renderMapa();
+    if (capasActivas.has('emergencia') || capasActivas.has('evacuacion') || capasActivas.has('combustible')) renderMapa();
   });
   return map;
 }
@@ -1877,15 +1877,20 @@ function paintIncendios(group) {
       // indica el rumbo de avance. rotate(avance - 90) porque el glifo ➤
       // apunta al Este (90°) por defecto: rotarlo (avance - 90)° alinea su
       // punta con el rumbo compás (0°=N arriba, 90°=E derecha, sentido horario).
-      const flecha = avance != null
-        ? `<span class="foco-flecha" style="transform: rotate(${avance - 90}deg)">➤</span>`
-        : '';
+      // Sin atributo style inline: la CSP (style-src 'self') lo bloquea. La
+      // rotación se aplica por CSSOM tras crear el marcador.
+      const flecha = avance != null ? '<span class="foco-flecha">➤</span>' : '';
       const icon = L.divIcon({
         className: `foco foco-${f.conf || 'n'}`,
         html: flecha,
         iconSize: [10, 10], iconAnchor: [5, 5],
       });
       const marker = L.marker([f.lat, f.lon], { icon }).addTo(group);
+      if (avance != null) {
+        const el = marker.getElement();
+        const span = el && el.querySelector('.foco-flecha');
+        if (span) span.style.transform = `rotate(${avance - 90}deg)`;
+      }
       const box = document.createElement('div');
       box.className = 'stn-popup';
       const h = document.createElement('strong'); h.textContent = 'Foco de calor'; box.appendChild(h);
@@ -2530,9 +2535,11 @@ function paintCombustible(group) {
     if (capasActivas.size === 1) $('#map-meta').textContent = 'combustible: capa en preparación (sin datos todavía)';
     return;
   }
+  const bounds = map.getBounds().pad(0.3);
+  const visibles = estaciones.filter((e) => bounds.contains([e.lat, e.lon]));
   const zoom = map.getZoom();
   if (zoom < 9) {
-    const grupos = agruparPorCelda(estaciones, 48).sort((a, b) => a.length - b.length);
+    const grupos = agruparPorCelda(visibles, 48).sort((a, b) => a.length - b.length);
     grupos.forEach((grupo) => {
       const lat = grupo.reduce((s, p) => s + p.lat, 0) / grupo.length;
       const lon = grupo.reduce((s, p) => s + p.lon, 0) / grupo.length;
@@ -2547,7 +2554,7 @@ function paintCombustible(group) {
       marker.on('click', () => map.setView([lat, lon], zoom + 2));
     });
   } else if (zoom <= 12) {
-    const grupos = agruparPorCelda(estaciones, 46).sort((a, b) => a.length - b.length);
+    const grupos = agruparPorCelda(visibles, 46).sort((a, b) => a.length - b.length);
     grupos.forEach((grupo) => {
       const lat = grupo.reduce((s, p) => s + p.lat, 0) / grupo.length;
       const lon = grupo.reduce((s, p) => s + p.lon, 0) / grupo.length;
@@ -2588,7 +2595,7 @@ function paintCombustible(group) {
       }
     });
   } else {
-    estaciones.forEach((e) => {
+    visibles.forEach((e) => {
       const precio93 = precioValor(e.precios && e.precios.gasolina_93);
       const icon = L.divIcon({
         className: 'stn-icon',

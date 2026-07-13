@@ -10,10 +10,12 @@ buscando la palabra de nivel más cercana después de su nombre.
 """
 import json
 import re
+import ssl
 import unicodedata
 import urllib.request
 from datetime import datetime, timezone
 from html.parser import HTMLParser
+from pathlib import Path
 
 import config
 from volcanes_cl import VOLCANES
@@ -22,6 +24,12 @@ UA = "vigia-ingesta/1.0 (proyecto open source; vigia.cavara.cl)"
 NIVELES_VALIDOS = {"verde", "amarilla", "naranja", "roja"}
 VENTANA_BUSQUEDA = 200   # caracteres tras el nombre del volcán donde se busca el nivel
 MIN_VOLCANES_OK = 15
+
+# sernageomin.cl sirve solo el certificado hoja en su cadena TLS (falta el
+# intermedio); se vendoriza para poder verificar sin desactivar la validación.
+CERT_INTERMEDIO_SERNAGEOMIN = Path(__file__).parent / "certs" / "globalsign-alphassl-2025.pem"
+_SSL_CONTEXT_SERNAGEOMIN = ssl.create_default_context()
+_SSL_CONTEXT_SERNAGEOMIN.load_verify_locations(cafile=str(CERT_INTERMEDIO_SERNAGEOMIN))
 
 
 class _TextExtractor(HTMLParser):
@@ -78,7 +86,8 @@ def _parse(html_text: str) -> dict[str, str]:
 
 def _fetch(url: str) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=30) as res:
+    ctx = _SSL_CONTEXT_SERNAGEOMIN if "sernageomin.cl" in url else None
+    with urllib.request.urlopen(req, timeout=30, context=ctx) as res:
         return res.read().decode("utf-8", errors="replace")
 
 
