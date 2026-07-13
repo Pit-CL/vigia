@@ -10,6 +10,7 @@ No todas las combinaciones existen (p.ej. hoy no hay VOLCANICAS_ROJA): un
 400/404 en una combinación puntual no es un error, se salta.
 """
 import json
+import statistics
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -164,8 +165,12 @@ def update(con, fetched_at: str) -> int:
         comunas = sorted(g["comunas"])
         lat = lon = None
         if g["centros"]:
-            lat = round(sum(c[0] for c in g["centros"]) / len(g["centros"]), 3)
-            lon = round(sum(c[1] for c in g["centros"]) / len(g["centros"]), 3)
+            # Mediana, no promedio: en alertas regionales las comunas insulares
+            # (Rapa Nui, Juan Fernández, Antártica) son outliers de longitud y
+            # el promedio deja el pin en medio del mar; la mediana cae en el
+            # continente, donde está el grueso de las comunas alertadas.
+            lat = round(statistics.median(c[0] for c in g["centros"]), 3)
+            lon = round(statistics.median(c[1] for c in g["centros"]), 3)
         alertas.append({
             "nivel": nivel, "categoria": categoria_label, "evento": causalidad,
             "region": region, "comunas": comunas, "n_comunas": len(comunas),
