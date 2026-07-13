@@ -1,10 +1,12 @@
 """Avisos meteorológicos derivados del propio pronóstico multi-modelo.
 
 No es un aviso oficial: son umbrales propios (inspirados en los criterios
-públicos de avisos de la Dirección Meteorológica de Chile, pero sin ninguna
-relación operativa con la DMC) aplicados a la MEDIANA horaria entre modelos
-del archivo de pronósticos, en la ventana de 48 h desde ahora. avisos.json lo
-declara explícitamente para que nadie lo confunda con un aviso oficial.
+públicos de avisos de la Dirección Meteorológica de Chile, y en la regla
+30-30-30 de manejo del fuego para el aviso de incendio, pero sin ninguna
+relación operativa con la DMC ni con CONAF/SENAPRED) aplicados a la MEDIANA
+horaria entre modelos del archivo de pronósticos, en la ventana de 48 h desde
+ahora. avisos.json lo declara explícitamente para que nadie lo confunda con
+un aviso oficial.
 
 Sin tabla propia: es barato de recalcular (SQL local + mediana, sin red), así
 que se recalcula entero en cada corrida en vez de persistir estado.
@@ -16,12 +18,14 @@ from datetime import datetime, timedelta, timezone
 import config
 
 # Umbrales (derivación propia; ver docstring). máx/mín = pico de la mediana
-# horaria entre modelos en la ventana de 48 h; lluvia = pico de la suma móvil
-# de 24 h de esa misma mediana horaria.
+# horaria entre modelos en la ventana de 48 h; lluvia/nieve = pico de la suma
+# móvil de 24 h de esa misma mediana horaria. Viento y calor son umbrales
+# FIJOS nacionales — ver _umbral_climatologico para el ajuste por estación.
 VIENTO_AMARILLO, VIENTO_NARANJA = 60.0, 90.0     # km/h, máx mediana horaria
 HELADA_AMARILLO, HELADA_NARANJA = 0.0, -4.0      # °C, mín mediana horaria
 LLUVIA_AMARILLO, LLUVIA_NARANJA = 30.0, 60.0     # mm, máx suma móvil 24 h
 CALOR_AMARILLO, CALOR_NARANJA = 34.0, 37.0       # °C, máx mediana horaria
+NIEVE_AMARILLO, NIEVE_NARANJA = 10.0, 30.0       # cm, máx suma móvil 24 h
 
 # Aviso aluvional: lluvia intensa + isoterma 0° alta significa que la cuenca
 # recibe agua líquida en vez de nieve, con riesgo de crecidas repentinas y
@@ -31,30 +35,54 @@ CALOR_AMARILLO, CALOR_NARANJA = 34.0, 37.0       # °C, máx mediana horaria
 ALUVION_LLUVIA_AMARILLO, ALUVION_LLUVIA_NARANJA = 20.0, 40.0     # mm, suma móvil 24 h
 ALUVION_ISOTERMA_AMARILLO, ALUVION_ISOTERMA_NARANJA = 2900.0, 3400.0  # m, mediana en la ventana
 
+# Aviso incendio: regla 30-30-30 (criterio establecido en manejo del fuego).
+# Temperatura, humedad relativa y viento deben cumplirse en la MISMA hora de
+# la mediana multi-modelo. Derivación propia, sin relación operativa con
+# CONAF/SENAPRED.
+INCENDIO_TEMP_AMARILLO, INCENDIO_TEMP_NARANJA = 30.0, 35.0        # °C
+INCENDIO_HR_AMARILLO, INCENDIO_HR_NARANJA = 30.0, 25.0            # %, menor es peor
+INCENDIO_VIENTO_AMARILLO, INCENDIO_VIENTO_NARANJA = 30.0, 40.0    # km/h
+
+# Umbral climatológico (viento y calor SOLAMENTE): en zonas donde el umbral
+# fijo nacional es habitual (p.ej. viento en Patagonia), un umbral fijo deja
+# la estación en aviso permanente. Se sube el umbral a percentil 98 de sus
+# propias observaciones cuando ese percentil supera al fijo, con gate de
+# muestra mínima — sin muestra suficiente, el ajuste NO se aplica (se
+# prefiere un umbral fijo conservador a un percentil poco confiable).
+MIN_OBS_CLIMATOLOGICO = 1000
+PERCENTIL_CLIMATOLOGICO = 98
+
 VENTANA_H = 48
-VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall", "freezing_level_height"]
+VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall",
+        "freezing_level_height", "relative_humidity_2m"]
 
 
-def _hourly_medians(con, station_id: str, run_tag: str, desde: str, hasta: str) -> dict:
-    """{variable: [(valid_time, mediana_entre_modelos)]}, ordenado, ignorando None."""
+def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str) -> tuple[dict, dict]:
+    """(series, por_modelo):
+    - series: {variable: [(valid_time, mediana_entre_modelos)]}, ordenado, sin None.
+    - por_modelo: {variable: {model: [(valid_time, value)]}}, ordenado, sin None.
+      Base del acuerdo de ensamble (B1): cada model=... es un modelo determinista
+      distinto archivado con member=-1 (ver forecasts en db.py); la mediana entre
+      todas esas filas por hora es lo que arma `series`.
+    """
     placeholders = ",".join("?" * len(VARS))
     rows = con.execute(
-        f"SELECT variable, valid_time, value FROM forecasts"
+        f"SELECT variable, model, valid_time, value FROM forecasts"
         f" WHERE station=? AND run_tag=? AND member=-1 AND variable IN ({placeholders})"
         f" AND valid_time >= ? AND valid_time <= ?",
         (station_id, run_tag, *VARS, desde, hasta))
     por_hora: dict = {}
-    for var, vt, val in rows:
+    por_modelo_raw: dict = {}
+    for var, model, vt, val in rows:
+        if val is None:
+            continue
         por_hora.setdefault(var, {}).setdefault(vt, []).append(val)
-    series = {}
-    for var, horas in por_hora.items():
-        serie = []
-        for vt in sorted(horas):
-            vals = [v for v in horas[vt] if v is not None]
-            if vals:
-                serie.append((vt, statistics.median(vals)))
-        series[var] = serie
-    return series
+        por_modelo_raw.setdefault(var, {}).setdefault(model, []).append((vt, val))
+    series = {var: [(vt, statistics.median(horas[vt])) for vt in sorted(horas)]
+              for var, horas in por_hora.items()}
+    por_modelo = {var: {m: sorted(vals) for m, vals in modelos.items()}
+                  for var, modelos in por_modelo_raw.items()}
+    return series, por_modelo
 
 
 def _rolling_sum_24h(serie: list) -> list:
@@ -82,14 +110,90 @@ def _nivel(valor: float, amarillo: float, naranja: float, mayor_es_peor: bool) -
     return None
 
 
-def _aviso(st: dict, tipo: str, nivel: str, valor: float, unidad: str, valid_time: str) -> dict:
-    return {
+def _percentil(valores_ordenados: list, p: float) -> float:
+    """Percentil por índice (nearest-rank, sin scipy). `valores_ordenados` YA
+    ordenado ascendente."""
+    n = len(valores_ordenados)
+    idx = min(n - 1, max(0, round(p / 100 * (n - 1))))
+    return valores_ordenados[idx]
+
+
+def _umbral_climatologico(con, station_id: str, variable: str,
+                           amarillo_fijo: float, naranja_fijo: float) -> tuple[float, float]:
+    """Umbral efectivo = max(fijo, percentil 98 de las OBSERVACIONES de esa
+    estación para esa variable), con gate de muestra mínima. `naranja` escala
+    proporcional para conservar la separación amarillo/naranja del umbral fijo."""
+    rows = con.execute(
+        "SELECT value FROM observations WHERE station=? AND variable=? AND value IS NOT NULL",
+        (station_id, variable)).fetchall()
+    if len(rows) < MIN_OBS_CLIMATOLOGICO:
+        return amarillo_fijo, naranja_fijo
+    valores = sorted(v for (v,) in rows)
+    p98 = _percentil(valores, PERCENTIL_CLIMATOLOGICO)
+    amarillo_efectivo = max(amarillo_fijo, p98)
+    naranja_efectivo = amarillo_efectivo * (naranja_fijo / amarillo_fijo)
+    return amarillo_efectivo, naranja_efectivo
+
+
+def _acuerdo_pico(por_modelo: dict, var: str, amarillo: float, naranja: float,
+                   mayor_es_peor: bool) -> str:
+    """'n_superan/n_modelos_con_datos': cuántos modelos, por sí solos (su propio
+    pico horario en la ventana), superan el umbral amarillo de este aviso.
+    Información de confianza del ensamble — NUNCA un gate: un aviso con
+    acuerdo 1/6 igual se emite si la mediana lo cruza."""
+    modelos = por_modelo.get(var, {})
+    n_supera = sum(
+        1 for serie in modelos.values()
+        if _nivel(max(v for _, v in serie) if mayor_es_peor else min(v for _, v in serie),
+                  amarillo, naranja, mayor_es_peor) is not None
+    )
+    return f"{n_supera}/{len(modelos)}"
+
+
+def _acuerdo_rolling(por_modelo: dict, var: str, amarillo: float, naranja: float) -> str:
+    """Ídem _acuerdo_pico para lluvia/nieve/aluvional: la suma móvil de 24 h de
+    cada modelo por sí solo. El denominador son los modelos con ventana de 24
+    puntos completa (los demás no tienen forma de opinar)."""
+    modelos = por_modelo.get(var, {})
+    n_con_ventana = n_supera = 0
+    for serie in modelos.values():
+        rolling = _rolling_sum_24h(serie)
+        if not rolling:
+            continue
+        n_con_ventana += 1
+        if _nivel(max(v for _, v in rolling), amarillo, naranja, mayor_es_peor=True) is not None:
+            n_supera += 1
+    return f"{n_supera}/{n_con_ventana}"
+
+
+def _acuerdo_incendio(por_modelo: dict) -> str:
+    """Ídem para incendio: cuántos modelos, con su propia temperatura/HR/viento
+    (sin pasar por la mediana), cumplen 30-30-30 en alguna hora común."""
+    temp_m = por_modelo.get("temperature_2m", {})
+    hr_m = por_modelo.get("relative_humidity_2m", {})
+    viento_m = por_modelo.get("wind_speed_10m", {})
+    modelos = set(temp_m) & set(hr_m) & set(viento_m)
+    n_supera = 0
+    for m in modelos:
+        temp_h, hr_h, viento_h = dict(temp_m[m]), dict(hr_m[m]), dict(viento_m[m])
+        horas = set(temp_h) & set(hr_h) & set(viento_h)
+        if any(temp_h[h] >= INCENDIO_TEMP_AMARILLO and hr_h[h] <= INCENDIO_HR_AMARILLO
+               and viento_h[h] >= INCENDIO_VIENTO_AMARILLO for h in horas):
+            n_supera += 1
+    return f"{n_supera}/{len(modelos)}"
+
+
+def _aviso(st: dict, tipo: str, nivel: str, valor: float, unidad: str, valid_time: str,
+           **extra) -> dict:
+    d = {
         "estacion_id": st["id"], "nombre": st["nombre"], "region": st.get("region"),
         "lat": st["lat"], "lon": st["lon"],
         "tipo": tipo, "nivel": nivel,
         "valor": round(valor, 1), "unidad": unidad,
         "hora_peak": valid_time + ":00Z",   # valid_time siempre "YYYY-MM-DDTHH:MM"
     }
+    d.update(extra)
+    return d
 
 
 def _suma_ventana(serie: list, n_horas: int) -> float | None:
@@ -116,27 +220,67 @@ def _acumulado_estacion(st: dict, series: dict) -> dict:
     }
 
 
-def _avisos_estacion(series: dict, st: dict) -> list:
+def _aviso_incendio(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """Regla 30-30-30: temperatura ≥30 °C, humedad relativa ≤30 % y viento
+    ≥30 km/h EN LA MISMA HORA de la mediana multi-modelo (≥35°/≤25 %/≥40 km/h
+    = naranja). hora_peak = la primera hora que alcanza el nivel más alto
+    alcanzado en toda la ventana."""
+    temp = dict(series.get("temperature_2m") or [])
+    hr = dict(series.get("relative_humidity_2m") or [])
+    viento = dict(series.get("wind_speed_10m") or [])
+    horas = sorted(set(temp) & set(hr) & set(viento))
+
+    def nivel_hora(h: str) -> str | None:
+        t, r, v = temp[h], hr[h], viento[h]
+        if t >= INCENDIO_TEMP_NARANJA and r <= INCENDIO_HR_NARANJA and v >= INCENDIO_VIENTO_NARANJA:
+            return "naranja"
+        if t >= INCENDIO_TEMP_AMARILLO and r <= INCENDIO_HR_AMARILLO and v >= INCENDIO_VIENTO_AMARILLO:
+            return "amarillo"
+        return None
+
+    niveles = {h: nivel_hora(h) for h in horas}
+    if "naranja" in niveles.values():
+        nivel_top = "naranja"
+    elif "amarillo" in niveles.values():
+        nivel_top = "amarillo"
+    else:
+        return None
+    h = next(h for h in horas if niveles[h] == nivel_top)  # horas ordenadas asc.
+    t, r, v = temp[h], hr[h], viento[h]
+    acuerdo = _acuerdo_incendio(por_modelo)
+    return _aviso(st, "incendio", nivel_top, t, "°C", h, acuerdo=acuerdo,
+                  hr=round(r, 1), viento=round(v, 1))
+
+
+def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
+                      viento_umbral: tuple, calor_umbral: tuple) -> list:
     avisos = []
+    viento_amarillo, viento_naranja = viento_umbral
+    calor_amarillo, calor_naranja = calor_umbral
 
     viento = series.get("wind_speed_10m") or []
     if viento:
         vt, val = max(viento, key=lambda p: p[1])
-        nivel = _nivel(val, VIENTO_AMARILLO, VIENTO_NARANJA, mayor_es_peor=True)
+        nivel = _nivel(val, viento_amarillo, viento_naranja, mayor_es_peor=True)
         if nivel:
-            avisos.append(_aviso(st, "viento", nivel, val, "km/h", vt))
+            acuerdo = _acuerdo_pico(por_modelo, "wind_speed_10m", viento_amarillo, viento_naranja, True)
+            avisos.append(_aviso(st, "viento", nivel, val, "km/h", vt,
+                                  acuerdo=acuerdo, umbral=round(viento_amarillo, 1)))
 
     temp = series.get("temperature_2m") or []
     if temp:
         vt_min, val_min = min(temp, key=lambda p: p[1])
         nivel = _nivel(val_min, HELADA_AMARILLO, HELADA_NARANJA, mayor_es_peor=False)
         if nivel:
-            avisos.append(_aviso(st, "helada", nivel, val_min, "°C", vt_min))
+            acuerdo = _acuerdo_pico(por_modelo, "temperature_2m", HELADA_AMARILLO, HELADA_NARANJA, False)
+            avisos.append(_aviso(st, "helada", nivel, val_min, "°C", vt_min, acuerdo=acuerdo))
 
         vt_max, val_max = max(temp, key=lambda p: p[1])
-        nivel = _nivel(val_max, CALOR_AMARILLO, CALOR_NARANJA, mayor_es_peor=True)
+        nivel = _nivel(val_max, calor_amarillo, calor_naranja, mayor_es_peor=True)
         if nivel:
-            avisos.append(_aviso(st, "calor", nivel, val_max, "°C", vt_max))
+            acuerdo = _acuerdo_pico(por_modelo, "temperature_2m", calor_amarillo, calor_naranja, True)
+            avisos.append(_aviso(st, "calor", nivel, val_max, "°C", vt_max,
+                                  acuerdo=acuerdo, umbral=round(calor_amarillo, 1)))
 
     precip = series.get("precipitation") or []
     rolling = _rolling_sum_24h(precip)
@@ -144,7 +288,8 @@ def _avisos_estacion(series: dict, st: dict) -> list:
         vt, val = max(rolling, key=lambda p: p[1])
         nivel = _nivel(val, LLUVIA_AMARILLO, LLUVIA_NARANJA, mayor_es_peor=True)
         if nivel:
-            avisos.append(_aviso(st, "lluvia", nivel, val, "mm", vt))
+            acuerdo = _acuerdo_rolling(por_modelo, "precipitation", LLUVIA_AMARILLO, LLUVIA_NARANJA)
+            avisos.append(_aviso(st, "lluvia", nivel, val, "mm", vt, acuerdo=acuerdo))
 
         # Isoterma 0° mediana durante la misma ventana de 24 h del pico de
         # lluvia. Null-safe: si freezing_level_height aún no tiene filas
@@ -164,9 +309,27 @@ def _avisos_estacion(series: dict, st: dict) -> list:
                 else:
                     nivel_aluv = None
                 if nivel_aluv:
-                    aviso_aluv = _aviso(st, "aluvional", nivel_aluv, val, "mm", vt)
+                    # Acuerdo del componente lluvia (el más variable entre
+                    # modelos); la isoterma es más homogénea regionalmente y
+                    # no se desglosa por modelo aquí.
+                    acuerdo = _acuerdo_rolling(por_modelo, "precipitation",
+                                               ALUVION_LLUVIA_AMARILLO, ALUVION_LLUVIA_NARANJA)
+                    aviso_aluv = _aviso(st, "aluvional", nivel_aluv, val, "mm", vt, acuerdo=acuerdo)
                     aviso_aluv["isoterma_m"] = round(iso_mediana / 100) * 100
                     avisos.append(aviso_aluv)
+
+    nieve = series.get("snowfall") or []
+    rolling_nieve = _rolling_sum_24h(nieve)
+    if rolling_nieve:
+        vt, val = max(rolling_nieve, key=lambda p: p[1])
+        nivel = _nivel(val, NIEVE_AMARILLO, NIEVE_NARANJA, mayor_es_peor=True)
+        if nivel:
+            acuerdo = _acuerdo_rolling(por_modelo, "snowfall", NIEVE_AMARILLO, NIEVE_NARANJA)
+            avisos.append(_aviso(st, "nieve", nivel, val, "cm", vt, acuerdo=acuerdo))
+
+    aviso_incendio = _aviso_incendio(series, por_modelo, st)
+    if aviso_incendio:
+        avisos.append(aviso_incendio)
 
     return avisos
 
@@ -186,8 +349,12 @@ def update(con, fetched_at: str) -> int:
             continue
         # Una sola consulta de series por estación: avisos y acumulados
         # comparten la misma mediana horaria multi-modelo.
-        series = _hourly_medians(con, st["id"], run_tag, desde, hasta)
-        avisos.extend(_avisos_estacion(series, st))
+        series, por_modelo = _series_estacion(con, st["id"], run_tag, desde, hasta)
+        viento_umbral = _umbral_climatologico(con, st["id"], "wind_speed_10m",
+                                               VIENTO_AMARILLO, VIENTO_NARANJA)
+        calor_umbral = _umbral_climatologico(con, st["id"], "temperature_2m",
+                                              CALOR_AMARILLO, CALOR_NARANJA)
+        avisos.extend(_avisos_estacion(series, por_modelo, st, viento_umbral, calor_umbral))
         acumulados.append(_acumulado_estacion(st, series))
 
     payload = {
