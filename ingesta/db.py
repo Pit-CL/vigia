@@ -95,6 +95,46 @@ def connect() -> sqlite3.Connection:
     return con
 
 
+# QC de rango físico (práctica estándar meteorológica): descarta observaciones
+# imposibles antes de insertarlas — un sensor roto (ej. estación DMC 390043
+# reportando 501.6 hPa constante) contamina la calibración EWMA con un bias
+# gigante que luego arruina el pronóstico corregido. Márgenes generosos sobre
+# récords mundiales: no tocan clima real, solo basura de hardware.
+RANGO_FISICO = {
+    "pressure_msl": (870, 1085),
+    "temperature_2m": (-45, 48),
+    "dew_point_2m": (-60, 40),
+    "relative_humidity_2m": (0, 100),
+    "wind_speed_10m": (0, 250),
+    "precipitation": (0, 120),
+    "cloud_cover": (0, 100),
+}
+
+
+def qc_filtrar_observaciones(rows):
+    """Separa filas (station, obs_time, variable, value, source) dentro/fuera
+    de rango físico. Devuelve (rows_ok, descartadas); descartadas es una lista
+    de dicts (station, variable, value) para que el caller imprima el resumen
+    — nunca se descarta en silencio."""
+    ok, descartadas = [], []
+    for row in rows:
+        station, _obs_time, variable, value, _source = row
+        rango = RANGO_FISICO.get(variable)
+        if rango is not None and value is not None and not (rango[0] <= value <= rango[1]):
+            descartadas.append({"station": station, "variable": variable, "value": value})
+            continue
+        ok.append(row)
+    return ok, descartadas
+
+
+def qc_reportar(descartadas) -> None:
+    """Imprime el resumen de QC (máx. 5 ejemplos). Nunca silencioso."""
+    if not descartadas:
+        return
+    ejemplos = ", ".join(f"{d['station']}: {d['variable']}={d['value']}" for d in descartadas[:5])
+    print(f"[aviso] QC: {len(descartadas)} observaciones descartadas por rango físico ({ejemplos})")
+
+
 def log(con: sqlite3.Connection, run_at: str, kind: str, ok: bool, rows: int, detail: str = "") -> None:
     con.execute(
         "INSERT INTO ingest_log(run_at, kind, ok, rows, detail) VALUES (?,?,?,?,?)",

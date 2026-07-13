@@ -119,6 +119,11 @@ REGIONES_AUSTRAL = {"XI", "XII"}
 # precursor del temporal de viento: cae la presión antes de que la ráfaga
 # aparezca en el pronóstico, dando anticipación adicional. Derivación propia.
 PRESION_AMARILLO, PRESION_NARANJA, PRESION_ROJO = 12.0, 18.0, 24.0   # hPa/24h, máx caída
+# Defensa en profundidad: ninguna ciclogénesis explosiva registrada cae más de
+# esto en 24 h. Por encima es error de datos (sensor roto contaminando el
+# bias, no clima real) — se descarta el aviso aunque haya pasado el gate de
+# calibrate.py.
+CAIDA_PRESION_MAX_PLAUSIBLE = 60.0
 
 # Aviso nieve en cota baja (compuesto, patrón aluvional): suma móvil 24 h de
 # precipitation Y mediana de freezing_level_height baja en la MISMA ventana —
@@ -504,6 +509,10 @@ def _aviso_presion(series: dict, por_modelo: dict, st: dict) -> dict | None:
     if not caidas:
         return None
     vt, val = max(caidas, key=lambda p: p[1])
+    if val > CAIDA_PRESION_MAX_PLAUSIBLE:
+        print(f"[aviso] presion: caída implausible descartada "
+              f"(estación {st['id']}: {val} hPa/24h — probable error de datos)")
+        return None
     nivel = _nivel(val, PRESION_AMARILLO, PRESION_NARANJA, mayor_es_peor=True, rojo=PRESION_ROJO)
     if not nivel:
         return None

@@ -27,6 +27,18 @@ BUCKETS = [(0, 24, "24"), (24, 48, "48"), (48, 72, "72"), (72, 96, "96")]
 ADDITIVE_VARS = config.CALIBRABLE_VARS
 CLIP = {"relative_humidity_2m": (0.0, 100.0), "wind_speed_10m": (0.0, None)}
 
+# Tope de plausibilidad del bias EWMA: por encima de esto ya no es sesgo de
+# terreno/altitud (legítimo, la función de la calibración), es un sensor roto
+# contaminando la celda (ej. estación con presión constante 501.6 hPa). Topes
+# generosos — no bloquean sesgo real, solo basura de sensor.
+TOPE_PLAUSIBILIDAD = {
+    "pressure_msl": 15,           # reducción a nivel del mar: un sesgo real es chico
+    "temperature_2m": 15,
+    "dew_point_2m": 15,
+    "relative_humidity_2m": 60,
+    "wind_speed_10m": 60,
+}
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS bias (
   station  TEXT NOT NULL,
@@ -134,6 +146,9 @@ def correct(con, station, model, variable, lead_hours, fc_value):
     if n < N_MIN:
         return fc_value
     b_eff = b * n / (n + K_SHRINK)
+    tope = TOPE_PLAUSIBILIDAD.get(variable)
+    if tope is not None and abs(b_eff) > tope:
+        return fc_value  # bias implausible: probable sensor roto, no aplicar
     out = fc_value - b_eff
     lo, hi = CLIP.get(variable, (None, None))
     if lo is not None:
@@ -164,6 +179,9 @@ def export_json(con) -> int:
             "SELECT station, model, variable, lead, b, mae, n, source FROM bias "
             "WHERE source='bootstrap' OR n >= ?", (N_EXPORT,)):
         b_eff = round(b * n / (n + K_SHRINK), 3)
+        tope = TOPE_PLAUSIBILIDAD.get(var)
+        if tope is not None and abs(b_eff) > tope:
+            continue  # bias implausible: mismo guard que correct(), no exportar al frontend
         mae_v = round(mae, 3) if mae is not None else None
         bias.setdefault(st, {}).setdefault(mdl, {}).setdefault(var, {})[lead] = [b_eff, mae_v]
     payload = {
