@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=67">
+  <link rel="stylesheet" href="app.css?v=68">
 </head>
 <body>
 
@@ -111,7 +111,7 @@
       <button class="riesgo-tile" data-capa="incendios" hidden><span class="rt-emoji">🔥</span><b id="rt-incendios">–</b><small>focos activos 48 h</small></button>
       <button class="riesgo-tile" data-capa="alertas" hidden><span class="rt-emoji">⚠️</span><b id="rt-alertas">–</b><small>alertas SENAPRED</small></button>
       <button class="riesgo-tile" data-capa="volcanes" hidden><span class="rt-emoji">🌋</span><b id="rt-volcanes">–</b><small>volcanes en alerta</small></button>
-      <button class="riesgo-tile" data-capa="avisos" hidden><span class="rt-emoji">💨</span><b id="rt-avisos">–</b><small>avisos meteo</small></button>
+      <button class="riesgo-tile" data-capa="avisos" hidden><span class="rt-emoji">💨</span><b id="rt-avisos">–</b><small>avisos Vigía</small></button>
       <button class="riesgo-tile" data-capa="cortes" hidden><span class="rt-emoji">⚡</span><b id="rt-cortes">–</b><small>comunas con cortes SEC</small></button>
     </div>
     <ol id="riesgo-eventos" class="riesgo-eventos"></ol>
@@ -183,7 +183,7 @@
       <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
       <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
       <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
-      <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos</button>
+      <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos Vigía</button>
       <button class="map-mode" data-capa="remociones" aria-pressed="false">⛰️ Remociones</button>
       <button class="map-mode" data-capa="cortes" aria-pressed="false">⚡ Cortes</button>
       <button class="map-mode" data-capa="combustible" aria-pressed="false">⛽ Combustible</button>
@@ -248,7 +248,7 @@
     <div id="map-legend-avisos" class="map-legend" aria-hidden="true" hidden>
       <span class="av-amarillo"></span><span>Amarillo</span>
       <span class="av-naranja"></span><span>Naranja</span>
-      <span>· 💨 viento · ❄️ helada · 🌧️ lluvia · 🌡️ calor · ⛰️💧 aluvional</span>
+      <span>· 💨 viento · ❄️ helada · 🌧️ lluvia · 🌡️ calor · ⛰️💧 aluvional · ❄️ nieve · 🔥 incendio</span>
     </div>
     <div id="map-legend-remociones" class="map-legend" aria-hidden="true" hidden>
       <span class="rk-flujo"></span><span>Flujo</span>
@@ -405,6 +405,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=67"></script>
+<script src="app.js?v=68"></script>
 </body>
 </html>

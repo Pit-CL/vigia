@@ -208,7 +208,7 @@ const INFO = {
 <p><strong>Alertas (SENAPRED).</strong> El Servicio Nacional de Prevención y Respuesta ante Desastres declara las alertas oficiales —roja, amarilla o temprana preventiva— por evento meteorológico, aluvión, incendio forestal u otro riesgo, con las comunas exactas bajo alerta.</p>
 <p><strong>Volcanes (SERNAGEOMIN).</strong> El Servicio Nacional de Geología y Minería opera la Red Nacional de Vigilancia Volcánica (RNVV) y publica el semáforo técnico de cada volcán activo: verde, amarilla, naranja o roja.</p>
 <p><strong>Incendios (NASA FIRMS).</strong> Focos de calor detectados por satélite (sensor VIIRS, 375 m de resolución) en las últimas 48 horas — no todo foco es un incendio confirmado en terreno.</p>
-<p><strong>Avisos meteorológicos (Vigía, no oficiales).</strong> A diferencia de las tres fuentes anteriores, estos avisos de viento, helada, lluvia, calor y riesgo aluvional NO vienen de un organismo oficial: los calculamos nosotros aplicando umbrales propios —inspirados en los criterios públicos de la DMC, pero sin relación operativa con ella— a la mediana de nuestro propio pronóstico multi-modelo. El aviso aluvional combina lluvia intensa con una isoterma 0° alta: cuando la nieve que normalmente retendría el agua en la cordillera cae como lluvia, las cuencas reciben agua líquida de golpe y crece el riesgo de crecidas repentinas y aluviones en quebradas y laderas. Trátalos como una señal de alerta temprana, no como un aviso oficial.</p>
+<p><strong>Avisos Vigía (no oficiales).</strong> A diferencia de las fuentes anteriores, estos avisos de viento, helada, lluvia, calor, nieve, riesgo aluvional e incendio NO vienen de un organismo oficial: los calculamos nosotros aplicando umbrales propios —inspirados en los criterios públicos de la DMC (y, para incendio, en la regla 30-30-30 de manejo del fuego), pero sin relación operativa con ellos— a la mediana de nuestro propio pronóstico multi-modelo. El aviso aluvional combina lluvia intensa con una isoterma 0° alta: cuando la nieve que normalmente retendría el agua en la cordillera cae como lluvia, las cuencas reciben agua líquida de golpe y crece el riesgo de crecidas repentinas y aluviones en quebradas y laderas. Cada aviso muestra además el acuerdo entre los modelos individuales (cuántos, por sí solos, cruzan el mismo umbral) como señal de confianza. Trátalos como una señal de alerta temprana, no como un aviso oficial.</p>
 <p><strong>Cortes de luz (SEC, best effort).</strong> El listado de interrupciones en línea de la Superintendencia de Electricidad y Combustibles no es una API pública documentada: la leemos igual porque es el dato más cercano a tiempo real que existe, pero puede fallar o quedar desactualizada sin aviso previo de la SEC. Se obtiene desde un equipo fuera del VPS (bloqueos de IP de datacenter) y se refresca cada 15 minutos cuando todo funciona.</p>
 <p class="info-fine">Los sismos no se pueden predecir: mostramos lo ya ocurrido y, tras un sismo mayor, la tasa estadística esperada de réplicas (ley de Omori) — nunca una proyección de cuándo o dónde ocurrirá el próximo.</p>
 <p><strong>Los tres niveles de alerta SENAPRED:</strong></p>
@@ -2022,8 +2022,8 @@ function paintVolcanes(group) {
 
 // ── Avisos meteorológicos (derivados del pronóstico propio, NO oficiales) ──
 
-const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', calor: '🌡️', aluvional: '⛰️💧' };
-const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', calor: 'Calor extremo', aluvional: 'Riesgo aluvional' };
+const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', calor: '🌡️', aluvional: '⛰️💧', nieve: '❄️', incendio: '🔥' };
+const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', calor: 'Calor extremo', aluvional: 'Riesgo aluvional', nieve: 'Nieve', incendio: 'Riesgo de incendio' };
 const AVISO_NIVEL_LABEL = { amarillo: 'Amarillo', naranja: 'Naranja' };
 
 function paintAvisos(group) {
@@ -2047,10 +2047,21 @@ function paintAvisos(group) {
       ['Hora del pico', fechaHora(a.hora_peak)],
     ];
     if (a.tipo === 'aluvional' && a.isoterma_m != null) filas.push(['Isoterma 0°', `~${a.isoterma_m} m`]);
+    if (a.tipo === 'incendio') {
+      if (a.hr != null) filas.push(['Humedad relativa', `${r1(a.hr)} %`]);
+      if (a.viento != null) filas.push(['Viento', `${r1(a.viento)} km/h`]);
+    }
+    if (a.umbral != null) filas.push(['Umbral amarillo', `${r1(a.umbral)} ${a.unidad}`]);
+    if (a.acuerdo) filas.push(['Acuerdo entre modelos', a.acuerdo]);
     box.appendChild(popupRows(filas));
     if (a.tipo === 'aluvional') {
       const riesgo = document.createElement('p');
       riesgo.textContent = `${r1(a.valor)} mm en 24 h con isoterma ~${a.isoterma_m} m — riesgo de aluvión en quebradas y laderas; aléjate de cauces`;
+      box.appendChild(riesgo);
+    }
+    if (a.tipo === 'incendio') {
+      const riesgo = document.createElement('p');
+      riesgo.textContent = `${r1(a.valor)} °C con ${r1(a.hr)} % HR y ${r1(a.viento)} km/h de viento — condiciones de comportamiento de incendio extremo (regla 30-30-30)`;
       box.appendChild(riesgo);
     }
     const small = document.createElement('small');
