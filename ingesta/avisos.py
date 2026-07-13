@@ -33,6 +33,15 @@ LLUVIA_AMARILLO, LLUVIA_NARANJA = 30.0, 60.0     # mm, máx suma móvil 24 h
 CALOR_AMARILLO, CALOR_NARANJA = 34.0, 37.0       # °C, máx mediana horaria
 NIEVE_AMARILLO, NIEVE_NARANJA = 10.0, 30.0       # cm, máx suma móvil 24 h
 
+# Umbrales rojos: escalón reservado a eventos extremos (derivación propia,
+# ver docstring del módulo). Viento y calor se desplazan por el mismo offset
+# aditivo que aplica _umbral_climatologico al amarillo/naranja, para no
+# perder la coherencia del ajuste por estación.
+VIENTO_ROJO = 120.0    # km/h, máx mediana horaria
+CALOR_ROJO = 40.0      # °C, máx mediana horaria
+HELADA_ROJO = -8.0     # °C, mín mediana horaria
+NIEVE_ROJO = 60.0      # cm, máx suma móvil 24 h
+
 # Aviso lluvia persistente: temporales largos que acumulan agua sin cruzar
 # nunca el umbral de 24 h (p.ej. 25 mm/día dos días seguidos) igual saturan el
 # suelo y elevan el riesgo de crecidas — exactamente el caso que el aviso de
@@ -41,6 +50,28 @@ NIEVE_AMARILLO, NIEVE_NARANJA = 10.0, 30.0       # cm, máx suma móvil 24 h
 # con la DMC, igual que el resto del módulo.
 LLUVIA48_AMARILLO, LLUVIA48_NARANJA = 50.0, 90.0  # mm, máx suma móvil 48 h
 
+# Rojo de lluvia por MACROZONA: a diferencia de amarillo/naranja (nacionales),
+# el rojo es el escalón de impacto extremo y ahí la geografía pesa — 120 mm/48h
+# es un temporal devastador en Valparaíso y un invierno normal en Valdivia.
+# Umbral de impacto según climatología regional (referencia real: temporal de
+# junio 2023 en la zona central, ~100-150 mm/48 h con daño severo). Derivación
+# propia, sin relación operativa con la DMC. Estación sin región reconocida
+# usa el umbral del sur (el más exigente = conservador, sin falsos rojos).
+LLUVIA_ROJO = {"norte": 50.0, "centro": 80.0, "sur": 120.0}          # mm/24h
+LLUVIA48_ROJO = {"norte": 80.0, "centro": 120.0, "sur": 180.0}       # mm/48h
+
+MACROZONA_NORTE = {"XV", "I", "II", "III", "IV"}
+MACROZONA_CENTRO = {"V", "RM", "VI", "VII"}
+MACROZONA_SUR = {"VIII", "XVI", "IX", "XIV", "X", "XI", "XII"}
+
+
+def _macrozona(region: str | None) -> str:
+    if region in MACROZONA_NORTE:
+        return "norte"
+    if region in MACROZONA_CENTRO:
+        return "centro"
+    return "sur"  # incluye MACROZONA_SUR y región desconocida (conservador)
+
 # Aviso aluvional: lluvia intensa + isoterma 0° alta significa que la cuenca
 # recibe agua líquida en vez de nieve, con riesgo de crecidas repentinas y
 # aluviones en quebradas y laderas. Requiere AMBAS condiciones a la vez sobre
@@ -48,6 +79,9 @@ LLUVIA48_AMARILLO, LLUVIA48_NARANJA = 50.0, 90.0  # mm, máx suma móvil 48 h
 # relación operativa con la DMC, igual que el resto del módulo).
 ALUVION_LLUVIA_AMARILLO, ALUVION_LLUVIA_NARANJA = 20.0, 40.0     # mm, suma móvil 24 h
 ALUVION_ISOTERMA_AMARILLO, ALUVION_ISOTERMA_NARANJA = 2900.0, 3400.0  # m, mediana en la ventana
+# Sin escalón rojo: el aviso ya es compuesto y estricto (requiere AMBAS
+# condiciones a la vez), y no hay un tercer punto de corte propio para el
+# par lluvia+isoterma que no sea arbitrario — se prefiere no inventarlo.
 
 # Aviso incendio: regla 30-30-30 (criterio establecido en manejo del fuego).
 # Temperatura, humedad relativa y viento deben cumplirse en la MISMA hora de
@@ -56,6 +90,9 @@ ALUVION_ISOTERMA_AMARILLO, ALUVION_ISOTERMA_NARANJA = 2900.0, 3400.0  # m, media
 INCENDIO_TEMP_AMARILLO, INCENDIO_TEMP_NARANJA = 30.0, 35.0        # °C
 INCENDIO_HR_AMARILLO, INCENDIO_HR_NARANJA = 30.0, 25.0            # %, menor es peor
 INCENDIO_VIENTO_AMARILLO, INCENDIO_VIENTO_NARANJA = 30.0, 40.0    # km/h
+# Sin escalón rojo: la regla 30-30-30 es un criterio establecido de dos
+# niveles; no define un tercer umbral, y estirarla a un "60-60-60" propio
+# sería inventar un criterio sin respaldo, no derivarlo del existente.
 
 # Umbral climatológico (viento y calor SOLAMENTE): en zonas donde el umbral
 # fijo nacional es habitual (p.ej. viento en Patagonia), un umbral fijo deja
@@ -135,13 +172,18 @@ def _rolling_sum(serie: list, n_horas: int) -> list:
     ]
 
 
-def _nivel(valor: float, amarillo: float, naranja: float, mayor_es_peor: bool) -> str | None:
+def _nivel(valor: float, amarillo: float, naranja: float, mayor_es_peor: bool,
+           rojo: float | None = None) -> str | None:
     if mayor_es_peor:
+        if rojo is not None and valor >= rojo:
+            return "rojo"
         if valor >= naranja:
             return "naranja"
         if valor >= amarillo:
             return "amarillo"
     else:
+        if rojo is not None and valor <= rojo:
+            return "rojo"
         if valor <= naranja:
             return "naranja"
         if valor <= amarillo:
@@ -158,22 +200,27 @@ def _percentil(valores_ordenados: list, p: float) -> float:
 
 
 def _umbral_climatologico(con, station_id: str, variable: str,
-                           amarillo_fijo: float, naranja_fijo: float) -> tuple[float, float]:
+                           amarillo_fijo: float, naranja_fijo: float,
+                           rojo_fijo: float | None = None) -> tuple[float, float, float | None]:
     """Umbral efectivo = max(fijo, percentil 98 de las OBSERVACIONES de esa
     estación para esa variable), con gate de muestra mínima. `naranja` conserva
     la separación ABSOLUTA amarillo/naranja del umbral fijo (offset, no razón:
     temperatura es escala de intervalo, no de razón — escalar por cociente
-    depende de si se mide en °C o K, lo que es un error de unidades)."""
+    depende de si se mide en °C o K, lo que es un error de unidades). `rojo`,
+    si se entrega, se desplaza con el mismo offset aditivo que naranja, para
+    mantener coherente el mecanismo de ajuste."""
     rows = con.execute(
         "SELECT value FROM observations WHERE station=? AND variable=? AND value IS NOT NULL",
         (station_id, variable)).fetchall()
     if len(rows) < MIN_OBS_CLIMATOLOGICO:
-        return amarillo_fijo, naranja_fijo
+        return amarillo_fijo, naranja_fijo, rojo_fijo
     valores = sorted(v for (v,) in rows)
     p98 = _percentil(valores, PERCENTIL_CLIMATOLOGICO)
     amarillo_efectivo = max(amarillo_fijo, p98)
     naranja_efectivo = amarillo_efectivo + (naranja_fijo - amarillo_fijo)
-    return amarillo_efectivo, naranja_efectivo
+    rojo_efectivo = (amarillo_efectivo + (rojo_fijo - amarillo_fijo)
+                     if rojo_fijo is not None else None)
+    return amarillo_efectivo, naranja_efectivo, rojo_efectivo
 
 
 def _acuerdo_pico(por_modelo: dict, var: str, amarillo: float, naranja: float,
@@ -298,13 +345,16 @@ def _aviso_incendio(series: dict, por_modelo: dict, st: dict) -> dict | None:
 def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
                       viento_umbral: tuple, calor_umbral: tuple) -> list:
     avisos = []
-    viento_amarillo, viento_naranja = viento_umbral
-    calor_amarillo, calor_naranja = calor_umbral
+    viento_amarillo, viento_naranja, viento_rojo = viento_umbral
+    calor_amarillo, calor_naranja, calor_rojo = calor_umbral
+    macrozona = _macrozona(st.get("region"))
+    lluvia_rojo = LLUVIA_ROJO[macrozona]
+    lluvia48_rojo = LLUVIA48_ROJO[macrozona]
 
     viento = series.get("wind_speed_10m") or []
     if viento:
         vt, val = max(viento, key=lambda p: p[1])
-        nivel = _nivel(val, viento_amarillo, viento_naranja, mayor_es_peor=True)
+        nivel = _nivel(val, viento_amarillo, viento_naranja, mayor_es_peor=True, rojo=viento_rojo)
         if nivel:
             acuerdo = _acuerdo_pico(por_modelo, "wind_speed_10m", viento_amarillo, viento_naranja, True)
             avisos.append(_aviso(st, "viento", nivel, val, "km/h", vt,
@@ -313,13 +363,13 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
     temp = series.get("temperature_2m") or []
     if temp:
         vt_min, val_min = min(temp, key=lambda p: p[1])
-        nivel = _nivel(val_min, HELADA_AMARILLO, HELADA_NARANJA, mayor_es_peor=False)
+        nivel = _nivel(val_min, HELADA_AMARILLO, HELADA_NARANJA, mayor_es_peor=False, rojo=HELADA_ROJO)
         if nivel:
             acuerdo = _acuerdo_pico(por_modelo, "temperature_2m", HELADA_AMARILLO, HELADA_NARANJA, False)
             avisos.append(_aviso(st, "helada", nivel, val_min, "°C", vt_min, acuerdo=acuerdo))
 
         vt_max, val_max = max(temp, key=lambda p: p[1])
-        nivel = _nivel(val_max, calor_amarillo, calor_naranja, mayor_es_peor=True)
+        nivel = _nivel(val_max, calor_amarillo, calor_naranja, mayor_es_peor=True, rojo=calor_rojo)
         if nivel:
             acuerdo = _acuerdo_pico(por_modelo, "temperature_2m", calor_amarillo, calor_naranja, True)
             avisos.append(_aviso(st, "calor", nivel, val_max, "°C", vt_max,
@@ -329,7 +379,7 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
     rolling = _rolling_sum(precip, 24)
     if rolling:
         vt, val = max(rolling, key=lambda p: p[1])
-        nivel = _nivel(val, LLUVIA_AMARILLO, LLUVIA_NARANJA, mayor_es_peor=True)
+        nivel = _nivel(val, LLUVIA_AMARILLO, LLUVIA_NARANJA, mayor_es_peor=True, rojo=lluvia_rojo)
         if nivel:
             acuerdo = _acuerdo_rolling(por_modelo, "precipitation", LLUVIA_AMARILLO, LLUVIA_NARANJA)
             avisos.append(_aviso(st, "lluvia", nivel, val, "mm", vt, acuerdo=acuerdo))
@@ -341,7 +391,7 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
     rolling48 = _rolling_sum(precip, 48)
     if rolling48:
         vt48, val48 = max(rolling48, key=lambda p: p[1])
-        nivel48 = _nivel(val48, LLUVIA48_AMARILLO, LLUVIA48_NARANJA, mayor_es_peor=True)
+        nivel48 = _nivel(val48, LLUVIA48_AMARILLO, LLUVIA48_NARANJA, mayor_es_peor=True, rojo=lluvia48_rojo)
         if nivel48:
             acuerdo48 = _acuerdo_rolling(por_modelo, "precipitation",
                                           LLUVIA48_AMARILLO, LLUVIA48_NARANJA, n_horas=48)
@@ -379,7 +429,7 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
     rolling_nieve = _rolling_sum(nieve, 24)
     if rolling_nieve:
         vt, val = max(rolling_nieve, key=lambda p: p[1])
-        nivel = _nivel(val, NIEVE_AMARILLO, NIEVE_NARANJA, mayor_es_peor=True)
+        nivel = _nivel(val, NIEVE_AMARILLO, NIEVE_NARANJA, mayor_es_peor=True, rojo=NIEVE_ROJO)
         if nivel:
             acuerdo = _acuerdo_rolling(por_modelo, "snowfall", NIEVE_AMARILLO, NIEVE_NARANJA)
             avisos.append(_aviso(st, "nieve", nivel, val, "cm", vt, acuerdo=acuerdo))
@@ -410,9 +460,9 @@ def update(con, fetched_at: str) -> int:
         # comparten la misma mediana horaria multi-modelo.
         series, por_modelo = _series_estacion(con, st["id"], run_tag, desde, hasta)
         viento_umbral = _umbral_climatologico(con, st["id"], "wind_speed_10m",
-                                               VIENTO_AMARILLO, VIENTO_NARANJA)
+                                               VIENTO_AMARILLO, VIENTO_NARANJA, VIENTO_ROJO)
         calor_umbral = _umbral_climatologico(con, st["id"], "temperature_2m",
-                                              CALOR_AMARILLO, CALOR_NARANJA)
+                                              CALOR_AMARILLO, CALOR_NARANJA, CALOR_ROJO)
         avisos.extend(_avisos_estacion(series, por_modelo, st, viento_umbral, calor_umbral))
         acumulados.append(_acumulado_estacion(st, series))
 
