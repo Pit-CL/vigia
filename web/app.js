@@ -2233,7 +2233,11 @@ function paintFarmacias(group) {
   if (!todos.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin farmacias de turno reportadas'; return; }
   const boundsPuntos = map.getBounds().pad(0.3);
   const visibles = todos.filter((it) => boundsPuntos.contains([it.lat, it.lon]));
-  const grupos = map.getZoom() >= 13
+  // Umbral de pin individual más bajo que 'emergencia' (zoom 11 en vez de
+  // 13): a diferencia de los ~9.000 puntos de infraestructura, las farmacias
+  // de turno son pocas por comuna — pedido explícito de pines directos antes
+  // sin pasar por el racimo agrupado.
+  const grupos = map.getZoom() >= 11
     ? visibles.map((it) => [it])
     : agruparPorCelda(visibles, 44).sort((a, b) => a.length - b.length);
   grupos.forEach((grupo) => {
@@ -2438,11 +2442,46 @@ function diasDesdeFecha(fechaYMD) {
 // vez para ese combustible en esa estación.
 const PRECIO_ANTIGUO_DIAS = 14;
 
+// Popup completo (nombre + comuna + tabla de precios) de una estación —
+// compartido entre el modo individual (zoom >= 13) y el caso de una celda
+// con una sola estación (zoom 9-12), para no duplicar esta lógica.
+function popupEstacionCombustible(e) {
+  const nombre = e.nombre || e.marca || 'Estación de servicio';
+  const box = document.createElement('div');
+  box.className = 'stn-popup';
+  const h = document.createElement('strong'); h.textContent = nombre; box.appendChild(h);
+  if (e.comuna) {
+    const small = document.createElement('small');
+    small.textContent = e.marca && e.nombre ? `${e.marca} · ${e.comuna}` : e.comuna;
+    box.appendChild(small);
+  }
+  const precios = e.precios || {};
+  box.appendChild(popupRows(Object.keys(PRECIO_COMBUSTIBLE_LABEL)
+    .filter((k) => precioValor(precios[k]) != null)
+    .map((k) => {
+      const entry = precios[k];
+      const valor = precioValor(entry);
+      const fecha = entry && typeof entry === 'object' ? entry.fecha : null;
+      if (!fecha) return [PRECIO_COMBUSTIBLE_LABEL[k], formatoClp(valor)];
+      const antiguo = diasDesdeFecha(fecha) > PRECIO_ANTIGUO_DIAS;
+      const texto = `${formatoClp(valor)} (al ${ddmm(fecha)})${antiguo ? ' ⚠ precio antiguo' : ''}`;
+      return [PRECIO_COMBUSTIBLE_LABEL[k], texto];
+    })));
+  return box;
+}
+
 // combustible.json: dormida sin CNE_API_KEY (n=0 o archivo ausente) → misma
-// nota que "capa en preparación", no un error. Con datos, mismo patrón de
-// agrupado por celda que paintRemociones/paintIncendios (1.768 estaciones
-// son ilegibles a escala país); el ícono individual muestra el precio de
-// 93 (el más buscado) y el popup el resto de la tabla de precios.
+// nota que "capa en preparación", no un error. Con datos, tres escalas
+// (mismo patrón de zoom que paintRemociones/paintIncendios, 1.768
+// estaciones son ilegibles a escala país):
+//   zoom < 9:  una celda ⛽N por zona, toca para acercar (como antes).
+//   zoom 9-12: agrupado por celda pero mostrando el precio 93 más barato
+//     de la celda (lo que el usuario busca al alejar el mapa es "dónde está
+//     lo más barato por acá", no una etiqueta por cada bomba); si la celda
+//     tiene 1 sola estación se comporta como el modo individual.
+//   zoom >= 13: estación por estación (como antes).
+// Antes de este fix, zoom >= 9 pintaba una etiqueta .stn-label POR ESTACIÓN
+// sin agrupar: en zonas densas (Valparaíso/Viña) se encimaban entre 9 y 12.
 function paintCombustible(group) {
   const estaciones = (combustibleData && combustibleData.estaciones) || [];
   if (!estaciones.length) {
@@ -2465,6 +2504,47 @@ function paintCombustible(group) {
       }).addTo(group);
       marker.on('click', () => map.setView([lat, lon], zoom + 2));
     });
+  } else if (zoom <= 12) {
+    const grupos = agruparPorCelda(estaciones, 46).sort((a, b) => a.length - b.length);
+    grupos.forEach((grupo) => {
+      const lat = grupo.reduce((s, p) => s + p.lat, 0) / grupo.length;
+      const lon = grupo.reduce((s, p) => s + p.lon, 0) / grupo.length;
+      const precios93 = grupo
+        .map((e) => precioValor(e.precios && e.precios.gasolina_93))
+        .filter((v) => v != null);
+      const masBarato = precios93.length ? Math.min(...precios93) : null;
+      const label = masBarato != null ? Math.round(masBarato) : '⛽';
+      const icon = L.divIcon({
+        className: 'stn-icon',
+        html: `<span class="stn-label">${label}${grupo.length > 1 ? ` <b>×${grupo.length}</b>` : ''}</span>`,
+        iconSize: [56, 26], iconAnchor: [28, 13],
+      });
+      const titulo = grupo.length > 1
+        ? `${grupo.length} estaciones — 93 desde ${masBarato != null ? formatoClp(masBarato) : '—'}`
+        : (grupo[0].nombre || grupo[0].marca || 'Estación de servicio');
+      const marker = L.marker([lat, lon], { icon, title: titulo }).addTo(group);
+      if (grupo.length === 1) {
+        marker.bindPopup(popupEstacionCombustible(grupo[0]), { maxWidth: 260 });
+      } else {
+        const box = document.createElement('div');
+        box.className = 'stn-popup';
+        const h = document.createElement('strong');
+        h.textContent = `${grupo.length} estaciones en esta zona`;
+        box.appendChild(h);
+        const ordenado = [...grupo].sort((a, b) => {
+          const pa = precioValor(a.precios && a.precios.gasolina_93);
+          const pb = precioValor(b.precios && b.precios.gasolina_93);
+          if (pa == null) return pb == null ? 0 : 1;
+          if (pb == null) return -1;
+          return pa - pb;
+        });
+        box.appendChild(popupRows(ordenado.map((e) => {
+          const p = precioValor(e.precios && e.precios.gasolina_93);
+          return [e.nombre || e.marca || 'Estación', p != null ? formatoClp(p) : '—'];
+        })));
+        marker.bindPopup(box, { maxWidth: 280 });
+      }
+    });
   } else {
     estaciones.forEach((e) => {
       const precio93 = precioValor(e.precios && e.precios.gasolina_93);
@@ -2475,27 +2555,7 @@ function paintCombustible(group) {
       });
       const nombre = e.nombre || e.marca || 'Estación de servicio';
       const marker = L.marker([e.lat, e.lon], { icon, title: nombre }).addTo(group);
-      const box = document.createElement('div');
-      box.className = 'stn-popup';
-      const h = document.createElement('strong'); h.textContent = nombre; box.appendChild(h);
-      if (e.comuna) {
-        const small = document.createElement('small');
-        small.textContent = e.marca && e.nombre ? `${e.marca} · ${e.comuna}` : e.comuna;
-        box.appendChild(small);
-      }
-      const precios = e.precios || {};
-      box.appendChild(popupRows(Object.keys(PRECIO_COMBUSTIBLE_LABEL)
-        .filter((k) => precioValor(precios[k]) != null)
-        .map((k) => {
-          const entry = precios[k];
-          const valor = precioValor(entry);
-          const fecha = entry && typeof entry === 'object' ? entry.fecha : null;
-          if (!fecha) return [PRECIO_COMBUSTIBLE_LABEL[k], formatoClp(valor)];
-          const antiguo = diasDesdeFecha(fecha) > PRECIO_ANTIGUO_DIAS;
-          const texto = `${formatoClp(valor)} (al ${ddmm(fecha)})${antiguo ? ' ⚠ precio antiguo' : ''}`;
-          return [PRECIO_COMBUSTIBLE_LABEL[k], texto];
-        })));
-      marker.bindPopup(box, { maxWidth: 260 });
+      marker.bindPopup(popupEstacionCombustible(e), { maxWidth: 260 });
     });
   }
   $('#map-meta').textContent = metaConFecha(`${estaciones.length} estaciones con precios · CNE Bencina en Línea`, combustibleData.updated);
