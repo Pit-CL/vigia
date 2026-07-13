@@ -7,6 +7,7 @@ import urllib.parse
 import urllib.request
 
 import config
+import db
 
 UA = "vigia-ingesta/1.0 (proyecto open source; vigia.cavara.cl)"
 
@@ -192,6 +193,8 @@ def ingest_metar(con, fetched_at: str) -> int:
                 "ON CONFLICT(station) DO UPDATE SET obs_time=excluded.obs_time, "
                 "wx=excluded.wx, updated=excluded.updated WHERE excluded.obs_time >= obs_wx.obs_time",
                 (st, t_iso, wx, fetched_at))
+    rows, descartadas = db.qc_filtrar_observaciones(rows)
+    db.qc_reportar(descartadas)
     con.executemany(
         "INSERT INTO observations(station, obs_time, variable, value, source) VALUES (?,?,?,?,?)",
         rows)
@@ -329,6 +332,8 @@ def ingest_dmc(con, fetched_at: str) -> int:
                 val = _dmc_num(reg.get("aguaCaida6Horas"))
                 if val is not None:
                     rows.append((st["id"], t_iso, "precipitation_6h", val, "dmc"))
+    rows, descartadas = db.qc_filtrar_observaciones(rows)
+    db.qc_reportar(descartadas)
     con.executemany(
         "INSERT INTO observations(station, obs_time, variable, value, source) VALUES (?,?,?,?,?)",
         rows)
