@@ -2060,8 +2060,8 @@ function paintVolcanes(group) {
 
 // ── Avisos meteorológicos (derivados del pronóstico propio, NO oficiales) ──
 
-const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', lluvia_persistente: '🌧️', calor: '🌡️', aluvional: '⛰️💧', nieve: '❄️', incendio: '🔥' };
-const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', lluvia_persistente: 'Lluvia persistente', calor: 'Calor extremo', aluvional: 'Riesgo aluvional', nieve: 'Nieve', incendio: 'Riesgo de incendio' };
+const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', lluvia_persistente: '🌧️', calor: '🌡️', aluvional: '⛰️💧', nieve: '❄️', incendio: '🔥', rafagas: '🌪️', presion: '📉', nieve_cota_baja: '🏔️❄️', ola_calor: '🥵', ola_frio: '🥶', tormenta: '⛈️', uv: '☀️' };
+const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', lluvia_persistente: 'Lluvia persistente', calor: 'Calor extremo', aluvional: 'Riesgo aluvional', nieve: 'Nieve', incendio: 'Riesgo de incendio', rafagas: 'Ráfagas de viento', presion: 'Caída de presión (temporal)', nieve_cota_baja: 'Nieve en cota baja', ola_calor: 'Ola de calor', ola_frio: 'Ola de frío', tormenta: 'Tormenta eléctrica', uv: 'UV extremo' };
 const AVISO_NIVEL_LABEL = { amarillo: 'Amarillo', naranja: 'Naranja', rojo: 'Rojo' };
 
 function paintAvisos(group) {
@@ -2084,7 +2084,8 @@ function paintAvisos(group) {
       ['Valor pico', `${r1(a.valor)} ${a.unidad}`],
       ['Hora del pico', fechaHora(a.hora_peak)],
     ];
-    if (a.tipo === 'aluvional' && a.isoterma_m != null) filas.push(['Isoterma 0°', `~${a.isoterma_m} m`]);
+    if ((a.tipo === 'aluvional' || a.tipo === 'nieve_cota_baja') && a.isoterma_m != null) filas.push(['Isoterma 0°', `~${a.isoterma_m} m`]);
+    if ((a.tipo === 'ola_calor' || a.tipo === 'ola_frio') && a.dias != null) filas.push(['Días consecutivos', `${a.dias}`]);
     if (a.tipo === 'incendio') {
       if (a.hr != null) filas.push(['Humedad relativa', `${r1(a.hr)} %`]);
       if (a.viento != null) filas.push(['Viento', `${r1(a.viento)} km/h`]);

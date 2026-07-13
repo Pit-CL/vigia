@@ -19,9 +19,12 @@ que se recalcula entero en cada corrida en vez de persistir estado.
 import json
 import statistics
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import calibrate
 import config
+
+CL_TZ = ZoneInfo("America/Santiago")
 
 # Umbrales (derivación propia; ver docstring). máx/mín = pico de la mediana
 # horaria entre modelos en la ventana de VENTANA_H; lluvia/nieve = pico de la suma
@@ -94,6 +97,64 @@ INCENDIO_VIENTO_AMARILLO, INCENDIO_VIENTO_NARANJA = 30.0, 40.0    # km/h
 # niveles; no define un tercer umbral, y estirarla a un "60-60-60" propio
 # sería inventar un criterio sin respaldo, no derivarlo del existente.
 
+# Aviso ráfagas (wind_gusts_10m, pico de la mediana horaria): SIN ajuste
+# climatológico ni escalón por umbral fijo nacional único — a diferencia de
+# viento sostenido, no hay observaciones de ráfaga pareadas en la red (regla 6:
+# invariante de que todo umbral climatológico se valida contra observaciones),
+# así que el ajuste por estación de _umbral_climatologico no aplica aquí.
+# La Patagonia (XI y XII) sí necesita un umbral fijo MÁS ALTO que el resto:
+# el viento austral sostenido ya ronda 80-100 km/h en primavera, y un umbral
+# nacional único dejaría esas dos regiones en aviso amarillo permanente
+# (mismo problema que _umbral_climatologico resuelve para viento sostenido,
+# pero aquí con un set de regiones fijo en vez de percentil, porque no hay
+# observación de ráfaga con la que calcular ese percentil). Derivación propia.
+RAFAGAS_AMARILLO, RAFAGAS_NARANJA, RAFAGAS_ROJO = 90.0, 120.0, 150.0        # km/h
+RAFAGAS_AUSTRAL_AMARILLO, RAFAGAS_AUSTRAL_NARANJA, RAFAGAS_AUSTRAL_ROJO = 100.0, 130.0, 160.0
+REGIONES_AUSTRAL = {"XI", "XII"}
+
+# Aviso caída brusca de presión (precursor de ciclogénesis explosiva): máxima
+# CAÍDA (hPa, positiva) de la mediana de pressure_msl en una ventana móvil de
+# 24 h. 24 hPa/24h es el criterio clásico de ciclogénesis explosiva (Bergeron
+# 1954, "bomb cyclone"), ajustado a latitudes medias — el escalón rojo. Es el
+# precursor del temporal de viento: cae la presión antes de que la ráfaga
+# aparezca en el pronóstico, dando anticipación adicional. Derivación propia.
+PRESION_AMARILLO, PRESION_NARANJA, PRESION_ROJO = 12.0, 18.0, 24.0   # hPa/24h, máx caída
+
+# Aviso nieve en cota baja (compuesto, patrón aluvional): suma móvil 24 h de
+# precipitation Y mediana de freezing_level_height baja en la MISMA ventana —
+# nieve real en rutas/ciudades del centro-sur, no solo en cordillera. Sin
+# escalón rojo: como el aluvional, el par lluvia+isoterma no tiene un tercer
+# corte no arbitrario — se prefiere no inventarlo. Derivación propia.
+NIEVE_BAJA_LLUVIA_AMARILLO, NIEVE_BAJA_LLUVIA_NARANJA = 5.0, 10.0         # mm, suma móvil 24 h
+NIEVE_BAJA_ISOTERMA_AMARILLO, NIEVE_BAJA_ISOTERMA_NARANJA = 1500.0, 1200.0  # m, mediana en la ventana (menor es peor)
+
+# Aviso ola de calor: 3+ días LOCALES (America/Santiago) consecutivos con
+# temperatura máxima diaria de la mediana sobre el umbral. Distinto de
+# "calor" (pico puntual): esto exige sostenido varios días. Umbrales propios.
+OLA_CALOR_DIAS_MIN = 3
+OLA_CALOR_AMARILLO, OLA_CALOR_NARANJA, OLA_CALOR_ROJO = 32.0, 35.0, 38.0  # °C, máx diaria
+
+# Aviso ola de frío: ídem con mínima diaria. Sin rojo: la helada puntual ya
+# tiene su propio escalón rojo en HELADA_ROJO (-8°C); este aviso es sobre
+# SOSTENIDO, no sobre el pico más extremo de una sola noche.
+OLA_FRIO_DIAS_MIN = 3
+OLA_FRIO_AMARILLO, OLA_FRIO_NARANJA = 0.0, -4.0  # °C, mín diaria
+
+# Aviso tormenta eléctrica (CAPE, pico de la mediana horaria): CAPE es
+# condición NECESARIA no suficiente para convección severa (energía potencial
+# disponible, no pronóstico de rayos/granizo) — indicativo de potencial
+# convectivo. Relevante sobre todo en el invierno boliviano del Altiplano
+# (verano austral, humedad del NE sobre el altiplano andino). Sin escalón
+# rojo: CAPE por sí solo no discrimina el tercer nivel sin más variables
+# (cizalladura, humedad) que este módulo no deriva. Derivación propia.
+TORMENTA_AMARILLO, TORMENTA_NARANJA = 1000.0, 2500.0  # J/kg, máx mediana horaria
+
+# Aviso UV (uv_index, pico de la mediana horaria): escala OMI/OMS estándar,
+# no un umbral propio — 9 = "muy alto", 11 = "extremo" son los cortes
+# publicados por la Organización Mundial de la Salud. Sin escalón rojo: la
+# escala OMS termina en "extremo" (≥11), no define un cuarto nivel.
+UV_AMARILLO, UV_NARANJA = 9.0, 11.0
+
 # Umbral climatológico (viento y calor SOLAMENTE): en zonas donde el umbral
 # fijo nacional es habitual (p.ej. viento en Patagonia), un umbral fijo deja
 # la estación en aviso permanente. Se sube el umbral a percentil 98 de sus
@@ -113,7 +174,10 @@ STALE_HORAS = 24
 
 VENTANA_H = 120
 VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall",
-        "freezing_level_height", "relative_humidity_2m"]
+        "freezing_level_height", "relative_humidity_2m", "pressure_msl",
+        # Avisos v3: sin observación pareada de ráfaga/CAPE/UV, quedan crudas
+        # (no en config.CALIBRABLE_VARS) — mismo tratamiento que precipitation.
+        "wind_gusts_10m", "cape", "uv_index"]
 
 # Variables de VARS que además son calibrables (config.CALIBRABLE_VARS): se
 # corrige cada valor por modelo con el bias de calibrate.py ANTES de la
@@ -256,6 +320,76 @@ def _acuerdo_rolling(por_modelo: dict, var: str, amarillo: float, naranja: float
     return f"{n_supera}/{n_con_ventana}"
 
 
+def _rolling_caida(serie: list, n_horas: int) -> list:
+    """[(valid_time_de_fin_de_ventana, caida)]: caida = valor al INICIO de la
+    ventana menos valor al FIN (positiva = presión bajando). Solo ventanas de
+    n_horas puntos completas — mismo criterio de completitud que _rolling_sum."""
+    return [
+        (serie[i][0], serie[i - (n_horas - 1)][1] - serie[i][1])
+        for i in range(n_horas - 1, len(serie))
+    ]
+
+
+def _acuerdo_caida(por_modelo: dict, var: str, amarillo: float, naranja: float,
+                    n_horas: int = 24) -> str:
+    """Ídem _acuerdo_rolling para el aviso de presión: la caída de n_horas de
+    cada modelo por sí solo."""
+    modelos = por_modelo.get(var, {})
+    n_con_ventana = n_supera = 0
+    for serie in modelos.values():
+        caidas = _rolling_caida(serie, n_horas)
+        if not caidas:
+            continue
+        n_con_ventana += 1
+        if _nivel(max(v for _, v in caidas), amarillo, naranja, mayor_es_peor=True) is not None:
+            n_supera += 1
+    return f"{n_supera}/{n_con_ventana}"
+
+
+def _dia_local(valid_time: str):
+    """Fecha LOCAL America/Santiago de un valid_time UTC ("YYYY-MM-DDTHH:MM").
+    Rapa Nui (UTC-6) queda desplazado hasta ±2 h del huso continental: se
+    acepta el desvío (aviso derivado, no oficial) en vez de mantener un huso
+    por estación."""
+    dt_utc = datetime.fromisoformat(valid_time).replace(tzinfo=timezone.utc)
+    return dt_utc.astimezone(CL_TZ).date()
+
+
+def _extremos_diarios_locales(serie: list, mayor_es_peor: bool) -> list:
+    """Agrupa 'serie' [(valid_time, valor)] por día LOCAL y devuelve
+    [(fecha, valid_time_del_extremo, valor_extremo)] ordenado por fecha. Incluye
+    días parciales en el borde de la ventana de 120 h (ola de calor/frío es
+    sobre el extremo diario disponible, no exige el día completo)."""
+    por_dia: dict = {}
+    for vt, val in serie:
+        d = _dia_local(vt)
+        actual = por_dia.get(d)
+        if actual is None or (val > actual[1] if mayor_es_peor else val < actual[1]):
+            por_dia[d] = (vt, val)
+    return [(d, *por_dia[d]) for d in sorted(por_dia)]
+
+
+def _racha_mas_larga(dias: list, umbral: float, mayor_es_peor: bool) -> list:
+    """Racha de días CONSECUTIVOS (diferencia de 1 día calendario) más larga
+    donde el extremo diario cruza 'umbral'. 'dias' = salida de
+    _extremos_diarios_locales, ya ordenada por fecha."""
+    mejor: list = []
+    actual: list = []
+    prev_fecha = None
+    for fecha, vt, val in dias:
+        cumple = val >= umbral if mayor_es_peor else val <= umbral
+        if cumple and prev_fecha is not None and (fecha - prev_fecha).days == 1:
+            actual.append((fecha, vt, val))
+        elif cumple:
+            actual = [(fecha, vt, val)]
+        else:
+            actual = []
+        if len(actual) > len(mejor):
+            mejor = actual
+        prev_fecha = fecha
+    return mejor
+
+
 def _acuerdo_incendio(por_modelo: dict) -> str:
     """Ídem para incendio: cuántos modelos, con su propia temperatura/HR/viento
     (sin pasar por la mediana), cumplen 30-30-30 en alguna hora común."""
@@ -340,6 +474,144 @@ def _aviso_incendio(series: dict, por_modelo: dict, st: dict) -> dict | None:
     acuerdo = _acuerdo_incendio(por_modelo)
     return _aviso(st, "incendio", nivel_top, t, "°C", h, acuerdo=acuerdo,
                   hr=round(r, 1), viento=round(v, 1))
+
+
+def _aviso_rafagas(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """Pico de la mediana horaria de wind_gusts_10m. Sin ajuste climatológico
+    (ver docstring de RAFAGAS_AMARILLO): umbral fijo nacional, más alto en la
+    Patagonia (XI/XII) para no dejarla en aviso permanente."""
+    serie = series.get("wind_gusts_10m") or []
+    if not serie:
+        return None
+    vt, val = max(serie, key=lambda p: p[1])
+    if st.get("region") in REGIONES_AUSTRAL:
+        amarillo, naranja, rojo = RAFAGAS_AUSTRAL_AMARILLO, RAFAGAS_AUSTRAL_NARANJA, RAFAGAS_AUSTRAL_ROJO
+    else:
+        amarillo, naranja, rojo = RAFAGAS_AMARILLO, RAFAGAS_NARANJA, RAFAGAS_ROJO
+    nivel = _nivel(val, amarillo, naranja, mayor_es_peor=True, rojo=rojo)
+    if not nivel:
+        return None
+    acuerdo = _acuerdo_pico(por_modelo, "wind_gusts_10m", amarillo, naranja, True)
+    return _aviso(st, "rafagas", nivel, val, "km/h", vt, acuerdo=acuerdo, umbral=round(amarillo, 1))
+
+
+def _aviso_presion(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """Máxima caída de la mediana de pressure_msl en ventana móvil de 24 h.
+    Precursor de ciclogénesis explosiva (ver docstring de PRESION_ROJO): da
+    anticipación antes de que la ráfaga aparezca en el pronóstico."""
+    serie = series.get("pressure_msl") or []
+    caidas = _rolling_caida(serie, 24)
+    if not caidas:
+        return None
+    vt, val = max(caidas, key=lambda p: p[1])
+    nivel = _nivel(val, PRESION_AMARILLO, PRESION_NARANJA, mayor_es_peor=True, rojo=PRESION_ROJO)
+    if not nivel:
+        return None
+    acuerdo = _acuerdo_caida(por_modelo, "pressure_msl", PRESION_AMARILLO, PRESION_NARANJA)
+    return _aviso(st, "presion", nivel, val, "hPa/24h", vt, acuerdo=acuerdo)
+
+
+def _aviso_nieve_baja(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """Compuesto (patrón del aluvional): suma móvil 24 h de precipitation Y
+    mediana de freezing_level_height baja en la MISMA ventana → nieve real en
+    rutas/ciudades del centro-sur, no solo cordillera. Null-safe: si
+    freezing_level_height o precipitation aún no tienen filas, no evalúa."""
+    precip = series.get("precipitation") or []
+    rolling = _rolling_sum(precip, 24)
+    if not rolling:
+        return None
+    vt, val = max(rolling, key=lambda p: p[1])
+    iso_serie = series.get("freezing_level_height") or []
+    if not iso_serie:
+        return None
+    idx = next(i for i, (t, _) in enumerate(precip) if t == vt)
+    ventana_times = [t for t, _ in precip[idx - 23:idx + 1]]
+    iso_por_hora = dict(iso_serie)
+    iso_vals = [iso_por_hora[t] for t in ventana_times if t in iso_por_hora]
+    if not iso_vals:
+        return None
+    iso_mediana = statistics.median(iso_vals)
+    if val >= NIEVE_BAJA_LLUVIA_NARANJA and iso_mediana <= NIEVE_BAJA_ISOTERMA_NARANJA:
+        nivel = "naranja"
+    elif val >= NIEVE_BAJA_LLUVIA_AMARILLO and iso_mediana <= NIEVE_BAJA_ISOTERMA_AMARILLO:
+        nivel = "amarillo"
+    else:
+        return None
+    acuerdo = _acuerdo_rolling(por_modelo, "precipitation",
+                                NIEVE_BAJA_LLUVIA_AMARILLO, NIEVE_BAJA_LLUVIA_NARANJA)
+    aviso = _aviso(st, "nieve_cota_baja", nivel, val, "mm", vt, acuerdo=acuerdo)
+    aviso["isoterma_m"] = round(iso_mediana / 100) * 100
+    return aviso
+
+
+def _aviso_ola_calor(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """3+ días LOCALES consecutivos con temperatura máxima diaria de la
+    mediana ≥ OLA_CALOR_AMARILLO. Distinto de "calor" (pico puntual): esto
+    exige persistencia."""
+    temp = series.get("temperature_2m") or []
+    if not temp:
+        return None
+    dias = _extremos_diarios_locales(temp, mayor_es_peor=True)
+    racha = _racha_mas_larga(dias, OLA_CALOR_AMARILLO, mayor_es_peor=True)
+    if len(racha) < OLA_CALOR_DIAS_MIN:
+        return None
+    _, vt_pico, val_pico = max(racha, key=lambda d: d[2])
+    nivel = _nivel(val_pico, OLA_CALOR_AMARILLO, OLA_CALOR_NARANJA, mayor_es_peor=True, rojo=OLA_CALOR_ROJO)
+    acuerdo = _acuerdo_pico(por_modelo, "temperature_2m", OLA_CALOR_AMARILLO, OLA_CALOR_NARANJA, True)
+    aviso = _aviso(st, "ola_calor", nivel, val_pico, "°C", vt_pico, acuerdo=acuerdo)
+    aviso["dias"] = len(racha)
+    return aviso
+
+
+def _aviso_ola_frio(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """Ídem ola de calor con mínima diaria ≤ OLA_FRIO_AMARILLO. Sin rojo: la
+    helada puntual ya tiene su propio escalón rojo en HELADA_ROJO."""
+    temp = series.get("temperature_2m") or []
+    if not temp:
+        return None
+    dias = _extremos_diarios_locales(temp, mayor_es_peor=False)
+    racha = _racha_mas_larga(dias, OLA_FRIO_AMARILLO, mayor_es_peor=False)
+    if len(racha) < OLA_FRIO_DIAS_MIN:
+        return None
+    _, vt_pico, val_pico = min(racha, key=lambda d: d[2])
+    nivel = _nivel(val_pico, OLA_FRIO_AMARILLO, OLA_FRIO_NARANJA, mayor_es_peor=False)
+    acuerdo = _acuerdo_pico(por_modelo, "temperature_2m", OLA_FRIO_AMARILLO, OLA_FRIO_NARANJA, False)
+    aviso = _aviso(st, "ola_frio", nivel, val_pico, "°C", vt_pico, acuerdo=acuerdo)
+    aviso["dias"] = len(racha)
+    return aviso
+
+
+def _aviso_tormenta(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """Pico de la mediana horaria de CAPE: condición NECESARIA no suficiente
+    para convección severa (energía potencial disponible, no pronóstico de
+    rayos/granizo). Relevante sobre todo en el invierno boliviano del
+    Altiplano. Sin rojo: CAPE solo no discrimina un tercer nivel sin más
+    variables (cizalladura, humedad) que este módulo no deriva."""
+    serie = series.get("cape") or []
+    if not serie:
+        return None
+    vt, val = max(serie, key=lambda p: p[1])
+    nivel = _nivel(val, TORMENTA_AMARILLO, TORMENTA_NARANJA, mayor_es_peor=True)
+    if not nivel:
+        return None
+    acuerdo = _acuerdo_pico(por_modelo, "cape", TORMENTA_AMARILLO, TORMENTA_NARANJA, True)
+    return _aviso(st, "tormenta", nivel, val, "J/kg", vt, acuerdo=acuerdo)
+
+
+def _aviso_uv(series: dict, por_modelo: dict, st: dict) -> dict | None:
+    """Pico de la mediana horaria de uv_index. Escala OMS estándar (9 = "muy
+    alto", 11 = "extremo"), no un umbral propio. Solo se emite si la variable
+    tiene datos: algunos modelos/horas la entregan None (radiación nocturna),
+    ya tolerado por _series_estacion."""
+    serie = series.get("uv_index") or []
+    if not serie:
+        return None
+    vt, val = max(serie, key=lambda p: p[1])
+    nivel = _nivel(val, UV_AMARILLO, UV_NARANJA, mayor_es_peor=True)
+    if not nivel:
+        return None
+    acuerdo = _acuerdo_pico(por_modelo, "uv_index", UV_AMARILLO, UV_NARANJA, True)
+    return _aviso(st, "uv", nivel, val, "índice UV", vt, acuerdo=acuerdo)
 
 
 def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
@@ -437,6 +709,12 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
     aviso_incendio = _aviso_incendio(series, por_modelo, st)
     if aviso_incendio:
         avisos.append(aviso_incendio)
+
+    for f in (_aviso_rafagas, _aviso_presion, _aviso_nieve_baja,
+              _aviso_ola_calor, _aviso_ola_frio, _aviso_tormenta, _aviso_uv):
+        aviso = f(series, por_modelo, st)
+        if aviso:
+            avisos.append(aviso)
 
     return avisos
 
