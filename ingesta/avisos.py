@@ -4,10 +4,10 @@ No es un aviso oficial: son umbrales propios (inspirados en los criterios
 públicos de avisos de la Dirección Meteorológica de Chile, y en la regla
 30-30-30 de manejo del fuego para el aviso de incendio, pero sin ninguna
 relación operativa con la DMC ni con CONAF/SENAPRED) aplicados a la MEDIANA
-horaria entre modelos del archivo de pronósticos, en la ventana de 72 h desde
-ahora (el archivo llega a 96 h; 72 da anticipación comparable a los avisos
-oficiales manteniendo margen de datos, y el campo "acuerdo" transparenta la
-confianza del ensamble a ese plazo). Las variables calibrables (temperatura, viento, humedad relativa) se
+horaria entre modelos del archivo de pronósticos, en la ventana de 120 h desde
+ahora (el archivo llega a 168 h; 120 anticipa temporales largos con margen de
+datos incluso con el run más viejo del ciclo, y el campo "acuerdo" transparenta
+la confianza del ensamble a ese plazo). Las variables calibrables (temperatura, viento, humedad relativa) se
 corrigen por sesgo (calibrate.py) antes de la mediana, para ser consistentes
 con el pronóstico que ve el usuario; precipitación y nieve quedan crudas.
 avisos.json lo declara explícitamente para que nadie lo confunda con un aviso
@@ -74,7 +74,7 @@ PERCENTIL_CLIMATOLOGICO = 98
 # y hay que decirlo explícito, no solo la fecha de cálculo.
 STALE_HORAS = 24
 
-VENTANA_H = 72
+VENTANA_H = 120
 VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall",
         "freezing_level_height", "relative_humidity_2m"]
 
@@ -419,7 +419,7 @@ def update(con, fetched_at: str) -> int:
     payload = {
         "updated": ahora.strftime("%Y-%m-%d %H:%M UTC"),
         "fuente": "Derivado del pronóstico multi-modelo calibrado de Vigía"
-                  " (mediana de 6 modelos con corrección de sesgo, 72 h)",
+                  " (mediana de 6 modelos con corrección de sesgo, 120 h)",
         "nota": "Aviso derivado de modelos, no es un aviso oficial de la DMC",
         "avisos": avisos,
         "acumulados": acumulados,
