@@ -21,6 +21,12 @@ def _get(url: str, params: dict | None, retries: int, parse_json: bool):
             with urllib.request.urlopen(req, timeout=45) as res:
                 text = res.read().decode("utf-8")
                 return (json.loads(text) if parse_json else text), url
+        except urllib.error.HTTPError as err:  # 429: respeta Retry-After, si no hay, backoff exponencial
+            last_err = err
+            if attempt < retries:
+                retry_after = err.headers.get("Retry-After") if err.code == 429 else None
+                espera = float(retry_after) if retry_after and retry_after.isdigit() else min(60, 5 * 2 ** attempt)
+                time.sleep(espera)
         except Exception as err:  # red o JSON inválido: reintentar con pausa
             last_err = err
             if attempt < retries:
@@ -47,11 +53,24 @@ def _om_chunks(stations, size=50):
         yield stations[i:i + size]
 
 
+# Open-Meteo pondera cada llamada por (variables/10) × (días/14) × ubicaciones,
+# con un mínimo de 1 por ubicación, y limita ~600 unidades/minuto (tier gratis).
+# Medido empíricamente el 2026-07-13 contra la API real con los parámetros de
+# producción (6 modelos × 10 variables horarias, forecast_days=4): 2 chunks de
+# 50 estaciones seguidos (100 ubicaciones) agotan el cupo del minuto y el 3er
+# chunk recibe 429 "Minutely API request limit exceeded" de inmediato. Un solo
+# chunk de 50 sí cabe, así que 60 s de pausa entre chunks (reinicio del cupo
+# por minuto) alcanza sin recortar variables/modelos/horizonte.
+_OM_THROTTLE_S = 60
+
+
 # ── Open-Meteo: pronósticos deterministas multi-modelo ──────────
 
 def ingest_openmeteo_det(con, run_tag: str) -> int:
     rows = []
-    for chunk in _om_chunks(config.STATIONS):
+    for i, chunk in enumerate(_om_chunks(config.STATIONS)):
+        if i > 0:
+            time.sleep(_OM_THROTTLE_S)
         data, _ = http_get_json(config.API_FORECAST, {
             "latitude": ",".join(f"{s['lat']:.4f}" for s in chunk),
             "longitude": ",".join(f"{s['lon']:.4f}" for s in chunk),
@@ -83,7 +102,11 @@ def ingest_openmeteo_det(con, run_tag: str) -> int:
 def ingest_openmeteo_ens(con, run_tag: str) -> int:
     rows = []
     ens_stations = [s for s in config.STATIONS if s.get("ens")]
+    # El límite de Open-Meteo es por IP, no por subdominio: si esta función corre
+    # justo después de ingest_openmeteo_det (caso de producción), el cupo del
+    # minuto ya viene consumido — se respeta la misma pausa antes del 1er chunk.
     for chunk in _om_chunks(ens_stations):
+        time.sleep(_OM_THROTTLE_S)
         data, _ = http_get_json(config.API_ENSEMBLE, {
             "latitude": ",".join(f"{s['lat']:.4f}" for s in chunk),
             "longitude": ",".join(f"{s['lon']:.4f}" for s in chunk),
