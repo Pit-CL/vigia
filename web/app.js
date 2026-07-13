@@ -2022,7 +2022,17 @@ function paintAlertas(group) {
 
 function paintVolcanes(group) {
   const volcanes = (volcanesData && volcanesData.volcanes) || [];
-  if (!volcanes.length) { if (capasActivas.size === 1) $('#map-meta').textContent = 'sin datos RNVV'; return; }
+  // Fuente parcial (fallback web de SERNAGEOMIN): solo lista volcanes con
+  // alerta sobre verde, así que 0 es un dato válido ("nadie sobre verde"),
+  // no ausencia de datos como en la ruta primaria RNVV.
+  const parcial = !!(volcanesData && volcanesData.parcial);
+  const sufijoParcial = parcial ? ' · fuente parcial (solo alerta elevada)' : '';
+  if (!volcanes.length) {
+    if (capasActivas.size === 1) {
+      $('#map-meta').textContent = parcial ? `0 volcanes con alerta${sufijoParcial}` : 'sin datos RNVV';
+    }
+    return;
+  }
   const TAMANO = { verde: 12, amarilla: 16, naranja: 18, roja: 20 };
   volcanes.forEach((v) => {
     const size = TAMANO[v.nivel] || 12;
@@ -2043,8 +2053,8 @@ function paintVolcanes(group) {
     marker.bindPopup(box, { maxWidth: 260 });
   });
   $('#map-meta').textContent = volcanesData.updated
-    ? `${volcanes.length} volcanes · ${horaLocal(volcanesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${volcanes.length} volcanes`;
+    ? `${volcanes.length} volcanes · ${horaLocal(volcanesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${sufijoParcial}`
+    : `${volcanes.length} volcanes${sufijoParcial}`;
 }
 
 // ── Avisos meteorológicos (derivados del pronóstico propio, NO oficiales) ──
