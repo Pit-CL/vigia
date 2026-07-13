@@ -49,7 +49,8 @@ HOURLY_VARS = [
     "freezing_level_height",
 ]
 
-HORIZON_HOURS = 96          # 4 días: el rango útil para calibración
+HORIZON_HOURS = 168         # 7 días: horizonte del determinista (medido 2026-07-13, sigue en el mínimo de costo de Open-Meteo)
+ENSEMBLE_HORIZON_HOURS = 96  # 4 días: el ensamble no se extiende, sigue siendo solo para el rango calibrable
 ENSEMBLE_MODEL = "ecmwf_ifs025"
 ENSEMBLE_VARS = ["temperature_2m"]
 

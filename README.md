@@ -45,7 +45,7 @@ Vigía es una PWA gratuita que junta, en un solo mapa de Chile, el pronóstico d
 - **Incendios activos** vía **NASA FIRMS** (detección satelital VIIRS, 375 m de resolución), con **dirección probable de avance del fuego** estimada a partir del viento medido en la estación más cercana.
 - **Alertas vigentes de SENAPRED** explicadas en lenguaje claro, no solo el aviso oficial crudo.
 - **Semáforo volcánico** con el estado técnico de cada volcán activo según la RNVV de SERNAGEOMIN (best effort: la red no publica en tiempo real).
-- **Avisos Vigía propios** (viento, helada, lluvia, calor, nieve, **riesgo aluvional** y **riesgo de incendio**) derivados de la mediana multi-modelo — explícitamente **no oficiales**. El aviso aluvional combina lluvia intensa con isoterma 0° alta: cuando la cordillera recibe agua líquida en vez de nieve, crece el riesgo de crecidas repentinas. El de incendio aplica la regla 30-30-30 (temperatura, humedad y viento extremos a la vez). Cada aviso incluye el acuerdo entre modelos individuales como señal de confianza, y viento/calor ajustan su umbral al percentil 98 de las observaciones de cada estación cuando hay muestra suficiente.
+- **Avisos Vigía propios** (viento, helada, lluvia, **lluvia persistente**, calor, nieve, **riesgo aluvional** y **riesgo de incendio**) derivados de la mediana multi-modelo — explícitamente **no oficiales**. El aviso de lluvia persistente mide el acumulado de 48 h (temporales largos que saturan el suelo sin cruzar nunca el umbral de 24 h) y se emite además del aviso de 24 h si ambos cruzan. El aviso aluvional combina lluvia intensa con isoterma 0° alta: cuando la cordillera recibe agua líquida en vez de nieve, crece el riesgo de crecidas repentinas. El de incendio aplica la regla 30-30-30 (temperatura, humedad y viento extremos a la vez). Cada aviso incluye el acuerdo entre modelos individuales como señal de confianza, y viento/calor ajustan su umbral al percentil 98 de las observaciones de cada estación cuando hay muestra suficiente.
 - **Marea, oleaje y temperatura del mar** en 32 puntos de la costa chilena (Open-Meteo Marine), más **aviso de marejadas** propio cuando el modelo proyecta olas de 3,5 m o más — dejando claro que la marea de modelo no reemplaza las tablas oficiales del **SHOA** ni las marejadas oficiales que declara el SHOA/Armada.
 - **Catastro de remociones en masa**: 1.218 eventos históricos de SENAPRED (aluviones, deslizamientos, derrumbes) — es un registro histórico, no un pronóstico.
 - **Acumulados de lluvia y nieve** a 48 horas.
@@ -75,7 +75,7 @@ Trece capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
 | 🔥 Incendios | Focos activos NASA FIRMS + dirección probable de avance por viento |
 | ⚠️ Alertas | Alertas vigentes de SENAPRED, explicadas en lenguaje claro |
 | 🌋 Volcanes | Semáforo técnico de la RNVV (SERNAGEOMIN) |
-| 💨 Avisos Vigía | Avisos propios: viento, helada, lluvia, calor, nieve, riesgo aluvional, riesgo de incendio |
+| 💨 Avisos Vigía | Avisos propios: viento, helada, lluvia, lluvia persistente, calor, nieve, riesgo aluvional, riesgo de incendio |
 | ⛰️ Remociones | Catastro histórico de remociones en masa (SENAPRED) |
 | 🌊 Costa | Marea, oleaje, temperatura del mar y aviso de marejadas (32 puntos) |
 | 🏃 Evacuación | Vías y zonas de inundación por tsunami, más rutas de evacuación volcánica |
@@ -87,7 +87,7 @@ El botón **🇨🇱 Chile** encuadra el mapa al país completo; el mapa admite 
 
 1. **Verificación pública, no promesas.** Casi ninguna app de clima muestra cuánto se equivoca. Vigía archiva cada pronóstico y publica su error real por modelo y plazo.
 2. **Honestidad sísmica.** Los terremotos no se pueden predecir — ninguna app seria lo hace. Lo que sí se puede mostrar es estadística real (Omori para réplicas, PAGER para impacto estimado), siempre etiquetada como tal.
-3. **Honestidad de autoridad.** La marea que se ve es de un modelo global, no la tabla oficial del SHOA; los avisos propios (viento, helada, lluvia, calor, nieve, aluvional, incendio, marejadas) no son un boletín oficial de la DMC o el SHOA; el PTWC no es la autoridad para Chile (lo es el SHOA/SNAM); el catastro de remociones es histórico, no un pronóstico. Cada capa deja explícito qué es y qué no es.
+3. **Honestidad de autoridad.** La marea que se ve es de un modelo global, no la tabla oficial del SHOA; los avisos propios (viento, helada, lluvia, lluvia persistente, calor, nieve, aluvional, incendio, marejadas) no son un boletín oficial de la DMC o el SHOA; el PTWC no es la autoridad para Chile (lo es el SHOA/SNAM); el catastro de remociones es histórico, no un pronóstico. Cada capa deja explícito qué es y qué no es.
 4. **Todo con fuentes oficiales citadas.** DMC, CSN, SENAPRED, SERNAGEOMIN, NASA, USGS, SHOA, PTWC — cada dato apunta a su origen y licencia (ver tabla abajo).
 5. **Cero costo de operación, cero dependencias oscuras.** Ingesta 100 % Python estándar, sin CDNs de terceros, CSP estricta.
 

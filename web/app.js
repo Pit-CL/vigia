@@ -2060,8 +2060,8 @@ function paintVolcanes(group) {
 
 // ── Avisos meteorológicos (derivados del pronóstico propio, NO oficiales) ──
 
-const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', calor: '🌡️', aluvional: '⛰️💧', nieve: '❄️', incendio: '🔥' };
-const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', calor: 'Calor extremo', aluvional: 'Riesgo aluvional', nieve: 'Nieve', incendio: 'Riesgo de incendio' };
+const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', lluvia_persistente: '🌧️', calor: '🌡️', aluvional: '⛰️💧', nieve: '❄️', incendio: '🔥' };
+const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', lluvia_persistente: 'Lluvia persistente', calor: 'Calor extremo', aluvional: 'Riesgo aluvional', nieve: 'Nieve', incendio: 'Riesgo de incendio' };
 const AVISO_NIVEL_LABEL = { amarillo: 'Amarillo', naranja: 'Naranja' };
 
 function paintAvisos(group) {
