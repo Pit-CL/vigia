@@ -33,6 +33,14 @@ LLUVIA_AMARILLO, LLUVIA_NARANJA = 30.0, 60.0     # mm, máx suma móvil 24 h
 CALOR_AMARILLO, CALOR_NARANJA = 34.0, 37.0       # °C, máx mediana horaria
 NIEVE_AMARILLO, NIEVE_NARANJA = 10.0, 30.0       # cm, máx suma móvil 24 h
 
+# Aviso lluvia persistente: temporales largos que acumulan agua sin cruzar
+# nunca el umbral de 24 h (p.ej. 25 mm/día dos días seguidos) igual saturan el
+# suelo y elevan el riesgo de crecidas — exactamente el caso que el aviso de
+# lluvia de 24 h no ve. Se emite ADEMÁS del aviso de 24 h si ambos cruzan
+# (productos distintos, sin dedupe). Derivación propia, sin relación operativa
+# con la DMC, igual que el resto del módulo.
+LLUVIA48_AMARILLO, LLUVIA48_NARANJA = 50.0, 90.0  # mm, máx suma móvil 48 h
+
 # Aviso aluvional: lluvia intensa + isoterma 0° alta significa que la cuenca
 # recibe agua líquida en vez de nieve, con riesgo de crecidas repentinas y
 # aluviones en quebradas y laderas. Requiere AMBAS condiciones a la vez sobre
@@ -115,14 +123,15 @@ def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str)
     return series, por_modelo
 
 
-def _rolling_sum_24h(serie: list) -> list:
-    """[(valid_time_de_fin_de_ventana, suma)], solo ventanas de 24 puntos completas.
-    Aproximado: si falta la mediana de alguna hora (todos los modelos None), esa
-    hora no cuenta como punto y la ventana de "24 puntos" puede cubrir algo más
-    de 24 horas de reloj — aceptable para un aviso derivado, no oficial."""
+def _rolling_sum(serie: list, n_horas: int) -> list:
+    """[(valid_time_de_fin_de_ventana, suma)], solo ventanas de n_horas puntos
+    completas. Aproximado: si falta la mediana de alguna hora (todos los
+    modelos None), esa hora no cuenta como punto y la ventana de "n_horas
+    puntos" puede cubrir algo más de n_horas de reloj — aceptable para un
+    aviso derivado, no oficial."""
     return [
-        (serie[i][0], sum(v for _, v in serie[i - 23:i + 1]))
-        for i in range(23, len(serie))
+        (serie[i][0], sum(v for _, v in serie[i - (n_horas - 1):i + 1]))
+        for i in range(n_horas - 1, len(serie))
     ]
 
 
@@ -182,14 +191,16 @@ def _acuerdo_pico(por_modelo: dict, var: str, amarillo: float, naranja: float,
     return f"{n_supera}/{len(modelos)}"
 
 
-def _acuerdo_rolling(por_modelo: dict, var: str, amarillo: float, naranja: float) -> str:
-    """Ídem _acuerdo_pico para lluvia/nieve/aluvional: la suma móvil de 24 h de
-    cada modelo por sí solo. El denominador son los modelos con ventana de 24
-    puntos completa (los demás no tienen forma de opinar)."""
+def _acuerdo_rolling(por_modelo: dict, var: str, amarillo: float, naranja: float,
+                      n_horas: int = 24) -> str:
+    """Ídem _acuerdo_pico para lluvia/nieve/aluvional/lluvia persistente: la
+    suma móvil de n_horas de cada modelo por sí solo. El denominador son los
+    modelos con ventana de n_horas puntos completa (los demás no tienen forma
+    de opinar)."""
     modelos = por_modelo.get(var, {})
     n_con_ventana = n_supera = 0
     for serie in modelos.values():
-        rolling = _rolling_sum_24h(serie)
+        rolling = _rolling_sum(serie, n_horas)
         if not rolling:
             continue
         n_con_ventana += 1
@@ -315,13 +326,27 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
                                   acuerdo=acuerdo, umbral=round(calor_amarillo, 1)))
 
     precip = series.get("precipitation") or []
-    rolling = _rolling_sum_24h(precip)
+    rolling = _rolling_sum(precip, 24)
     if rolling:
         vt, val = max(rolling, key=lambda p: p[1])
         nivel = _nivel(val, LLUVIA_AMARILLO, LLUVIA_NARANJA, mayor_es_peor=True)
         if nivel:
             acuerdo = _acuerdo_rolling(por_modelo, "precipitation", LLUVIA_AMARILLO, LLUVIA_NARANJA)
             avisos.append(_aviso(st, "lluvia", nivel, val, "mm", vt, acuerdo=acuerdo))
+
+    # Lluvia persistente: pico de la suma móvil de 48 h (ventana propia,
+    # independiente del pico de 24 h de arriba). Se emite ADEMÁS del aviso de
+    # 24 h si ambos cruzan (productos distintos, sin dedupe) — ver docstring
+    # de LLUVIA48_AMARILLO/NARANJA.
+    rolling48 = _rolling_sum(precip, 48)
+    if rolling48:
+        vt48, val48 = max(rolling48, key=lambda p: p[1])
+        nivel48 = _nivel(val48, LLUVIA48_AMARILLO, LLUVIA48_NARANJA, mayor_es_peor=True)
+        if nivel48:
+            acuerdo48 = _acuerdo_rolling(por_modelo, "precipitation",
+                                          LLUVIA48_AMARILLO, LLUVIA48_NARANJA, n_horas=48)
+            avisos.append(_aviso(st, "lluvia_persistente", nivel48, val48, "mm/48h", vt48,
+                                  acuerdo=acuerdo48))
 
         # Isoterma 0° mediana durante la misma ventana de 24 h del pico de
         # lluvia. Null-safe: si freezing_level_height aún no tiene filas
@@ -351,7 +376,7 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
                     avisos.append(aviso_aluv)
 
     nieve = series.get("snowfall") or []
-    rolling_nieve = _rolling_sum_24h(nieve)
+    rolling_nieve = _rolling_sum(nieve, 24)
     if rolling_nieve:
         vt, val = max(rolling_nieve, key=lambda p: p[1])
         nivel = _nivel(val, NIEVE_AMARILLO, NIEVE_NARANJA, mayor_es_peor=True)

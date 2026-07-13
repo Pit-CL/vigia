@@ -112,13 +112,13 @@ def ingest_openmeteo_ens(con, run_tag: str) -> int:
             "longitude": ",".join(f"{s['lon']:.4f}" for s in chunk),
             "hourly": ",".join(config.ENSEMBLE_VARS),
             "models": config.ENSEMBLE_MODEL,
-            "forecast_days": math.ceil(config.HORIZON_HOURS / 24),
+            "forecast_days": math.ceil(config.ENSEMBLE_HORIZON_HOURS / 24),
             "timezone": "UTC",
         })
         results = data if isinstance(data, list) else [data]
         for st, res in zip(chunk, results):
             hourly = res.get("hourly", {})
-            times = hourly.get("time", [])[: config.HORIZON_HOURS]
+            times = hourly.get("time", [])[: config.ENSEMBLE_HORIZON_HOURS]
             for var in config.ENSEMBLE_VARS:
                 for key, series in hourly.items():
                     if not key.startswith(var) or key == "time":
