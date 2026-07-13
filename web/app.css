@@ -1466,8 +1466,9 @@ dialog::backdrop {
    solo el color de borde es propio de este aviso, no oficial. */
 .aviso-amarillo { border-color: var(--alerta-amarilla); }
 .aviso-naranja { border-color: var(--vol-naranja); }
+.aviso-rojo { border-color: var(--alerta-roja); }
 
-.av-amarillo, .av-naranja {
+.av-amarillo, .av-naranja, .av-rojo {
   display: inline-block;
   width: 12px;
   height: 12px;
@@ -1477,6 +1478,7 @@ dialog::backdrop {
 }
 .av-amarillo { border-color: var(--alerta-amarilla); }
 .av-naranja { border-color: var(--vol-naranja); }
+.av-rojo { border-color: var(--alerta-roja); }
 
 /* ── Volcanes: alerta técnica (SERNAGEOMIN RNVV) ─────────────── */
 

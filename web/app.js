@@ -2062,7 +2062,7 @@ function paintVolcanes(group) {
 
 const AVISO_EMOJI = { viento: '💨', helada: '❄️', lluvia: '🌧️', lluvia_persistente: '🌧️', calor: '🌡️', aluvional: '⛰️💧', nieve: '❄️', incendio: '🔥' };
 const AVISO_TIPO_LABEL = { viento: 'Viento fuerte', helada: 'Helada', lluvia: 'Lluvia intensa', lluvia_persistente: 'Lluvia persistente', calor: 'Calor extremo', aluvional: 'Riesgo aluvional', nieve: 'Nieve', incendio: 'Riesgo de incendio' };
-const AVISO_NIVEL_LABEL = { amarillo: 'Amarillo', naranja: 'Naranja' };
+const AVISO_NIVEL_LABEL = { amarillo: 'Amarillo', naranja: 'Naranja', rojo: 'Rojo' };
 
 function paintAvisos(group) {
   const avisos = (avisosData && avisosData.avisos) || [];
@@ -2758,7 +2758,7 @@ function riesgoCounts(ambito = riesgoAmbito) {
   // Avisos meteo: conteo aparte (5.º tile), nunca mezclado con las 4 fuentes
   // oficiales de arriba — son una derivación propia, no un aviso oficial.
   const avisos = avisosData ? avisosData.avisos.filter((a) => enAmbito(a, ambito)) : [];
-  const avisoAlto = avisos.some((a) => a.nivel === 'naranja');
+  const avisoAlto = avisos.some((a) => a.nivel === 'naranja' || a.nivel === 'rojo');
   // Cortes SEC: conteo de comunas afectadas (no de clientes, para que el
   // número calce con "toca para ver el detalle" del tile). Alto si alguna
   // comuna del ámbito supera 10.000 clientes afectados.
@@ -2834,10 +2834,10 @@ function riesgoEventos() {
   }
 
   // Avisos meteo: entran al top-10 con menos score que un evento oficial
-  // (45 naranja / 25 amarillo) — son una derivación propia, no oficial.
+  // (65 rojo / 45 naranja / 25 amarillo) — son una derivación propia, no oficial.
   for (const a of avisosData ? avisosData.avisos : []) {
     items.push({
-      score: a.nivel === 'naranja' ? 45 : 25,
+      score: a.nivel === 'rojo' ? 65 : a.nivel === 'naranja' ? 45 : 25,
       fecha: null, capa: 'avisos', lat: a.lat, lon: a.lon,
       emoji: AVISO_EMOJI[a.tipo] || '⚠️',
       texto: `${AVISO_TIPO_LABEL[a.tipo] || a.tipo} ${a.nivel} · ${a.nombre} · ${r1(a.valor)} ${a.unidad}`,
