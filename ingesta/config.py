@@ -47,6 +47,16 @@ HOURLY_VARS = [
     "cloud_cover",
     "pressure_msl",
     "freezing_level_height",
+    # Avisos v3 (ver ingesta/avisos.py): ráfagas, tormenta convectiva y UV.
+    # Verificado empíricamente 2026-07-13 contra la API real (50 ubicaciones,
+    # 6 modelos, 13 variables, forecast_days=7): 200 OK, ~2.6 s. La ponderación
+    # de Open-Meteo es (variables/10)×(días/14) con mínimo 1/ubicación — con
+    # 13 vars y 7 días da 0.65, sigue clavada en el mínimo, no sube costo.
+    # cape y uv_index vienen null en algunos modelos/horas (p.ej. uv_index de
+    # noche): el pipeline ya tolera None por diseño (ver _series_estacion).
+    "wind_gusts_10m",
+    "cape",
+    "uv_index",
 ]
 
 HORIZON_HOURS = 168         # 7 días: horizonte del determinista (medido 2026-07-13, sigue en el mínimo de costo de Open-Meteo)
