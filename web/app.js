@@ -1777,9 +1777,10 @@ function paintPrecip(group) {
   });
   const resumen = est.length < todas.length ? `${est.length} de ${todas.length} estaciones` : `${est.length} estaciones`;
   const acerca = est.length < todas.length ? ' (acerca el mapa para ver más)' : '';
+  const vencido = avisosData.stale ? ` · pronóstico base de hace ${avisosData.pronostico_horas}h` : '';
   $('#map-meta').textContent = avisosData.updated
-    ? `${resumen} · acumulado 48 h · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${acerca}`
-    : `${resumen} · acumulado 48 h${acerca}`;
+    ? `${resumen} · acumulado 48 h · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${acerca}${vencido}`
+    : `${resumen} · acumulado 48 h${acerca}${vencido}`;
 }
 
 // Chip de impacto estimado PAGER (USGS) — mismo semáforo verde/amarillo/
@@ -2106,9 +2107,10 @@ function paintAvisos(group) {
     box.appendChild(small);
     marker.bindPopup(box, { maxWidth: 280 });
   });
+  const vencido = avisosData.stale ? ` · pronóstico base de hace ${avisosData.pronostico_horas}h` : '';
   $('#map-meta').textContent = avisosData.updated
-    ? `${avisos.length} avisos meteo · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${avisos.length} avisos meteo`;
+    ? `${avisos.length} avisos meteo · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${vencido}`
+    : `${avisos.length} avisos meteo${vencido}`;
 }
 
 // ── Marea, oleaje y temperatura del mar (Open-Meteo Marine, no oficial) ──

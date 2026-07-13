@@ -56,6 +56,14 @@ INCENDIO_VIENTO_AMARILLO, INCENDIO_VIENTO_NARANJA = 30.0, 40.0    # km/h
 MIN_OBS_CLIMATOLOGICO = 1000
 PERCENTIL_CLIMATOLOGICO = 98
 
+# Frescura del pronóstico BASE (regla 8): los pronósticos corren 2x/día, así
+# que más de un ciclo de margen (>24 h) significa que se perdió al menos una
+# corrida — p.ej. por un 429 de Open-Meteo. avisos.json ya siempre queda con
+# "updated" fresco (se recalcula cada corrida), pero si el run_tag que lo
+# alimenta es viejo, el aviso está calculado sobre un pronóstico desactualizado
+# y hay que decirlo explícito, no solo la fecha de cálculo.
+STALE_HORAS = 24
+
 VENTANA_H = 48
 VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall",
         "freezing_level_height", "relative_humidity_2m"]
@@ -363,12 +371,14 @@ def update(con, fetched_at: str) -> int:
 
     avisos = []
     acumulados = []
+    run_tags_usados = []
     for st in config.STATIONS:
         run_tag = con.execute(
             "SELECT MAX(run_tag) FROM forecasts WHERE station=? AND member=-1",
             (st["id"],)).fetchone()[0]
         if not run_tag:
             continue
+        run_tags_usados.append(run_tag)
         # Una sola consulta de series por estación: avisos y acumulados
         # comparten la misma mediana horaria multi-modelo.
         series, por_modelo = _series_estacion(con, st["id"], run_tag, desde, hasta)
@@ -387,6 +397,14 @@ def update(con, fetched_at: str) -> int:
         "avisos": avisos,
         "acumulados": acumulados,
     }
+    if run_tags_usados:
+        pronostico_run = max(run_tags_usados)
+        pronostico_horas = round((ahora - datetime.fromisoformat(pronostico_run + ":00")
+                                   .replace(tzinfo=timezone.utc)).total_seconds() / 3600)
+        payload["pronostico_run"] = pronostico_run
+        payload["pronostico_horas"] = pronostico_horas
+        if pronostico_horas > STALE_HORAS:
+            payload["stale"] = True
     config.AVISOS_PATH.parent.mkdir(parents=True, exist_ok=True)
     config.AVISOS_PATH.write_text(json.dumps(payload, ensure_ascii=False) + "\n")
     return len(avisos)
