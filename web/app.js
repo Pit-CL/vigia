@@ -1567,6 +1567,28 @@ function popupRows(pairs) {
   return dl;
 }
 
+// true si el dispositivo abre Apple Maps nativo (iPhone/iPad/Mac). iPadOS
+// se reporta como "MacIntel" en navigator.platform igual que un Mac de
+// escritorio, pero da lo mismo: ambos tienen Apple Maps instalado.
+function esApple() {
+  const plat = navigator.platform || '';
+  return /iPhone|iPad|iPod|Mac/.test(plat);
+}
+
+// Enlace "Cómo llegar" a la app de mapas del dispositivo: Apple Maps en
+// iOS/iPadOS/macOS, Google Maps en el resto (Android abre la app si está
+// instalada, PC abre el navegador).
+function enlaceComoLlegar(lat, lon) {
+  const a = document.createElement('a');
+  a.href = esApple()
+    ? `https://maps.apple.com/?daddr=${lat},${lon}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.textContent = '🧭 Cómo llegar';
+  return a;
+}
+
 function renderMapa() {
   if (!ensureMap()) return;
   if (tileLayer) map.removeLayer(tileLayer);
@@ -2145,6 +2167,7 @@ function pintarPuntoEmg(it, group) {
     a.textContent = 'ver vías de evacuación oficiales';
     box.appendChild(a);
   }
+  box.appendChild(enlaceComoLlegar(it.lat, it.lon));
   marker.bindPopup(box, { maxWidth: 260 });
 }
 
@@ -2466,6 +2489,13 @@ function popupEstacionCombustible(e) {
     small.textContent = e.marca && e.nombre ? `${e.marca} · ${e.comuna}` : e.comuna;
     box.appendChild(small);
   }
+  // combustible.json ya generados en prod pueden no traer este campo hasta
+  // la próxima corrida de ingesta: solo se muestra si viene.
+  if (e.direccion) {
+    const dir = document.createElement('small');
+    dir.textContent = e.direccion;
+    box.appendChild(dir);
+  }
   const precios = e.precios || {};
   box.appendChild(popupRows(Object.keys(PRECIO_COMBUSTIBLE_LABEL)
     .filter((k) => precioValor(precios[k]) != null)
@@ -2478,6 +2508,7 @@ function popupEstacionCombustible(e) {
       const texto = `${formatoClp(valor)} (al ${ddmm(fecha)})${antiguo ? ' ⚠ precio antiguo' : ''}`;
       return [PRECIO_COMBUSTIBLE_LABEL[k], texto];
     })));
+  box.appendChild(enlaceComoLlegar(e.lat, e.lon));
   return box;
 }
 

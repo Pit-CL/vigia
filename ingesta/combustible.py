@@ -95,8 +95,8 @@ def _num_precio(raw):
 
 def _mapear_estacion(row) -> dict | None:
     """Una fila cruda de /api/v4/estaciones -> {lat, lon, nombre?, marca?,
-    comuna?, precios{}}. Se descartan estaciones en mantención o sin
-    lat/lon utilizable (no se pueden pintar en el mapa)."""
+    comuna?, direccion?, precios{}}. Se descartan estaciones en mantención o
+    sin lat/lon utilizable (no se pueden pintar en el mapa)."""
     if not isinstance(row, dict) or row.get("en_mantenimiento") == 1:
         return None
     ubicacion = row.get("ubicacion") or {}
@@ -115,6 +115,9 @@ def _mapear_estacion(row) -> dict | None:
     comuna = ubicacion.get("nombre_comuna")
     if comuna:
         item["comuna"] = str(comuna)
+    direccion = ubicacion.get("direccion")
+    if direccion:
+        item["direccion"] = str(direccion)
     # Cada combustible trae su propia fecha_actualizacion ("YYYY-MM-DD"): en
     # una misma estación el 93 puede venir de hoy y el diésel de hace meses
     # (verificado contra la API real), así que la fecha va por precio, no
