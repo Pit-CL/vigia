@@ -5,8 +5,11 @@ públicos de avisos de la Dirección Meteorológica de Chile, y en la regla
 30-30-30 de manejo del fuego para el aviso de incendio, pero sin ninguna
 relación operativa con la DMC ni con CONAF/SENAPRED) aplicados a la MEDIANA
 horaria entre modelos del archivo de pronósticos, en la ventana de 48 h desde
-ahora. avisos.json lo declara explícitamente para que nadie lo confunda con
-un aviso oficial.
+ahora. Las variables calibrables (temperatura, viento, humedad relativa) se
+corrigen por sesgo (calibrate.py) antes de la mediana, para ser consistentes
+con el pronóstico que ve el usuario; precipitación y nieve quedan crudas.
+avisos.json lo declara explícitamente para que nadie lo confunda con un aviso
+oficial.
 
 Sin tabla propia: es barato de recalcular (SQL local + mediana, sin red), así
 que se recalcula entero en cada corrida en vez de persistir estado.
@@ -15,6 +18,7 @@ import json
 import statistics
 from datetime import datetime, timedelta, timezone
 
+import calibrate
 import config
 
 # Umbrales (derivación propia; ver docstring). máx/mín = pico de la mediana
@@ -56,6 +60,14 @@ VENTANA_H = 48
 VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall",
         "freezing_level_height", "relative_humidity_2m"]
 
+# Variables de VARS que además son calibrables (config.CALIBRABLE_VARS): se
+# corrige cada valor por modelo con el bias de calibrate.py ANTES de la
+# mediana, para que el aviso sea consistente con el pronóstico que ve el
+# usuario. precipitation/snowfall/freezing_level_height quedan crudas
+# (regla 5: nunca se calibra precipitation, y snowfall/isoterma no están en
+# CALIBRABLE_VARS).
+VARS_CALIBRABLES = [v for v in VARS if v in config.CALIBRABLE_VARS]
+
 
 def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str) -> tuple[dict, dict]:
     """(series, por_modelo):
@@ -64,6 +76,10 @@ def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str)
       Base del acuerdo de ensamble (B1): cada model=... es un modelo determinista
       distinto archivado con member=-1 (ver forecasts en db.py); la mediana entre
       todas esas filas por hora es lo que arma `series`.
+
+    Para las variables en VARS_CALIBRABLES, cada valor se corrige por sesgo
+    (calibrate.correct, gate + shrinkage incluidos) antes de entrar a la
+    mediana y al desglose por modelo — misma base que el pronóstico servido.
     """
     placeholders = ",".join("?" * len(VARS))
     rows = con.execute(
@@ -71,11 +87,15 @@ def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str)
         f" WHERE station=? AND run_tag=? AND member=-1 AND variable IN ({placeholders})"
         f" AND valid_time >= ? AND valid_time <= ?",
         (station_id, run_tag, *VARS, desde, hasta))
+    run_dt = datetime.fromisoformat(run_tag + ":00")
     por_hora: dict = {}
     por_modelo_raw: dict = {}
     for var, model, vt, val in rows:
         if val is None:
             continue
+        if var in VARS_CALIBRABLES:
+            lead_hours = (datetime.fromisoformat(vt) - run_dt).total_seconds() / 3600
+            val = calibrate.correct(con, station_id, model, var, lead_hours, val)
         por_hora.setdefault(var, {}).setdefault(vt, []).append(val)
         por_modelo_raw.setdefault(var, {}).setdefault(model, []).append((vt, val))
     series = {var: [(vt, statistics.median(horas[vt])) for vt in sorted(horas)]
@@ -121,8 +141,10 @@ def _percentil(valores_ordenados: list, p: float) -> float:
 def _umbral_climatologico(con, station_id: str, variable: str,
                            amarillo_fijo: float, naranja_fijo: float) -> tuple[float, float]:
     """Umbral efectivo = max(fijo, percentil 98 de las OBSERVACIONES de esa
-    estación para esa variable), con gate de muestra mínima. `naranja` escala
-    proporcional para conservar la separación amarillo/naranja del umbral fijo."""
+    estación para esa variable), con gate de muestra mínima. `naranja` conserva
+    la separación ABSOLUTA amarillo/naranja del umbral fijo (offset, no razón:
+    temperatura es escala de intervalo, no de razón — escalar por cociente
+    depende de si se mide en °C o K, lo que es un error de unidades)."""
     rows = con.execute(
         "SELECT value FROM observations WHERE station=? AND variable=? AND value IS NOT NULL",
         (station_id, variable)).fetchall()
@@ -131,7 +153,7 @@ def _umbral_climatologico(con, station_id: str, variable: str,
     valores = sorted(v for (v,) in rows)
     p98 = _percentil(valores, PERCENTIL_CLIMATOLOGICO)
     amarillo_efectivo = max(amarillo_fijo, p98)
-    naranja_efectivo = amarillo_efectivo * (naranja_fijo / amarillo_fijo)
+    naranja_efectivo = amarillo_efectivo + (naranja_fijo - amarillo_fijo)
     return amarillo_efectivo, naranja_efectivo
 
 
@@ -359,7 +381,8 @@ def update(con, fetched_at: str) -> int:
 
     payload = {
         "updated": ahora.strftime("%Y-%m-%d %H:%M UTC"),
-        "fuente": "Derivado del pronóstico multi-modelo de Vigía (mediana de 6 modelos, 48 h)",
+        "fuente": "Derivado del pronóstico multi-modelo calibrado de Vigía"
+                  " (mediana de 6 modelos con corrección de sesgo, 48 h)",
         "nota": "Aviso derivado de modelos, no es un aviso oficial de la DMC",
         "avisos": avisos,
         "acumulados": acumulados,
