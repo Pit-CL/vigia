@@ -2489,6 +2489,13 @@ function popupEstacionCombustible(e) {
     small.textContent = e.marca && e.nombre ? `${e.marca} · ${e.comuna}` : e.comuna;
     box.appendChild(small);
   }
+  // combustible.json ya generados en prod pueden no traer este campo hasta
+  // la próxima corrida de ingesta: solo se muestra si viene.
+  if (e.direccion) {
+    const dir = document.createElement('small');
+    dir.textContent = e.direccion;
+    box.appendChild(dir);
+  }
   const precios = e.precios || {};
   box.appendChild(popupRows(Object.keys(PRECIO_COMBUSTIBLE_LABEL)
     .filter((k) => precioValor(precios[k]) != null)
