@@ -1132,6 +1132,12 @@ dialog::backdrop {
 .stn-popup .grupo-lista li { margin-bottom: 3px; }
 .stn-popup .grupo-lista li:last-child { margin-bottom: 0; }
 
+.alerta-meta {
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  margin: 2px 0 0;
+}
+
 .alerta-explica, .alerta-nivel-explica {
   font-size: 0.78rem;
   color: var(--ink-soft);
