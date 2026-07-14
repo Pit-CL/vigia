@@ -169,6 +169,18 @@ UV_AMARILLO, UV_NARANJA = 9.0, 11.0
 MIN_OBS_CLIMATOLOGICO = 1000
 PERCENTIL_CLIMATOLOGICO = 98
 
+# Gate de CANTIDAD de datos para avisos compuestos (aluvional, incendio,
+# nieve_cota_baja): la mediana entre modelos puede salir de una lista de 1
+# solo valor, un outlier de un único modelo disfrazado de consenso. Se exige
+# un mínimo de modelos PRESENTES (con dato, sea cual sea su valor) en la
+# hora/ventana que gatilla el aviso, para cada variable que lo compone. Esto
+# protege contra falsos positivos por dato escaso — NO exige acuerdo entre
+# modelos (eso es el campo "acuerdo", nunca un gate, ver _acuerdo_pico): un
+# aviso con acuerdo 1/6 pero con los 6 modelos presentes debe seguir
+# emitiéndose. Se tolera falso positivo por desacuerdo, NO se tolera falso
+# negativo por dato insuficiente.
+MIN_MODELOS_COMPUESTO = 3
+
 # Frescura del pronóstico BASE (regla 8): los pronósticos corren 2x/día, así
 # que más de un ciclo de margen (>24 h) significa que se perdió al menos una
 # corrida — p.ej. por un 429 de Open-Meteo. avisos.json ya siempre queda con
@@ -236,6 +248,15 @@ def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str)
     por_modelo = {var: {m: sorted(vals) for m, vals in modelos.items()}
                   for var, modelos in por_modelo_raw.items()}
     return series, por_modelo, series_crudo
+
+
+def _modelos_presentes(por_modelo: dict, var: str, hora: str) -> int:
+    """Cuenta cuántos modelos de por_modelo[var] tienen dato en 'hora' (valid_time
+    exacto), sin importar su valor — gate de CANTIDAD, no de acuerdo (ver
+    MIN_MODELOS_COMPUESTO). Reusada por los tres avisos compuestos para no
+    triplicar la lógica de conteo."""
+    modelos = por_modelo.get(var, {})
+    return sum(1 for serie in modelos.values() if hora in dict(serie))
 
 
 def _rolling_sum(serie: list, n_horas: int) -> list:
@@ -484,6 +505,14 @@ def _aviso_incendio(series: dict, por_modelo: dict, st: dict) -> dict | None:
     else:
         return None
     h = next(h for h in horas if niveles[h] == nivel_top)  # horas ordenadas asc.
+    n_temp = _modelos_presentes(por_modelo, "temperature_2m", h)
+    n_hr = _modelos_presentes(por_modelo, "relative_humidity_2m", h)
+    n_viento = _modelos_presentes(por_modelo, "wind_speed_10m", h)
+    if min(n_temp, n_hr, n_viento) < MIN_MODELOS_COMPUESTO:
+        print(f"[aviso] incendio: datos insuficientes descartado "
+              f"(estación {st['id']}: temp={n_temp} hr={n_hr} viento={n_viento}"
+              f" modelos, mínimo {MIN_MODELOS_COMPUESTO})")
+        return None
     t, r, v = temp[h], hr[h], viento[h]
     acuerdo = _acuerdo_incendio(por_modelo)
     return _aviso(st, "incendio", nivel_top, t, "°C", h, acuerdo=acuerdo,
@@ -554,6 +583,13 @@ def _aviso_nieve_baja(series: dict, por_modelo: dict, st: dict) -> dict | None:
     elif val >= NIEVE_BAJA_LLUVIA_AMARILLO and iso_mediana <= NIEVE_BAJA_ISOTERMA_AMARILLO:
         nivel = "amarillo"
     else:
+        return None
+    n_lluvia = _modelos_presentes(por_modelo, "precipitation", vt)
+    n_iso = _modelos_presentes(por_modelo, "freezing_level_height", vt)
+    if min(n_lluvia, n_iso) < MIN_MODELOS_COMPUESTO:
+        print(f"[aviso] nieve_cota_baja: datos insuficientes descartado "
+              f"(estación {st['id']}: lluvia={n_lluvia} iso={n_iso} modelos,"
+              f" mínimo {MIN_MODELOS_COMPUESTO})")
         return None
     acuerdo = _acuerdo_rolling(por_modelo, "precipitation",
                                 NIEVE_BAJA_LLUVIA_AMARILLO, NIEVE_BAJA_LLUVIA_NARANJA)
@@ -706,14 +742,21 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
                 else:
                     nivel_aluv = None
                 if nivel_aluv:
-                    # Acuerdo del componente lluvia (el más variable entre
-                    # modelos); la isoterma es más homogénea regionalmente y
-                    # no se desglosa por modelo aquí.
-                    acuerdo = _acuerdo_rolling(por_modelo, "precipitation",
-                                               ALUVION_LLUVIA_AMARILLO, ALUVION_LLUVIA_NARANJA)
-                    aviso_aluv = _aviso(st, "aluvional", nivel_aluv, val, "mm", vt, acuerdo=acuerdo)
-                    aviso_aluv["isoterma_m"] = round(iso_mediana / 100) * 100
-                    avisos.append(aviso_aluv)
+                    n_lluvia = _modelos_presentes(por_modelo, "precipitation", vt)
+                    n_iso = _modelos_presentes(por_modelo, "freezing_level_height", vt)
+                    if min(n_lluvia, n_iso) < MIN_MODELOS_COMPUESTO:
+                        print(f"[aviso] aluvional: datos insuficientes descartado "
+                              f"(estación {st['id']}: lluvia={n_lluvia} iso={n_iso}"
+                              f" modelos, mínimo {MIN_MODELOS_COMPUESTO})")
+                    else:
+                        # Acuerdo del componente lluvia (el más variable entre
+                        # modelos); la isoterma es más homogénea regionalmente y
+                        # no se desglosa por modelo aquí.
+                        acuerdo = _acuerdo_rolling(por_modelo, "precipitation",
+                                                   ALUVION_LLUVIA_AMARILLO, ALUVION_LLUVIA_NARANJA)
+                        aviso_aluv = _aviso(st, "aluvional", nivel_aluv, val, "mm", vt, acuerdo=acuerdo)
+                        aviso_aluv["isoterma_m"] = round(iso_mediana / 100) * 100
+                        avisos.append(aviso_aluv)
 
     nieve = series.get("snowfall") or []
     rolling_nieve = _rolling_sum(nieve, 24)
