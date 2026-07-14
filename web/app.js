@@ -1108,6 +1108,12 @@ const TILES_LABELS = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
 };
 
+// Estilo del mapa base "Satelital" (imagen aérea, no confundir con la capa
+// 🛰️ 'satelite' de GOES-East más abajo, que es la nube meteorológica animada).
+// Esri World Imagery no distingue claro/oscuro: una sola textura para ambos temas.
+const TILES_ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const TILES_ESRI_ATTR = 'Esri, Maxar, Earthstar Geographics';
+
 // Capa satelital: NASA GIBS, GOES-East ABI GeoColor (WMTS RESTful, sin API key).
 // Ojo con el orden del path: es {z}/{y}/{x} (TileMatrix/TileRow/TileCol), no
 // el {z}/{x}/{y} habitual de Leaflet — el template solo cambia DÓNDE va cada
@@ -1422,10 +1428,13 @@ function toggleReproduccionSatelite() {
 // Retira del mapa los tileLayers persistentes del satélite y detiene la
 // reproducción; se llama al apagar la capa (renderMapa no lo hace solo
 // porque estos tileLayers viven fuera de layerGroups['satelite']).
-function limpiarSatelite() {
+// `mantenerEtiquetas` (true cuando el mapa base está en modo Satelital) evita
+// borrar el rotulado only_labels que ese modo también necesita, aunque la
+// capa GOES esté apagada.
+function limpiarSatelite(mantenerEtiquetas) {
   detenerReproduccionSatelite();
   sateliteLayers.forEach((layer) => { if (map.hasLayer(layer)) map.removeLayer(layer); });
-  if (sateliteLabelsLayer && map.hasLayer(sateliteLabelsLayer)) map.removeLayer(sateliteLabelsLayer);
+  if (!mantenerEtiquetas && sateliteLabelsLayer && map.hasLayer(sateliteLabelsLayer)) map.removeLayer(sateliteLabelsLayer);
 }
 
 function paintSatelite() {
@@ -1491,6 +1500,23 @@ function capasGuardadas() {
     }
   } catch (_) { /* localStorage puede no estar disponible */ }
   return new Set(['temp']);
+}
+
+// Estilo del mapa base (Calles/Satelital), independiente de capasActivas:
+// no es una capa que se combine con otras, es el fondo mismo del mapa.
+function basemapGuardado() {
+  try {
+    const raw = localStorage.getItem('sinoptica.basemap');
+    if (raw === 'satelital' || raw === 'calles') return raw;
+  } catch (_) { /* localStorage puede no estar disponible */ }
+  return 'calles';
+}
+let mapaBase = basemapGuardado();
+
+function toggleBasemap() {
+  mapaBase = mapaBase === 'calles' ? 'satelital' : 'calles';
+  try { localStorage.setItem('sinoptica.basemap', mapaBase); } catch (_) { /* opcional */ }
+  renderMapa();
 }
 
 let capasActivas = capasGuardadas();
@@ -1592,9 +1618,11 @@ function enlaceComoLlegar(lat, lon) {
 function renderMapa() {
   if (!ensureMap()) return;
   if (tileLayer) map.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
-    attribution: TILES_ATTR, maxZoom: 18, subdomains: 'abcd',
-  }).addTo(map);
+  tileLayer = mapaBase === 'satelital'
+    ? L.tileLayer(TILES_ESRI, { attribution: TILES_ESRI_ATTR, maxZoom: 18 }).addTo(map)
+    : L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
+        attribution: TILES_ATTR, maxZoom: 18, subdomains: 'abcd',
+      }).addTo(map);
   // Este tileLayer base se recrea en cada render (igual que layerGroups[k]
   // más abajo se vacía con clearLayers): por eso los tileLayers del satélite
   // NO viven en layerGroups['satelite'] sino en la variable de módulo
@@ -1637,10 +1665,19 @@ function renderMapa() {
   document.getElementById('map-note-satelite').hidden = !capasActivas.has('satelite');
   document.getElementById('satelite-control').hidden = !capasActivas.has('satelite');
   // Los tileLayers del satélite viven fuera de layerGroups['satelite'] (ver
-  // nota crítica arriba): al apagar la capa hay que retirarlos a mano.
-  if (!capasActivas.has('satelite')) limpiarSatelite();
+  // nota crítica arriba): al apagar la capa hay que retirarlos a mano. El
+  // rotulado only_labels lo comparten la capa GOES y el modo base Satelital
+  // (ambos necesitan nombres de ciudad legibles sobre una imagen oscura): si
+  // la capa GOES está apagada pero el modo base es Satelital, se conserva.
+  if (!capasActivas.has('satelite')) limpiarSatelite(mapaBase === 'satelital');
+  if (mapaBase === 'satelital') getOrCreateSateliteLabelsLayer();
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
+  const basemapBtn = document.getElementById('basemap-toggle');
+  if (basemapBtn) {
+    basemapBtn.setAttribute('aria-pressed', String(mapaBase === 'satelital'));
+    basemapBtn.textContent = mapaBase === 'satelital' ? '🗺️ Mapa: Satelital' : '🗺️ Mapa: Calles';
+  }
 
   map.invalidateSize();   // por si el panel cambió de tamaño desde el último render
 }
@@ -2641,6 +2678,8 @@ function setupCapas() {
   }
   const playBtn = document.getElementById('satelite-play');
   if (playBtn) playBtn.addEventListener('click', toggleReproduccionSatelite);
+  const basemapBtn = document.getElementById('basemap-toggle');
+  if (basemapBtn) basemapBtn.addEventListener('click', toggleBasemap);
 }
 
 // Pantalla completa: sobre el panel entero (no solo #map) para que la

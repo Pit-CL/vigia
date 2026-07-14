@@ -1,5 +1,5 @@
 /* Service worker: shell en caché, datos red-primero con respaldo. */
-const SHELL_CACHE = 'vigia-shell-v50';
+const SHELL_CACHE = 'vigia-shell-v51';
 const DATA_CACHE = 'vigia-data-v21';
 // Tiles del mapa base (CARTO): caché propia con límite LRU aproximado, para
 // que el mapa siga siendo usable sin conexión (ver fetch handler abajo).
@@ -16,8 +16,8 @@ const SHELL = [
   'emergencia.html',
   'emergencia.js?v=1',
   'theme.js?v=1',
-  'app.css?v=74',
-  'app.js?v=74',
+  'app.css?v=75',
+  'app.js?v=75',
   'manifest.webmanifest',
   'vendor/chart.umd.min.js',
   'vendor/leaflet.js',
@@ -104,6 +104,13 @@ self.addEventListener('fetch', (e) => {
   // queda en blanco en toda carga controlada por el SW (bug real 2026-07).
   // Sin red y sin tile cacheado, se deja fallar el fetch tal cual: se ve un
   // tile roto, aceptable en modo offline (mejor que romper todo el mapa).
+  // Los tiles de Esri World Imagery (modo base "Satelital", app.js) NO entran
+  // aquí a propósito: quedan network-only, sin caché ni LRU propios. Server.
+  // arcgisonline.com solo está en img-src de la CSP (no en connect-src), así
+  // que un fetch() del SW hacia ese host fallaría (ver nota de cartocdn más
+  // abajo); dejarlo pasar sin interceptar evita ese problema y matchea el
+  // uso real: "Preparar mi zona" (offline) sigue siendo solo calles, la
+  // imagen satelital pesa el doble y su caso de uso es online.
   if (url.hostname.endsWith('.basemaps.cartocdn.com')) {
     e.respondWith(
       caches.open(PACK_CACHE).then((pack) => pack.match(e.request)).then((pinned) => {

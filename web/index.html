@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=74">
+  <link rel="stylesheet" href="app.css?v=75">
 </head>
 <body>
 
@@ -174,6 +174,8 @@
       <button class="info-btn" data-info="mapa" aria-label="¿De dónde salen estas mediciones?">?</button>
     </header>
     <div class="map-modes" role="group" aria-label="Capas del mapa">
+      <button id="basemap-toggle" class="map-mode" aria-pressed="false" title="Cambiar el estilo del mapa base (no confundir con la capa 🛰️ Satélite)">🗺️ Mapa: Calles</button>
+      <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode" data-capa="temp" aria-pressed="true">🌡️ Temperatura</button>
       <button class="map-mode" data-capa="aire" aria-pressed="false">🌫️ Aire</button>
       <button class="map-mode" data-capa="precipitacion" aria-pressed="false">💧 Lluvia/nieve</button>
@@ -406,6 +408,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=74"></script>
+<script src="app.js?v=75"></script>
 </body>
 </html>
