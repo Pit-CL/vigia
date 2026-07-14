@@ -158,7 +158,7 @@ const INFO = {
 <p>Cada punto es una <strong>estación meteorológica real</strong> midiendo ahora mismo, no un pronóstico: cerca de 150 estaciones que cubren las 16 regiones de Chile, de Arica a la Antártica, más Isla de Pascua y Juan Fernández.</p>
 <p><strong>Aeropuertos (METAR).</strong> Observaciones oficiales que los aeródromos publican cada hora a la red mundial de la Organización Meteorológica Mundial, con estándares de aviación.</p>
 <p><strong>Estaciones automáticas (EMA) de la Dirección Meteorológica de Chile.</strong> Sensores que reportan minuto a minuto a lo largo de todo el país, de cordillera a costa.</p>
-<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas, volcanes y avisos meteorológicos derivados, la capa ⛰️ Remociones (catastro histórico SENAPRED de flujos, deslizamientos y caídas de rocas ya ocurridos — no es un pronóstico, pero el terreno con historial es terreno que puede repetir; ante lluvia intensa, aléjate de quebradas y laderas marcadas), y —para una emergencia— la capa 🏃 Evacuación (vías de evacuación y zona de inundación ante tsunami y volcán) y la capa 🚑 Emergencia (infraestructura como salud, bomberos y carabineros). Cada capa declara su fuente (u origen, si es propia) justo debajo del mapa.</p>
+<p><strong>Más capas sobre el mismo mapa.</strong> Además de temperatura y aire puedes activar sismos, incendios, alertas, volcanes y avisos meteorológicos derivados, la capa ⛰️ Remociones (catastro histórico SENAPRED de flujos, deslizamientos y caídas de rocas ya ocurridos — no es un pronóstico, pero el terreno con historial es terreno que puede repetir; ante lluvia intensa, aléjate de quebradas y laderas marcadas), la capa 🌊 Ríos (pronóstico de crecidas GloFAS/Copernicus, modelo global de referencia — no reemplaza a la DGA ni a SENAPRED), y —para una emergencia— la capa 🏃 Evacuación (vías de evacuación y zona de inundación ante tsunami y volcán) y la capa 🚑 Emergencia (infraestructura como salud, bomberos y carabineros). Cada capa declara su fuente (u origen, si es propia) justo debajo del mapa.</p>
 <p class="info-fine">¿Por qué una estación puede diferir del «ahora» del panel superior? Porque el panel es un modelo interpolado a tu punto exacto y la estación es un sensor físico en SU punto exacto — comparar ambos es justamente cómo medimos la calidad del pronóstico (ver «¿Cuánto acierta cada modelo?»).</p>`,
   },
   ensamble: {
@@ -249,6 +249,7 @@ let farmaciasPromise = null; // promesa del fetch en vuelo, compartida entre loa
 let tsunamiViasData = null; // vías de evacuación tsunami+volcán (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), capa 'evacuacion', carga lazy junto con emergenciaData
 let remocionesData = null; // catastro de remociones en masa (SENAPRED), capa 'remociones', carga lazy propia
+let crecidasData = null; // pronóstico de crecidas GloFAS/Copernicus (Open-Meteo Flood, no oficial), capa 'crecidas', carga lazy propia
 let cortesData = null;   // cortes de luz SEC (best effort, vía satélite en omen)
 let combustibleData = null; // precios de combustible en línea (CNE), capa 'combustible', carga lazy propia; dormida sin CNE_API_KEY
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
@@ -267,7 +268,6 @@ let sateliteTimer = null;
 // tapan el rotulado del mapa base. Vive fuera de layerGroups por la misma
 // razón que sateliteLayers (sobrevivir al clearLayers() de cada render).
 let sateliteLabelsLayer = null;
-let sateliteLabelsTema = null; // 'light'/'dark' con el que se creó/actualizó sateliteLabelsLayer
 // Marcador de "mi ubicación" (botón 📍 Centrar): vive fuera de layerGroups,
 // igual que los tileLayers del satélite, para sobrevivir al clearLayers()
 // de cada renderMapa(); se reemplaza entero cada vez que se vuelve a tocar
@@ -1108,10 +1108,10 @@ const TILES = {
 const TILES_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>';
 // Solo el rotulado (nombres de ciudades) de CARTO, sin el resto del mapa base:
 // se usa por encima del satélite, que de otro modo tapa las etiquetas horneadas.
-const TILES_LABELS = {
-  light: 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
-};
+// Siempre la variante 'light_only_labels' (texto blanco en negrita con halo
+// oscuro): es la que se lee bien sobre cualquier textura satelital, sin
+// importar el tema claro/oscuro de la UI (ver getOrCreateSateliteLabelsLayer).
+const TILES_LABELS_URL = 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png';
 
 // Estilo del mapa base "Satelital" (imagen aérea, no confundir con la capa
 // 🛰️ 'satelite' de GOES-East más abajo, que es la nube meteorológica animada).
@@ -1312,6 +1312,23 @@ async function loadRemociones() {
   if (capasActivas.has('remociones')) renderMapa();
 }
 
+// crecidas.json es el pronóstico de crecidas GloFAS/Copernicus (~29 puntos,
+// se refresca junto a la ingesta principal): loader propio, con el mismo
+// guard lazy que loadRemociones, pero además llama renderRiesgos() (como
+// loadAvisos/loadCortes) porque alimenta el tile del centro de riesgos.
+let crecidasCargando = false;
+async function loadCrecidas() {
+  if (crecidasData || crecidasCargando) return;
+  crecidasCargando = true;
+  try {
+    const res = await fetch('crecidas.json', { cache: 'no-store' });
+    if (res.ok) crecidasData = await res.json();
+  } catch (_) { /* sin pronóstico: la capa queda vacía */ }
+  crecidasCargando = false;
+  if (capasActivas.has('crecidas')) renderMapa();
+  renderRiesgos();
+}
+
 // combustible.json: precios de bencina en línea (CNE), cuasi-estático (se
 // refresca 2x/día): loader propio, mismo patrón que loadRemociones. Sin
 // CNE_API_KEY registrada la capa queda dormida (combustible.json con n=0 o
@@ -1381,14 +1398,17 @@ function getOrCreateSateliteLayer(t) {
   return layer;
 }
 
+// Rotulado sobre imagen satelital (Esri o GOES): SIEMPRE la variante 'light'
+// de TILES_LABELS, sin importar el tema claro/oscuro de la UI. Se probó con
+// screenshot (no se asumió por el nombre): 'light_only_labels' es texto
+// blanco en negrita con halo oscuro y se lee bien sobre cualquier textura;
+// 'dark_only_labels' es un texto celeste delgado y de bajo contraste — con
+// tema de UI oscuro, atarlo a isDark() daba justo la variante que peor se
+// lee (bug real, no solo estético).
 function getOrCreateSateliteLabelsLayer() {
-  const tema = isDark() ? 'dark' : 'light';
   if (!sateliteLabelsLayer) {
-    sateliteLabelsLayer = L.tileLayer(TILES_LABELS[tema], { maxZoom: 18, zIndex: 6, subdomains: 'abcd' });
-  } else if (sateliteLabelsTema !== tema) {
-    sateliteLabelsLayer.setUrl(TILES_LABELS[tema]);
+    sateliteLabelsLayer = L.tileLayer(TILES_LABELS_URL, { maxZoom: 18, zIndex: 6, subdomains: 'abcd' });
   }
-  sateliteLabelsTema = tema;
   if (!map.hasLayer(sateliteLabelsLayer)) sateliteLabelsLayer.addTo(map);
   return sateliteLabelsLayer;
 }
@@ -1474,6 +1494,7 @@ const CAPAS = {
   volcanes:      { paint: paintVolcanes },
   avisos:        { paint: paintAvisos },
   remociones:    { paint: paintRemociones, lazy: loadRemociones, tieneData: () => remocionesData !== null },
+  crecidas:      { paint: paintCrecidas, lazy: loadCrecidas, tieneData: () => crecidasData !== null },
   cortes:        { paint: paintCortes },
   combustible:   { paint: paintCombustible, lazy: loadCombustible, tieneData: () => combustibleData !== null },
   marea:         { paint: paintMarea },
@@ -1494,7 +1515,7 @@ const CAPAS = {
 // acción más urgente (hacia dónde ir), por sobre el resto. 'satelite' va
 // primero: es la capa menos accionable, su texto en #map-meta no debe pisar
 // el de ninguna otra.
-const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'cortes', 'combustible', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'farmacias', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'crecidas', 'cortes', 'combustible', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'farmacias', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1648,6 +1669,7 @@ function renderMapa() {
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-legend-avisos').hidden = !capasActivas.has('avisos');
   document.getElementById('map-legend-remociones').hidden = !capasActivas.has('remociones');
+  document.getElementById('map-legend-crecidas').hidden = !capasActivas.has('crecidas');
   document.getElementById('map-legend-combustible').hidden = !capasActivas.has('combustible');
   document.getElementById('map-legend-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-legend-evacuacion').hidden = !capasActivas.has('evacuacion');
@@ -1661,6 +1683,7 @@ function renderMapa() {
   document.getElementById('map-note-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-note-avisos').hidden = !capasActivas.has('avisos');
   document.getElementById('map-note-remociones').hidden = !capasActivas.has('remociones');
+  document.getElementById('map-note-crecidas').hidden = !capasActivas.has('crecidas');
   document.getElementById('map-note-cortes').hidden = !capasActivas.has('cortes');
   document.getElementById('map-note-combustible').hidden = !capasActivas.has('combustible');
   document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
@@ -2362,12 +2385,18 @@ function paintEvacuacion(group) {
   // filtrada por viewport, igual que las vías. Va ANTES que las vías para
   // quedar debajo (relleno de fondo, no un trazo que compita con la ruta a
   // seguir).
+  // Sobre satélite, techos y vegetación compiten con el relleno/trazo: se
+  // sube la opacidad y se agrega borde discontinuo para que el límite se
+  // distinga (sobre 'calles' quedan como estaban, el fondo ya es plano).
+  const sobreSatelite = mapaBase === 'satelital';
   if (tsunamiAreasData && map.getZoom() >= 12) {
     const bounds = map.getBounds();
     const color = css('--alerta-roja');
     for (const area of tsunamiAreasData.areas || []) {
       if (!bounds.intersects(geomBounds(area))) continue;
-      L.polygon(area.p, { color, weight: 1, opacity: 0.3, fillColor: color, fillOpacity: 0.12 })
+      L.polygon(area.p, sobreSatelite
+        ? { color, weight: 2, opacity: 0.9, dashArray: '6 4', fillColor: color, fillOpacity: 0.28 }
+        : { color, weight: 1, opacity: 0.3, fillColor: color, fillOpacity: 0.12 })
         .bindPopup('Zona de evacuación ante tsunami — si sientes un sismo fuerte, abandona esta zona hacia terreno alto')
         .addTo(group);
     }
@@ -2385,7 +2414,14 @@ function paintEvacuacion(group) {
     for (const via of tsunamiViasData.vias || []) {
       if (!bounds.intersects(geomBounds(via))) continue;
       const esVolcan = via.t === 'volcan';
-      L.polyline(via.p, { color: esVolcan ? colorVolcan : colorTsunami, weight: 3, opacity: 0.85, dashArray: '6 4' })
+      const color = esVolcan ? colorVolcan : colorTsunami;
+      // Casing cartográfico: una línea blanca más gruesa debajo del trazo de
+      // color, para que se lea sobre cualquier textura del satélite (ya
+      // filtradas por viewport arriba, así que duplicar solo estas es barato).
+      if (sobreSatelite) {
+        L.polyline(via.p, { color: '#fff', weight: 6, opacity: 0.9 }).addTo(group);
+      }
+      L.polyline(via.p, { color, weight: 3, opacity: 0.85, dashArray: '6 4' })
         .bindPopup(esVolcan ? `Vía de evacuación volcánica · ${via.c}` : `Vía de evacuación · ${via.c}`)
         .addTo(group);
       pintadas++;
@@ -2461,6 +2497,74 @@ function paintRemociones(group) {
     });
   }
   $('#map-meta').textContent = metaConFecha(`${puntos.length} remociones registradas · catastro SENAPRED`, remocionesData.updated);
+}
+
+// ── Crecidas de ríos (GloFAS/Copernicus vía Open-Meteo, NO oficial) ──
+
+// "YYYY-MM-DD" → "DD-MM-AAAA" (formato Chile, regla 8), sin pasar por Date
+// para no arrastrar el desfase de zona horaria de un string sin hora.
+function fechaChile(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
+}
+
+// Etiqueta "DD-MM" del día i-ésimo de la serie de 7, contado desde el día
+// calendario (UTC) del `updated` global — mismo día en que Open-Meteo fechó
+// el pronóstico. En TZ Chile un `updated` de madrugada UTC cae la noche
+// anterior, así que se formatea en UTC para no correr la fecha un día.
+function diaSerie(updated, i) {
+  const base = parseUpdated(updated);
+  const d = new Date(base.getTime() + i * 86400000);
+  return new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(d);
+}
+
+function paintCrecidas(group) {
+  const puntos = (crecidasData && crecidasData.puntos) || [];
+  if (!puntos.length) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = 'cargando pronóstico de crecidas…';
+    return;
+  }
+  puntos.forEach((p) => {
+    const clase = p.nivel ? `creci-${p.nivel}` : 'creci-normal';
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="alerta ${clase}">🌊</span>`,
+      iconSize: [30, 30], iconAnchor: [15, 15],
+    });
+    const marker = L.marker([p.lat, p.lon], { icon, title: `${p.rio} — ${p.comuna}` }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong');
+    h.textContent = `${p.rio} — ${p.comuna}`;
+    box.appendChild(h);
+
+    const serieMax = p.caudal_max.some((v) => v != null) ? p.caudal_max : p.caudal;
+    const peak = serieMax.filter((v) => v != null).reduce((m, v) => (m == null || v > m ? v : m), null);
+    box.appendChild(popupRows([
+      ['Nivel', p.nivel ? (AVISO_NIVEL_LABEL[p.nivel] || p.nivel) : 'Sin alerta (normal)'],
+      ['Caudal pico (7 días)', peak != null ? `${Math.round(peak).toLocaleString('es-CL')} m³/s` : null],
+      ['Día del pico', p.dia_peak ? fechaChile(p.dia_peak) : null],
+      ['Umbral amarillo (~2 años)', p.umbral_rp2 != null ? `${Math.round(p.umbral_rp2).toLocaleString('es-CL')} m³/s` : null],
+      ['Umbral naranja (~5 años)', p.umbral_rp5 != null ? `${Math.round(p.umbral_rp5).toLocaleString('es-CL')} m³/s` : null],
+      ['Umbral rojo (~20 años)', p.umbral_rp20 != null ? `${Math.round(p.umbral_rp20).toLocaleString('es-CL')} m³/s` : null],
+    ]));
+
+    const serieLabel = document.createElement('small');
+    serieLabel.textContent = 'Serie de 7 días (caudal máximo diario)';
+    box.appendChild(serieLabel);
+    box.appendChild(popupRows(serieMax.map((v, i) => [
+      diaSerie(crecidasData.updated, i),
+      v != null ? `${Math.round(v).toLocaleString('es-CL')} m³/s` : null,
+    ])));
+
+    const small = document.createElement('small');
+    small.textContent = crecidasData.nota || 'Pronóstico de referencia GloFAS, no oficial';
+    box.appendChild(small);
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+
+  const conNivel = puntos.filter((p) => p.nivel).length;
+  $('#map-meta').textContent = metaConFecha(`${puntos.length} ríos monitoreados · ${conNivel} en crecida · GloFAS`, crecidasData.updated);
 }
 
 // Círculo escalado por clientes afectados (mismo patrón que paintSismos con
@@ -2698,7 +2802,7 @@ function centrarEnMiUbicacion() {
     (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       msg.hidden = true;
-      map.setView([latitude, longitude], 13);
+      map.setView([latitude, longitude], 16); // nivel calle, no de comuna
       pintarMiUbicacion(latitude, longitude, accuracy);
     },
     (err) => mostrarErrorGeolocation(err, msg),
@@ -2852,9 +2956,14 @@ function riesgoCounts(ambito = riesgoAmbito) {
   // comuna del ámbito supera 10.000 clientes afectados.
   const cortes = cortesData ? cortesData.cortes.filter((c) => enAmbito(c, ambito)) : [];
   const cortesAlto = cortes.some((c) => c.clientes > 10000);
+  // Crecidas GloFAS: conteo de ríos con nivel (amarillo/naranja/rojo), no
+  // oficial — mismo criterio que avisoAlto para el color del tile.
+  const crecidas = crecidasData ? crecidasData.puntos.filter((p) => p.nivel && enAmbito(p, ambito)) : [];
+  const crecidaAlta = crecidas.some((p) => p.nivel === 'naranja' || p.nivel === 'rojo');
   return {
     sismos24, sismoMax6, rojas, amarillas, alertaRoja, volcanesAlerta, volPeor, volcanPeor,
     incendiosN, avisosN: avisos.length, avisoAlto, cortesN: cortes.length, cortesAlto,
+    crecidasN: crecidas.length, crecidaAlta,
   };
 }
 
@@ -2874,6 +2983,7 @@ function renderRiesgoTiles(c) {
   set('#rt-volcanes', c.volcanesAlerta.length, volAlto ? 'rt-alto' : c.volPeor === 'amarilla' ? 'rt-medio' : 'rt-cero');
   set('#rt-avisos', c.avisosN, c.avisoAlto ? 'rt-alto' : c.avisosN > 0 ? 'rt-medio' : 'rt-cero');
   set('#rt-cortes', c.cortesN, c.cortesAlto ? 'rt-alto' : c.cortesN > 0 ? 'rt-medio' : 'rt-cero');
+  set('#rt-crecidas', c.crecidasN, c.crecidaAlta ? 'rt-alto' : c.crecidasN > 0 ? 'rt-medio' : 'rt-cero');
 }
 
 // DD-MM-AAAA (formato de SENAPRED) → Date; null si no calza.
@@ -3009,7 +3119,7 @@ function renderRiskBadge(c) {
 function renderRiesgos() {
   const panel = document.querySelector('.panel-riesgos');
   if (!panel) return;
-  const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData || avisosData || cortesData);
+  const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData || avisosData || cortesData || crecidasData);
   panel.hidden = !hayAlgo;
   if (!hayAlgo) { $('#risk-badge').hidden = true; return; }
 
@@ -3018,11 +3128,12 @@ function renderRiesgos() {
   panel.querySelector('[data-capa="alertas"]').hidden = !alertasData;
   panel.querySelector('[data-capa="volcanes"]').hidden = !volcanesData;
   panel.querySelector('[data-capa="avisos"]').hidden = !avisosData;
+  panel.querySelector('[data-capa="crecidas"]').hidden = !crecidasData;
   panel.querySelector('[data-capa="cortes"]').hidden = !cortesData;
 
   $('#riesgos-meta').textContent = [
     ['CSN', sismosData], ['SENAPRED', alertasData], ['SERNAGEOMIN', volcanesData], ['NASA FIRMS', incendiosData],
-    ['Vigía (no oficial)', avisosData], ['SEC (best effort)', cortesData],
+    ['Vigía (no oficial)', avisosData], ['SEC (best effort)', cortesData], ['GloFAS (no oficial)', crecidasData],
   ].filter(([, ok]) => ok).map(([nombre]) => nombre).join(' · ');
 
   renderRiesgoTiles(riesgoCounts());
@@ -3070,7 +3181,8 @@ function setupRiesgos() {
 // Guía de error de geolocalización compartida por todo gesto que pida
 // ubicación (punto de encuentro, centrar el mapa): permiso denegado muestra
 // instrucciones por plataforma (Android/Chrome primero por ser lo más común
-// en Chile; rutas según la ayuda oficial de Google Chrome y Apple,
+// en Chile, luego iOS, luego Safari de escritorio y por último Chrome/Firefox
+// de escritorio; rutas según la ayuda oficial de Google Chrome y Apple,
 // verificadas 2026-07), cualquier otro error muestra un mensaje genérico.
 // `out` es cualquier contenedor donde renderizar el resultado.
 function mostrarErrorGeolocation(err, out) {
@@ -3078,6 +3190,9 @@ function mostrarErrorGeolocation(err, out) {
     const ua = navigator.userAgent;
     const esAndroid = /android/i.test(ua);
     const esIOS = /iphone|ipad|ipod/i.test(ua);
+    // Safari de escritorio (macOS): Safari SIN motor Chromium/Firefox detrás
+    // (Chrome, Edge y Firefox en Mac también llevan "Safari" en su UA).
+    const esSafariMac = /macintosh/i.test(ua) && /safari/i.test(ua) && !/chrome|chromium|crios|firefox|edg/i.test(ua);
     const guias = [];
     if (esAndroid) {
       guias.push(
@@ -3089,8 +3204,13 @@ function mostrarErrorGeolocation(err, out) {
     } else if (esIOS) {
       guias.push(
         'En Safari: toca "AA" o el ícono junto a la dirección → Configuración del sitio web → Ubicación → Permitir.',
-        'Si no aparece: Ajustes del iPhone → Apps → Safari → Ubicación → «Preguntar» o «Permitir».',
-        'Revisa también: Ajustes → Privacidad y seguridad → Localización (debe estar activada).',
+        'Si no aparece: Ajustes del iPhone → Apps → Safari → Ubicación → «Preguntar» o «Permitir» (en Chrome del iPhone, busca Ajustes → Apps → Chrome en su lugar).',
+        'Si la Localización está desactivada para todo el equipo: Ajustes → Privacidad y seguridad → Localización → activa el interruptor de arriba, y dentro de esa misma pantalla busca tu navegador y ponlo en «Preguntar» o «Al usar la app».',
+      );
+    } else if (esSafariMac) {
+      guias.push(
+        'En Safari: menú Safari → Ajustes → Sitios web → Ubicación → busca vigia.cavara.cl (o "En estos sitios web") y cambia a Permitir.',
+        'Si no aparece ninguna opción: revisa que la Ubicación esté habilitada a nivel de sistema en Ajustes del Sistema → Privacidad y seguridad → Localización, y que Safari esté marcado ahí.',
       );
     } else {
       guias.push(
@@ -3108,6 +3228,10 @@ function mostrarErrorGeolocation(err, out) {
       ul.appendChild(li);
     });
     out.append(p, ul);
+    // La guía puede quedar bajo el pliegue (el botón "Centrar" está arriba
+    // del mapa, la guía la desplaza hacia abajo): sin esto el usuario no la
+    // veía y creía que el botón no hacía nada.
+    out.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   } else {
     out.textContent = 'No se pudo obtener tu ubicación (sin señal de GPS o tardó demasiado). '
       + 'Revisa que la Ubicación del equipo esté encendida e inténtalo de nuevo.';
@@ -3849,6 +3973,12 @@ loadAvisos();
 loadMarea();
 loadTsunami();
 loadCortes();
+// crecidas.json se carga eager (a diferencia de remociones/combustible, que
+// no alimentan ningún tile) porque el tile del centro de riesgos necesita
+// el conteo de ríos en crecida ANTES de que el usuario active la capa del
+// mapa; el mecanismo `lazy` de CAPAS.crecidas queda como respaldo si este
+// fetch inicial falló.
+loadCrecidas();
 
 // ── Refresco en vivo ───────────────────────────────────────────
 // Una pestaña dejada abierta mostraba datos congelados hasta recargar. Al
@@ -3905,6 +4035,7 @@ async function refreshAll() {
   loadMarea();         // marea.json (Open-Meteo Marine, no oficial)
   loadTsunami();       // tsunami.json (PTWC + catálogo sísmico propio)
   loadCortes();        // cortes.json (SEC, best effort vía satélite en omen)
+  loadCrecidas();      // crecidas.json (GloFAS/Copernicus vía Open-Meteo, no oficial)
   // El satélite no tiene JSON propio (fetch cross-origin a GIBS) y solo se
   // recarga si la capa está activa: sin esto no habría forma de ver frames
   // nuevos sin apagar y prender la capa a mano.

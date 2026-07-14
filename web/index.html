@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=75">
+  <link rel="stylesheet" href="app.css?v=76">
 </head>
 <body>
 
@@ -113,6 +113,7 @@
       <button class="riesgo-tile" data-capa="volcanes" hidden><span class="rt-emoji">🌋</span><b id="rt-volcanes">–</b><small>volcanes en alerta</small></button>
       <button class="riesgo-tile" data-capa="avisos" hidden><span class="rt-emoji">💨</span><b id="rt-avisos">–</b><small>avisos Vigía</small></button>
       <button class="riesgo-tile" data-capa="cortes" hidden><span class="rt-emoji">⚡</span><b id="rt-cortes">–</b><small>comunas con cortes SEC</small></button>
+      <button class="riesgo-tile" data-capa="crecidas" hidden><span class="rt-emoji">🌊</span><b id="rt-crecidas">–</b><small>ríos en crecida</small></button>
     </div>
     <ol id="riesgo-eventos" class="riesgo-eventos"></ol>
     <div class="riesgo-acciones">
@@ -187,6 +188,7 @@
       <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
       <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos Vigía</button>
       <button class="map-mode" data-capa="remociones" aria-pressed="false">⛰️ Remociones</button>
+      <button class="map-mode" data-capa="crecidas" aria-pressed="false">🌊 Ríos</button>
       <button class="map-mode" data-capa="cortes" aria-pressed="false">⚡ Cortes</button>
       <button class="map-mode" data-capa="combustible" aria-pressed="false">⛽ Combustible</button>
       <button class="map-mode" data-capa="marea" aria-pressed="false">🌊 Costa</button>
@@ -255,6 +257,12 @@
       <span class="av-rojo"></span><span>Rojo</span>
       <span>· 💨 viento · ❄️ helada · 🌧️ lluvia · 🌧️ lluvia persistente · 🌡️ calor · ⛰️💧 aluvional · ❄️ nieve · 🔥 incendio · 🌪️ ráfagas · 📉 presión · 🏔️❄️ nieve en cota baja · 🥵 ola de calor · 🥶 ola de frío · ⛈️ tormenta · ☀️ UV extremo</span>
     </div>
+    <div id="map-legend-crecidas" class="map-legend" aria-hidden="true" hidden>
+      <span class="ck-amarillo"></span><span>Amarillo</span>
+      <span class="ck-naranja"></span><span>Naranja</span>
+      <span class="ck-rojo"></span><span>Rojo</span>
+      <span class="ck-normal"></span><span>Sin alerta</span>
+    </div>
     <div id="map-legend-remociones" class="map-legend" aria-hidden="true" hidden>
       <span class="rk-flujo"></span><span>Flujo</span>
       <span class="rk-desliza"></span><span>Deslizamiento</span>
@@ -290,6 +298,7 @@
     <p id="map-note-alertas" class="panel-note" hidden>Alertas vigentes SENAPRED · punto = centroide del área alertada.</p>
     <p id="map-note-volcanes" class="panel-note" hidden>Alerta técnica volcánica · SERNAGEOMIN RNVV.</p>
     <p id="map-note-avisos" class="panel-note" hidden>Avisos <strong>derivados del pronóstico propio</strong> de Vigía (mediana de 6 modelos, ventana de 120 h) — no son un aviso oficial de la DMC.</p>
+    <p id="map-note-crecidas" class="panel-note" hidden>Pronóstico de crecidas <strong>GloFAS/Copernicus</strong> vía Open-Meteo — modelo global ~5 km, pensado para ríos grandes; no reemplaza a la <strong>DGA</strong> (dga.mop.gob.cl) ni a las alertas oficiales de <strong>SENAPRED</strong>.</p>
     <p id="map-note-remociones" class="panel-note" hidden>Catastro histórico de remociones en masa · SENAPRED — marca dónde ya ocurrieron flujos (aluviones), deslizamientos y caídas de rocas; terreno con historial es terreno que puede repetir. Círculo = zona de influencia aproximada (150 m).</p>
     <p id="map-note-cortes" class="panel-note" hidden>Cortes de luz reportados por <strong>SEC</strong> (interrupciones en línea) · endpoint no documentado, <strong>best effort</strong> — círculo escalado por clientes afectados. Se actualiza vía un satélite fuera del VPS; si ves "datos antiguos" el satélite lleva más de 30 min sin refrescar.</p>
     <p id="map-note-combustible" class="panel-note" hidden>Precios de combustible en línea · <strong>CNE (Bencina en Línea)</strong> · se actualiza 2 veces al día.</p>
@@ -410,6 +419,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=75"></script>
+<script src="app.js?v=76"></script>
 </body>
 </html>
