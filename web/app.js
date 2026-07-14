@@ -2227,8 +2227,8 @@ function paintAvisos(group) {
     box.appendChild(h);
     const filas = [
       ['Nivel', AVISO_NIVEL_LABEL[a.nivel] || a.nivel],
-      ['Valor pico', `${r1(a.valor)} ${a.unidad}`],
-      ['Hora del pico', fechaHora(a.hora_peak)],
+      ['Valor peak', `${r1(a.valor)} ${a.unidad}`],
+      ['Hora peak', fechaHora(a.hora_peak)],
     ];
     if ((a.tipo === 'aluvional' || a.tipo === 'nieve_cota_baja') && a.isoterma_m != null) filas.push(['Isoterma 0°', `~${a.isoterma_m} m`]);
     if ((a.tipo === 'ola_calor' || a.tipo === 'ola_frio') && a.dias != null) filas.push(['Días consecutivos', `${a.dias}`]);
@@ -2623,8 +2623,8 @@ function paintCrecidas(group) {
     const peak = serieMax.filter((v) => v != null).reduce((m, v) => (m == null || v > m ? v : m), null);
     box.appendChild(popupRows([
       ['Nivel', p.nivel ? (AVISO_NIVEL_LABEL[p.nivel] || p.nivel) : 'Sin alerta (normal)'],
-      ['Caudal pico (7 días)', peak != null ? `${Math.round(peak).toLocaleString('es-CL')} m³/s` : null],
-      ['Día del pico', p.dia_peak ? fechaChile(p.dia_peak) : null],
+      ['Caudal peak (7 días)', peak != null ? `${Math.round(peak).toLocaleString('es-CL')} m³/s` : null],
+      ['Día peak', p.dia_peak ? fechaChile(p.dia_peak) : null],
       ['Umbral amarillo (~2 años)', p.umbral_rp2 != null ? `${Math.round(p.umbral_rp2).toLocaleString('es-CL')} m³/s` : null],
       ['Umbral naranja (~5 años)', p.umbral_rp5 != null ? `${Math.round(p.umbral_rp5).toLocaleString('es-CL')} m³/s` : null],
       ['Umbral rojo (~20 años)', p.umbral_rp20 != null ? `${Math.round(p.umbral_rp20).toLocaleString('es-CL')} m³/s` : null],
