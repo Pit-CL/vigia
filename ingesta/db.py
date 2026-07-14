@@ -109,6 +109,25 @@ CREATE TABLE IF NOT EXISTS avisos_emitidos (
 
 CREATE INDEX IF NOT EXISTS idx_avisos_emitidos_run
   ON avisos_emitidos(run_ts, tipo);
+
+-- Métricas POD/FAR/CSI de avisos_emitidos contra observaciones (ver
+-- verify_avisos.py). Una fila por tipo en cada corrida de verificación
+-- (2 veces al día, colgada del mismo paso que verify.py); solo INSERT,
+-- nunca se pisa el histórico.
+CREATE TABLE IF NOT EXISTS avisos_verif (
+  run_ts       TEXT NOT NULL,
+  tipo         TEXT NOT NULL,
+  ventana_dias INTEGER NOT NULL,
+  hits         INTEGER NOT NULL,
+  falsas       INTEGER NOT NULL,
+  misses       INTEGER NOT NULL,
+  pod          REAL,
+  far          REAL,
+  csi          REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_avisos_verif_run
+  ON avisos_verif(run_ts, tipo);
 """
 
 

@@ -13,6 +13,7 @@ import math
 from datetime import datetime, timezone
 
 import config
+import verify_avisos
 
 WINDOW_DAYS = 14
 BUCKETS = [(0, 24, "24"), (24, 48, "48"), (48, 72, "72"), (72, 96, "96")]
@@ -70,12 +71,14 @@ def compute(con) -> dict:
     }
 
 
-def write(con) -> int:
+def write(con, run_ts: str | None = None) -> int:
     data = compute(con)
+    data["avisos"] = verify_avisos.compute_and_persist(con, run_ts)
     config.VERIF_PATH.parent.mkdir(parents=True, exist_ok=True)
     config.VERIF_PATH.write_text(json.dumps(data, ensure_ascii=False) + "\n")
     pares = sum(b["n"] for m in data["models"].values()
                 for v in m.values() for b in v.values())
     print(f"verificación → {config.VERIF_PATH}: {len(data['models'])} modelos, "
-          f"{len(VARIABLES)} variables, {pares} pares")
+          f"{len(VARIABLES)} variables, {pares} pares; avisos: "
+          f"{data['avisos']['n_avisos_evaluados']} evaluados")
     return pares
