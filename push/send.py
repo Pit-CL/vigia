@@ -464,7 +464,11 @@ def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], ti
     caller los descarte."""
     payload = json.dumps({"title": titulo, "body": body, "url": url})
     vapid_private_key = os.environ["VAPID_PRIVATE_KEY"]
-    contacto = os.environ.get("VAPID_CONTACT", "rafaelfariaspoblete@gmail.com")
+    # docker-compose.yml define VAPID_CONTACT: ${VAPID_CONTACT:-}, así que si no
+    # se configuró en el .env de prod la var llega como string vacío (presente,
+    # no ausente) y os.environ.get(k, default) NO cae al default en ese caso —
+    # solo lo hace si la key falta. Con "or" se cubre además ausencia real.
+    contacto = os.environ.get("VAPID_CONTACT") or "rafaelfariaspoblete@gmail.com"
     caducados = set()
 
     for endpoint, p256dh, auth in subs:
