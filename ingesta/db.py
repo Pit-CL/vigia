@@ -79,6 +79,36 @@ CREATE TABLE IF NOT EXISTS crecidas_umbral (
   n_anios INTEGER NOT NULL,
   updated TEXT NOT NULL
 );
+
+-- Histórico de avisos emitidos en cada corrida (auditoría científica, ver
+-- avisos.py): avisos.json se recalcula entero y se sobrescribe en cada
+-- corrida, así que sin esta tabla es imposible medir retrospectivamente
+-- falsos positivos/negativos. `valor` es el valor YA corregido por
+-- calibrate.py (el mismo que va al JSON público); `valor_crudo` es la
+-- mediana SIN corrección de bias para la misma variable/hora — permite ver
+-- si la corrección de bias fue lo que disparó o suprimió el aviso. NULL en
+-- `valor_crudo` cuando el aviso es compuesto y no tiene un único valor crudo
+-- bien definido (ver _valor_crudo en avisos.py). Solo AGREGA filas, nunca se
+-- pisa el histórico. Para distinguir "no hubo aviso en esta corrida" de "la
+-- corrida no ocurrió": cruzar con ingest_log (kind='avisos', run_at=run_ts) —
+-- si existe esa fila con ok=1 y no hay avisos_emitidos con ese run_ts, no
+-- hubo aviso; si no existe la fila en ingest_log, la corrida no se ejecutó.
+CREATE TABLE IF NOT EXISTS avisos_emitidos (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_ts      TEXT NOT NULL,
+  station_id  TEXT NOT NULL,
+  tipo        TEXT NOT NULL,
+  nivel       TEXT NOT NULL,
+  valor       REAL NOT NULL,
+  valor_crudo REAL,
+  unidad      TEXT NOT NULL,
+  umbral      REAL,
+  acuerdo     TEXT,
+  valid_time  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_avisos_emitidos_run
+  ON avisos_emitidos(run_ts, tipo);
 """
 
 
