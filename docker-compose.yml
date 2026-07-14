@@ -43,6 +43,7 @@ services:
       CLIMA_TSUNAMI_AREAS: /data/tsunami_areas.json
       CLIMA_MAREA: /data/marea.json
       CLIMA_TSUNAMI: /data/tsunami.json
+      CLIMA_CRECIDAS: /data/crecidas.json
       CLIMA_CORTES: /data/cortes.json
       CLIMA_FARMACIAS: /data/farmacias.json
       CLIMA_COMBUSTIBLE: /data/combustible.json
