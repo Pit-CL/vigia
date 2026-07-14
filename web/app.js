@@ -2060,21 +2060,45 @@ function emojiEvento(evento) {
 // orden que usa riesgoEventos: roja > amarilla > temprana_preventiva).
 const SEVERIDAD_ALERTA = { roja: 3, amarilla: 2, temprana_preventiva: 1 };
 
-function alertaPopup(box, a) {
-  box.appendChild(popupRows([
-    ['Evento', a.evento],
-    ['Nivel', NIVEL_ALERTA_LABEL[a.nivel] || a.nivel],
-    ['Región', a.region],
-    ['Vigente desde', a.desde],
-  ]));
-  const pEvento = document.createElement('p');
-  pEvento.className = 'alerta-explica';
-  pEvento.textContent = explicaEvento(a.evento);
-  box.appendChild(pEvento);
+// SENAPRED agrega un sufijo administrativo tipo "(mod. cober. 10-07-2026)"
+// al re-emitir una alerta con cobertura modificada; no aporta al lector así
+// que se limpia (regex conservadora: solo paréntesis que empiezan con "mod.").
+function limpiaEvento(evento) {
+  return (evento || '').replace(/\s*\(mod\.[^)]*\)/gi, '').trim();
+}
+
+// Bloque compacto de una alerta: título (emoji + evento), metadatos (nivel +
+// fecha, con región opcional cuando el título del popup no es una comuna) y
+// el resumen de qué implica el evento. La explicación del nivel va aparte
+// (una sola vez por popup, con el nivel más severo) para no repetirla.
+function alertaPopup(box, a, { conRegion = false } = {}) {
+  const titulo = document.createElement('strong');
+  titulo.textContent = `${emojiEvento(a.evento)} ${limpiaEvento(a.evento)}`;
+  box.appendChild(titulo);
+  const meta = document.createElement('p');
+  meta.className = 'alerta-meta';
+  const nivel = NIVEL_ALERTA_LABEL[a.nivel] || a.nivel;
+  meta.textContent = conRegion ? `${nivel} · ${a.region} · desde ${a.desde}` : `${nivel} · desde ${a.desde}`;
+  box.appendChild(meta);
+  const explica = document.createElement('p');
+  explica.className = 'alerta-explica';
+  explica.textContent = explicaEvento(a.evento);
+  box.appendChild(explica);
+}
+
+// Pie común a todos los popups de alertas: explicación del nivel más severo
+// presente (una sola vez) y el link al listado oficial de boletines.
+function piePopupAlertas(box, nivel) {
   const pNivel = document.createElement('p');
   pNivel.className = 'alerta-nivel-explica';
-  pNivel.textContent = EXPLICA_NIVEL[a.nivel] || '';
+  pNivel.textContent = EXPLICA_NIVEL[nivel] || '';
   box.appendChild(pNivel);
+  const link = document.createElement('a');
+  link.href = 'https://senapred.cl/alertas/';
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = 'Detalle oficial: senapred.cl/alertas →';
+  box.appendChild(link);
 }
 
 // Un pin por alerta era engañoso: SENAPRED entrega un único lat/lon por
@@ -2120,7 +2144,8 @@ function paintAlertas(group) {
     box.className = 'stn-popup';
     const h = document.createElement('strong'); h.textContent = centroide.n; box.appendChild(h);
     alertas.forEach((a) => alertaPopup(box, a));
-    marker.bindPopup(box, { maxWidth: 280 });
+    piePopupAlertas(box, peor.nivel);
+    marker.bindPopup(box, { maxWidth: 300, maxHeight: 300 });
   });
 
   sinComuna.forEach((a) => {
@@ -2130,25 +2155,11 @@ function paintAlertas(group) {
       iconSize: [38, 38], iconAnchor: [19, 19],
     });
     const marker = L.marker([a.lat, a.lon], { icon, title: a.evento }).addTo(group);
-    const comunas = a.comunas.slice(0, 5).join(', ') + (a.comunas.length > 5 ? ` y ${a.comunas.length - 5} más` : '');
     const box = document.createElement('div');
     box.className = 'stn-popup';
-    const h = document.createElement('strong'); h.textContent = a.evento; box.appendChild(h);
-    box.appendChild(popupRows([
-      ['Nivel', NIVEL_ALERTA_LABEL[a.nivel] || a.nivel],
-      ['Región', a.region],
-      ['Comunas', `${a.n_comunas} (${comunas})`],
-      ['Vigente desde', a.desde],
-    ]));
-    const pEvento = document.createElement('p');
-    pEvento.className = 'alerta-explica';
-    pEvento.textContent = explicaEvento(a.evento);
-    box.appendChild(pEvento);
-    const pNivel = document.createElement('p');
-    pNivel.className = 'alerta-nivel-explica';
-    pNivel.textContent = EXPLICA_NIVEL[a.nivel] || '';
-    box.appendChild(pNivel);
-    marker.bindPopup(box, { maxWidth: 280 });
+    alertaPopup(box, a, { conRegion: true });
+    piePopupAlertas(box, a.nivel);
+    marker.bindPopup(box, { maxWidth: 300, maxHeight: 300 });
   });
 
   $('#map-meta').textContent = alertasData.updated
