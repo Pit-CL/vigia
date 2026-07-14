@@ -268,7 +268,6 @@ let sateliteTimer = null;
 // tapan el rotulado del mapa base. Vive fuera de layerGroups por la misma
 // razón que sateliteLayers (sobrevivir al clearLayers() de cada render).
 let sateliteLabelsLayer = null;
-let sateliteLabelsTema = null; // 'light'/'dark' con el que se creó/actualizó sateliteLabelsLayer
 // Marcador de "mi ubicación" (botón 📍 Centrar): vive fuera de layerGroups,
 // igual que los tileLayers del satélite, para sobrevivir al clearLayers()
 // de cada renderMapa(); se reemplaza entero cada vez que se vuelve a tocar
@@ -1109,10 +1108,10 @@ const TILES = {
 const TILES_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" rel="noopener">CARTO</a>';
 // Solo el rotulado (nombres de ciudades) de CARTO, sin el resto del mapa base:
 // se usa por encima del satélite, que de otro modo tapa las etiquetas horneadas.
-const TILES_LABELS = {
-  light: 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png',
-  dark: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
-};
+// Siempre la variante 'light_only_labels' (texto blanco en negrita con halo
+// oscuro): es la que se lee bien sobre cualquier textura satelital, sin
+// importar el tema claro/oscuro de la UI (ver getOrCreateSateliteLabelsLayer).
+const TILES_LABELS_URL = 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png';
 
 // Estilo del mapa base "Satelital" (imagen aérea, no confundir con la capa
 // 🛰️ 'satelite' de GOES-East más abajo, que es la nube meteorológica animada).
@@ -1399,14 +1398,17 @@ function getOrCreateSateliteLayer(t) {
   return layer;
 }
 
+// Rotulado sobre imagen satelital (Esri o GOES): SIEMPRE la variante 'light'
+// de TILES_LABELS, sin importar el tema claro/oscuro de la UI. Se probó con
+// screenshot (no se asumió por el nombre): 'light_only_labels' es texto
+// blanco en negrita con halo oscuro y se lee bien sobre cualquier textura;
+// 'dark_only_labels' es un texto celeste delgado y de bajo contraste — con
+// tema de UI oscuro, atarlo a isDark() daba justo la variante que peor se
+// lee (bug real, no solo estético).
 function getOrCreateSateliteLabelsLayer() {
-  const tema = isDark() ? 'dark' : 'light';
   if (!sateliteLabelsLayer) {
-    sateliteLabelsLayer = L.tileLayer(TILES_LABELS[tema], { maxZoom: 18, zIndex: 6, subdomains: 'abcd' });
-  } else if (sateliteLabelsTema !== tema) {
-    sateliteLabelsLayer.setUrl(TILES_LABELS[tema]);
+    sateliteLabelsLayer = L.tileLayer(TILES_LABELS_URL, { maxZoom: 18, zIndex: 6, subdomains: 'abcd' });
   }
-  sateliteLabelsTema = tema;
   if (!map.hasLayer(sateliteLabelsLayer)) sateliteLabelsLayer.addTo(map);
   return sateliteLabelsLayer;
 }
@@ -2383,12 +2385,18 @@ function paintEvacuacion(group) {
   // filtrada por viewport, igual que las vías. Va ANTES que las vías para
   // quedar debajo (relleno de fondo, no un trazo que compita con la ruta a
   // seguir).
+  // Sobre satélite, techos y vegetación compiten con el relleno/trazo: se
+  // sube la opacidad y se agrega borde discontinuo para que el límite se
+  // distinga (sobre 'calles' quedan como estaban, el fondo ya es plano).
+  const sobreSatelite = mapaBase === 'satelital';
   if (tsunamiAreasData && map.getZoom() >= 12) {
     const bounds = map.getBounds();
     const color = css('--alerta-roja');
     for (const area of tsunamiAreasData.areas || []) {
       if (!bounds.intersects(geomBounds(area))) continue;
-      L.polygon(area.p, { color, weight: 1, opacity: 0.3, fillColor: color, fillOpacity: 0.12 })
+      L.polygon(area.p, sobreSatelite
+        ? { color, weight: 2, opacity: 0.9, dashArray: '6 4', fillColor: color, fillOpacity: 0.28 }
+        : { color, weight: 1, opacity: 0.3, fillColor: color, fillOpacity: 0.12 })
         .bindPopup('Zona de evacuación ante tsunami — si sientes un sismo fuerte, abandona esta zona hacia terreno alto')
         .addTo(group);
     }
@@ -2406,7 +2414,14 @@ function paintEvacuacion(group) {
     for (const via of tsunamiViasData.vias || []) {
       if (!bounds.intersects(geomBounds(via))) continue;
       const esVolcan = via.t === 'volcan';
-      L.polyline(via.p, { color: esVolcan ? colorVolcan : colorTsunami, weight: 3, opacity: 0.85, dashArray: '6 4' })
+      const color = esVolcan ? colorVolcan : colorTsunami;
+      // Casing cartográfico: una línea blanca más gruesa debajo del trazo de
+      // color, para que se lea sobre cualquier textura del satélite (ya
+      // filtradas por viewport arriba, así que duplicar solo estas es barato).
+      if (sobreSatelite) {
+        L.polyline(via.p, { color: '#fff', weight: 6, opacity: 0.9 }).addTo(group);
+      }
+      L.polyline(via.p, { color, weight: 3, opacity: 0.85, dashArray: '6 4' })
         .bindPopup(esVolcan ? `Vía de evacuación volcánica · ${via.c}` : `Vía de evacuación · ${via.c}`)
         .addTo(group);
       pintadas++;
@@ -2787,7 +2802,7 @@ function centrarEnMiUbicacion() {
     (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       msg.hidden = true;
-      map.setView([latitude, longitude], 13);
+      map.setView([latitude, longitude], 16); // nivel calle, no de comuna
       pintarMiUbicacion(latitude, longitude, accuracy);
     },
     (err) => mostrarErrorGeolocation(err, msg),
@@ -3166,7 +3181,8 @@ function setupRiesgos() {
 // Guía de error de geolocalización compartida por todo gesto que pida
 // ubicación (punto de encuentro, centrar el mapa): permiso denegado muestra
 // instrucciones por plataforma (Android/Chrome primero por ser lo más común
-// en Chile; rutas según la ayuda oficial de Google Chrome y Apple,
+// en Chile, luego iOS, luego Safari de escritorio y por último Chrome/Firefox
+// de escritorio; rutas según la ayuda oficial de Google Chrome y Apple,
 // verificadas 2026-07), cualquier otro error muestra un mensaje genérico.
 // `out` es cualquier contenedor donde renderizar el resultado.
 function mostrarErrorGeolocation(err, out) {
@@ -3174,6 +3190,9 @@ function mostrarErrorGeolocation(err, out) {
     const ua = navigator.userAgent;
     const esAndroid = /android/i.test(ua);
     const esIOS = /iphone|ipad|ipod/i.test(ua);
+    // Safari de escritorio (macOS): Safari SIN motor Chromium/Firefox detrás
+    // (Chrome, Edge y Firefox en Mac también llevan "Safari" en su UA).
+    const esSafariMac = /macintosh/i.test(ua) && /safari/i.test(ua) && !/chrome|chromium|crios|firefox|edg/i.test(ua);
     const guias = [];
     if (esAndroid) {
       guias.push(
@@ -3185,8 +3204,13 @@ function mostrarErrorGeolocation(err, out) {
     } else if (esIOS) {
       guias.push(
         'En Safari: toca "AA" o el ícono junto a la dirección → Configuración del sitio web → Ubicación → Permitir.',
-        'Si no aparece: Ajustes del iPhone → Apps → Safari → Ubicación → «Preguntar» o «Permitir».',
-        'Revisa también: Ajustes → Privacidad y seguridad → Localización (debe estar activada).',
+        'Si no aparece: Ajustes del iPhone → Apps → Safari → Ubicación → «Preguntar» o «Permitir» (en Chrome del iPhone, busca Ajustes → Apps → Chrome en su lugar).',
+        'Si la Localización está desactivada para todo el equipo: Ajustes → Privacidad y seguridad → Localización → activa el interruptor de arriba, y dentro de esa misma pantalla busca tu navegador y ponlo en «Preguntar» o «Al usar la app».',
+      );
+    } else if (esSafariMac) {
+      guias.push(
+        'En Safari: menú Safari → Ajustes → Sitios web → Ubicación → busca vigia.cavara.cl (o "En estos sitios web") y cambia a Permitir.',
+        'Si no aparece ninguna opción: revisa que la Ubicación esté habilitada a nivel de sistema en Ajustes del Sistema → Privacidad y seguridad → Localización, y que Safari esté marcado ahí.',
       );
     } else {
       guias.push(
@@ -3204,6 +3228,10 @@ function mostrarErrorGeolocation(err, out) {
       ul.appendChild(li);
     });
     out.append(p, ul);
+    // La guía puede quedar bajo el pliegue (el botón "Centrar" está arriba
+    // del mapa, la guía la desplaza hacia abajo): sin esto el usuario no la
+    // veía y creía que el botón no hacía nada.
+    out.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   } else {
     out.textContent = 'No se pudo obtener tu ubicación (sin señal de GPS o tardó demasiado). '
       + 'Revisa que la Ubicación del equipo esté encendida e inténtalo de nuevo.';
