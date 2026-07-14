@@ -268,6 +268,11 @@ let sateliteTimer = null;
 // razón que sateliteLayers (sobrevivir al clearLayers() de cada render).
 let sateliteLabelsLayer = null;
 let sateliteLabelsTema = null; // 'light'/'dark' con el que se creó/actualizó sateliteLabelsLayer
+// Marcador de "mi ubicación" (botón 📍 Centrar): vive fuera de layerGroups,
+// igual que los tileLayers del satélite, para sobrevivir al clearLayers()
+// de cada renderMapa(); se reemplaza entero cada vez que se vuelve a tocar
+// el botón (nunca se acumulan marcadores viejos).
+let miUbicacionLayer = null;
 
 function savedPlace() {
   try {
@@ -1108,6 +1113,12 @@ const TILES_LABELS = {
   dark: 'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
 };
 
+// Estilo del mapa base "Satelital" (imagen aérea, no confundir con la capa
+// 🛰️ 'satelite' de GOES-East más abajo, que es la nube meteorológica animada).
+// Esri World Imagery no distingue claro/oscuro: una sola textura para ambos temas.
+const TILES_ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const TILES_ESRI_ATTR = 'Esri, Maxar, Earthstar Geographics';
+
 // Capa satelital: NASA GIBS, GOES-East ABI GeoColor (WMTS RESTful, sin API key).
 // Ojo con el orden del path: es {z}/{y}/{x} (TileMatrix/TileRow/TileCol), no
 // el {z}/{x}/{y} habitual de Leaflet — el template solo cambia DÓNDE va cada
@@ -1422,10 +1433,13 @@ function toggleReproduccionSatelite() {
 // Retira del mapa los tileLayers persistentes del satélite y detiene la
 // reproducción; se llama al apagar la capa (renderMapa no lo hace solo
 // porque estos tileLayers viven fuera de layerGroups['satelite']).
-function limpiarSatelite() {
+// `mantenerEtiquetas` (true cuando el mapa base está en modo Satelital) evita
+// borrar el rotulado only_labels que ese modo también necesita, aunque la
+// capa GOES esté apagada.
+function limpiarSatelite(mantenerEtiquetas) {
   detenerReproduccionSatelite();
   sateliteLayers.forEach((layer) => { if (map.hasLayer(layer)) map.removeLayer(layer); });
-  if (sateliteLabelsLayer && map.hasLayer(sateliteLabelsLayer)) map.removeLayer(sateliteLabelsLayer);
+  if (!mantenerEtiquetas && sateliteLabelsLayer && map.hasLayer(sateliteLabelsLayer)) map.removeLayer(sateliteLabelsLayer);
 }
 
 function paintSatelite() {
@@ -1491,6 +1505,23 @@ function capasGuardadas() {
     }
   } catch (_) { /* localStorage puede no estar disponible */ }
   return new Set(['temp']);
+}
+
+// Estilo del mapa base (Calles/Satelital), independiente de capasActivas:
+// no es una capa que se combine con otras, es el fondo mismo del mapa.
+function basemapGuardado() {
+  try {
+    const raw = localStorage.getItem('sinoptica.basemap');
+    if (raw === 'satelital' || raw === 'calles') return raw;
+  } catch (_) { /* localStorage puede no estar disponible */ }
+  return 'calles';
+}
+let mapaBase = basemapGuardado();
+
+function toggleBasemap() {
+  mapaBase = mapaBase === 'calles' ? 'satelital' : 'calles';
+  try { localStorage.setItem('sinoptica.basemap', mapaBase); } catch (_) { /* opcional */ }
+  renderMapa();
 }
 
 let capasActivas = capasGuardadas();
@@ -1592,9 +1623,11 @@ function enlaceComoLlegar(lat, lon) {
 function renderMapa() {
   if (!ensureMap()) return;
   if (tileLayer) map.removeLayer(tileLayer);
-  tileLayer = L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
-    attribution: TILES_ATTR, maxZoom: 18, subdomains: 'abcd',
-  }).addTo(map);
+  tileLayer = mapaBase === 'satelital'
+    ? L.tileLayer(TILES_ESRI, { attribution: TILES_ESRI_ATTR, maxZoom: 18 }).addTo(map)
+    : L.tileLayer(TILES[isDark() ? 'dark' : 'light'], {
+        attribution: TILES_ATTR, maxZoom: 18, subdomains: 'abcd',
+      }).addTo(map);
   // Este tileLayer base se recrea en cada render (igual que layerGroups[k]
   // más abajo se vacía con clearLayers): por eso los tileLayers del satélite
   // NO viven en layerGroups['satelite'] sino en la variable de módulo
@@ -1637,10 +1670,19 @@ function renderMapa() {
   document.getElementById('map-note-satelite').hidden = !capasActivas.has('satelite');
   document.getElementById('satelite-control').hidden = !capasActivas.has('satelite');
   // Los tileLayers del satélite viven fuera de layerGroups['satelite'] (ver
-  // nota crítica arriba): al apagar la capa hay que retirarlos a mano.
-  if (!capasActivas.has('satelite')) limpiarSatelite();
+  // nota crítica arriba): al apagar la capa hay que retirarlos a mano. El
+  // rotulado only_labels lo comparten la capa GOES y el modo base Satelital
+  // (ambos necesitan nombres de ciudad legibles sobre una imagen oscura): si
+  // la capa GOES está apagada pero el modo base es Satelital, se conserva.
+  if (!capasActivas.has('satelite')) limpiarSatelite(mapaBase === 'satelital');
+  if (mapaBase === 'satelital') getOrCreateSateliteLabelsLayer();
   document.querySelectorAll('.map-mode[data-capa]').forEach((b) =>
     b.setAttribute('aria-pressed', String(capasActivas.has(b.dataset.capa))));
+  const basemapBtn = document.getElementById('basemap-toggle');
+  if (basemapBtn) {
+    basemapBtn.setAttribute('aria-pressed', String(mapaBase === 'satelital'));
+    basemapBtn.textContent = mapaBase === 'satelital' ? '🗺️ Mapa: Satelital' : '🗺️ Mapa: Calles';
+  }
 
   map.invalidateSize();   // por si el panel cambió de tamaño desde el último render
 }
@@ -2623,6 +2665,47 @@ function paintCombustible(group) {
   $('#map-meta').textContent = metaConFecha(`${estaciones.length} estaciones con precios · CNE Bencina en Línea`, combustibleData.updated);
 }
 
+// Marcador de "mi ubicación" para el botón 📍 Centrar: un punto + círculo de
+// precisión (accuracy en metros de la propia geolocalización), reemplazado
+// entero cada vez que se vuelve a tocar el botón. Igual que "Mi punto de
+// encuentro" (setupPuntoCercano), la geolocalización se pide solo con este
+// gesto explícito y no se guarda en localStorage ni en ninguna otra parte.
+function pintarMiUbicacion(lat, lon, accuracy) {
+  if (miUbicacionLayer) map.removeLayer(miUbicacionLayer);
+  const color = css('--accent2');
+  const icon = L.divIcon({
+    className: 'miubicacion-icon',
+    html: '<span class="miubicacion-dot"></span>',
+    iconSize: [14, 14], iconAnchor: [7, 7],
+  });
+  miUbicacionLayer = L.layerGroup([
+    L.circle([lat, lon], { radius: accuracy, color, weight: 1, fillColor: color, fillOpacity: 0.08 }),
+    L.marker([lat, lon], { icon, title: 'Tu ubicación', zIndexOffset: 1000 }),
+  ]).addTo(map);
+}
+
+function centrarEnMiUbicacion() {
+  const msg = document.getElementById('map-locate-msg');
+  if (!ensureMap() || !msg) return;
+  if (!('geolocation' in navigator)) {
+    msg.hidden = false;
+    msg.textContent = 'Tu navegador no permite geolocalización.';
+    return;
+  }
+  msg.hidden = false;
+  msg.textContent = 'Buscando tu ubicación…';
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      msg.hidden = true;
+      map.setView([latitude, longitude], 13);
+      pintarMiUbicacion(latitude, longitude, accuracy);
+    },
+    (err) => mostrarErrorGeolocation(err, msg),
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
+  );
+}
+
 function setupCapas() {
   document.querySelectorAll('.map-mode[data-capa]').forEach((btn) => {
     btn.addEventListener('click', () => toggleCapa(btn.dataset.capa));
@@ -2641,6 +2724,10 @@ function setupCapas() {
   }
   const playBtn = document.getElementById('satelite-play');
   if (playBtn) playBtn.addEventListener('click', toggleReproduccionSatelite);
+  const basemapBtn = document.getElementById('basemap-toggle');
+  if (basemapBtn) basemapBtn.addEventListener('click', toggleBasemap);
+  const locateBtn = document.getElementById('map-locate-btn');
+  if (locateBtn) locateBtn.addEventListener('click', centrarEnMiUbicacion);
 }
 
 // Pantalla completa: sobre el panel entero (no solo #map) para que la
@@ -2980,6 +3067,53 @@ function setupRiesgos() {
   actualizarLabelCerca();
 }
 
+// Guía de error de geolocalización compartida por todo gesto que pida
+// ubicación (punto de encuentro, centrar el mapa): permiso denegado muestra
+// instrucciones por plataforma (Android/Chrome primero por ser lo más común
+// en Chile; rutas según la ayuda oficial de Google Chrome y Apple,
+// verificadas 2026-07), cualquier otro error muestra un mensaje genérico.
+// `out` es cualquier contenedor donde renderizar el resultado.
+function mostrarErrorGeolocation(err, out) {
+  if (err.code === err.PERMISSION_DENIED) {
+    const ua = navigator.userAgent;
+    const esAndroid = /android/i.test(ua);
+    const esIOS = /iphone|ipad|ipod/i.test(ua);
+    const guias = [];
+    if (esAndroid) {
+      guias.push(
+        'En Chrome: toca el ícono junto a la dirección del sitio (arriba, el candado o los controles) → Permisos → Ubicación → Permitir, y vuelve a tocar el botón.',
+        'Si no aparece la opción: menú ⋮ (arriba a la derecha) → Configuración → Configuración de sitios → Ubicación → busca vigia.cavara.cl y permítelo.',
+        'Revisa también que la Ubicación del teléfono esté encendida (desliza desde arriba y busca el ícono 📍 Ubicación).',
+        'En Samsung Internet: menú ☰ → Ajustes → Sitios y descargas → Permisos de sitios → Ubicación.',
+      );
+    } else if (esIOS) {
+      guias.push(
+        'En Safari: toca "AA" o el ícono junto a la dirección → Configuración del sitio web → Ubicación → Permitir.',
+        'Si no aparece: Ajustes del iPhone → Apps → Safari → Ubicación → «Preguntar» o «Permitir».',
+        'Revisa también: Ajustes → Privacidad y seguridad → Localización (debe estar activada).',
+      );
+    } else {
+      guias.push(
+        'En Chrome: haz clic en el candado (o el ícono de controles) a la izquierda de la dirección → Configuración del sitio → Ubicación → Permitir, y recarga la página.',
+        'En Firefox: clic en el candado → Permisos → Ubicación → quita el bloqueo, y recarga.',
+      );
+    }
+    out.textContent = '';
+    const p = document.createElement('p');
+    p.textContent = 'Sin permiso de ubicación. Actívalo así:';
+    const ul = document.createElement('ul');
+    guias.forEach((t) => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      ul.appendChild(li);
+    });
+    out.append(p, ul);
+  } else {
+    out.textContent = 'No se pudo obtener tu ubicación (sin señal de GPS o tardó demasiado). '
+      + 'Revisa que la Ubicación del equipo esté encendida e inténtalo de nuevo.';
+  }
+}
+
 // Punto de encuentro más cercano a la posición real del usuario, ante tsunami
 // o ante erupción volcánica según el tipo elegido en el selector. Siempre se
 // muestra el punto más cercano con su distancia (nunca se oculta por estar
@@ -3049,49 +3183,7 @@ function setupPuntoCercano() {
         });
         out.appendChild(verBtn);
       },
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
-          // Guía por plataforma, la del usuario primero (Android + Chrome es
-          // por lejos lo más común en Chile). Rutas según la ayuda oficial
-          // de Google Chrome y Apple, verificadas 2026-07.
-          const ua = navigator.userAgent;
-          const esAndroid = /android/i.test(ua);
-          const esIOS = /iphone|ipad|ipod/i.test(ua);
-          const guias = [];
-          if (esAndroid) {
-            guias.push(
-              'En Chrome: toca el ícono junto a la dirección del sitio (arriba, el candado o los controles) → Permisos → Ubicación → Permitir, y vuelve a tocar el botón.',
-              'Si no aparece la opción: menú ⋮ (arriba a la derecha) → Configuración → Configuración de sitios → Ubicación → busca vigia.cavara.cl y permítelo.',
-              'Revisa también que la Ubicación del teléfono esté encendida (desliza desde arriba y busca el ícono 📍 Ubicación).',
-              'En Samsung Internet: menú ☰ → Ajustes → Sitios y descargas → Permisos de sitios → Ubicación.',
-            );
-          } else if (esIOS) {
-            guias.push(
-              'En Safari: toca "AA" o el ícono junto a la dirección → Configuración del sitio web → Ubicación → Permitir.',
-              'Si no aparece: Ajustes del iPhone → Apps → Safari → Ubicación → «Preguntar» o «Permitir».',
-              'Revisa también: Ajustes → Privacidad y seguridad → Localización (debe estar activada).',
-            );
-          } else {
-            guias.push(
-              'En Chrome: haz clic en el candado (o el ícono de controles) a la izquierda de la dirección → Configuración del sitio → Ubicación → Permitir, y recarga la página.',
-              'En Firefox: clic en el candado → Permisos → Ubicación → quita el bloqueo, y recarga.',
-            );
-          }
-          out.textContent = '';
-          const p = document.createElement('p');
-          p.textContent = 'Sin permiso de ubicación. Actívalo así:';
-          const ul = document.createElement('ul');
-          guias.forEach((t) => {
-            const li = document.createElement('li');
-            li.textContent = t;
-            ul.appendChild(li);
-          });
-          out.append(p, ul);
-        } else {
-          out.textContent = 'No se pudo obtener tu ubicación (sin señal de GPS o tardó demasiado). '
-            + 'Revisa que la Ubicación del equipo esté encendida e inténtalo de nuevo.';
-        }
-      },
+      (err) => mostrarErrorGeolocation(err, out),
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
     );
   });
