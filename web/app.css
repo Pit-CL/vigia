@@ -1306,9 +1306,24 @@ dialog::backdrop {
 .map-modes {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 12px 16px;
   margin-bottom: 12px;
+}
+
+.map-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.map-group-label {
+  flex: 0 0 100%;
+  font: 500 0.6rem var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
 }
 
 .map-mode {
@@ -1326,12 +1341,6 @@ dialog::backdrop {
   background: var(--ink);
   color: var(--bg);
   border-color: var(--ink);
-}
-
-.map-sep {
-  width: 1.5px;
-  align-self: stretch;
-  background: var(--border);
 }
 
 .satelite-control {
