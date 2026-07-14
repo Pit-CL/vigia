@@ -231,6 +231,7 @@ def main():
     check_json_fresco_laxo(base, "cortes.json", timedelta(hours=24))
     check_json_fresco_laxo(base, "farmacias.json", timedelta(hours=26))
     check_json_fresco_laxo(base, "combustible.json", timedelta(hours=26))
+    check_json_fresco_laxo(base, "crecidas.json", timedelta(hours=26))
     check_emergencia(base)
 
     print()
