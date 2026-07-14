@@ -3431,11 +3431,11 @@ function renderTsunamiBanner() {
   const estado = tsunamiData.estado;
   if (estado === 'amenaza') {
     el.textContent = `🌊 AMENAZA DE TSUNAMI — ${tsunamiData.mensaje} · Sigue al SHOA/SENAPRED y evacúa la costa`;
-    el.className = 'tsunami-amenaza';
+    el.className = 'tsunami-banner tsunami-amenaza';
     el.hidden = false;
   } else if (estado === 'precaucion') {
     el.textContent = tsunamiData.mensaje;
-    el.className = 'tsunami-precaucion';
+    el.className = 'tsunami-banner tsunami-precaucion';
     el.hidden = false;
   } else {
     el.hidden = true;
@@ -4169,4 +4169,7 @@ setInterval(() => {
   if (document.visibilityState === 'visible' && (capasActivas.has('sismos') || panelMapaVisible)) {
     loadSismos();
   }
+  // Tsunami también va al carril rápido: es el banner de seguridad vital y
+  // no puede esperar los 10 min del refresco general.
+  if (document.visibilityState === 'visible') loadTsunami();
 }, SISMOS_REFRESH_MS);
