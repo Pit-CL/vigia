@@ -1490,7 +1490,7 @@ const CAPAS = {
   precipitacion: { grupo: 'medicion', paint: paintPrecip },
   sismos:        { paint: paintSismos },
   incendios:     { paint: paintIncendios },
-  alertas:       { paint: paintAlertas },
+  alertas:       { paint: paintAlertas, lazy: cargarComunas, tieneData: () => comunasData !== null },
   volcanes:      { paint: paintVolcanes },
   avisos:        { paint: paintAvisos },
   remociones:    { paint: paintRemociones, lazy: loadRemociones, tieneData: () => remocionesData !== null },
@@ -2050,11 +2050,74 @@ function emojiEvento(evento) {
 }
 
 
+// Severidad para elegir, por comuna, la alerta más grave a mostrar (mismo
+// orden que usa riesgoEventos: roja > amarilla > temprana_preventiva).
+const SEVERIDAD_ALERTA = { roja: 3, amarilla: 2, temprana_preventiva: 1 };
+
+function alertaPopup(box, a) {
+  box.appendChild(popupRows([
+    ['Evento', a.evento],
+    ['Nivel', NIVEL_ALERTA_LABEL[a.nivel] || a.nivel],
+    ['Región', a.region],
+    ['Vigente desde', a.desde],
+  ]));
+  const pEvento = document.createElement('p');
+  pEvento.className = 'alerta-explica';
+  pEvento.textContent = explicaEvento(a.evento);
+  box.appendChild(pEvento);
+  const pNivel = document.createElement('p');
+  pNivel.className = 'alerta-nivel-explica';
+  pNivel.textContent = EXPLICA_NIVEL[a.nivel] || '';
+  box.appendChild(pNivel);
+}
+
+// Un pin por alerta era engañoso: SENAPRED entrega un único lat/lon por
+// alerta (el punto medio de TODAS sus comunas), así que una alerta regional
+// de 38 comunas quedaba con su único pin cerca de la comuna central y quien
+// mira el resto de la región no veía nada. Ahora se pinta un marcador por
+// comuna afectada (centroide INE de comunas.json), agrupando las alertas
+// que la tocan; si una alerta no matchea ninguna comuna del catastro, cae
+// al comportamiento anterior (un pin en su punto medio).
 function paintAlertas(group) {
   const todas = (alertasData && alertasData.alertas) || [];
-  const conCoords = todas.filter((a) => a.lat != null && a.lon != null);
-  if (!conCoords.length) { $('#map-meta').textContent = 'sin alertas vigentes'; return; }
-  conCoords.forEach((a) => {
+  if (!todas.length) { $('#map-meta').textContent = 'sin alertas vigentes'; return; }
+
+  const indice = comunasData
+    ? new Map(comunasData.comunas.map((c) => [norm(c.n), c]))
+    : null;
+
+  const grupos = new Map(); // nombre-normalizado → { centroide, alertas: [] }
+  const sinComuna = [];
+  todas.forEach((a) => {
+    const nombres = Array.isArray(a.comunas) ? a.comunas : [];
+    let matcheo = false;
+    nombres.forEach((nombreComuna) => {
+      const centroide = indice && indice.get(norm(nombreComuna));
+      if (!centroide) return;
+      matcheo = true;
+      const key = norm(nombreComuna);
+      if (!grupos.has(key)) grupos.set(key, { centroide, alertas: [] });
+      grupos.get(key).alertas.push(a);
+    });
+    if (!matcheo && a.lat != null && a.lon != null) sinComuna.push(a);
+  });
+
+  grupos.forEach(({ centroide, alertas }) => {
+    const peor = [...alertas].sort((x, y) => (SEVERIDAD_ALERTA[y.nivel] || 0) - (SEVERIDAD_ALERTA[x.nivel] || 0))[0];
+    const icon = L.divIcon({
+      className: 'stn-icon',
+      html: `<span class="alerta alerta-${peor.nivel}">${emojiEvento(peor.evento)}</span>`,
+      iconSize: [30, 30], iconAnchor: [15, 15],
+    });
+    const marker = L.marker([centroide.lat, centroide.lon], { icon, title: centroide.n }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = centroide.n; box.appendChild(h);
+    alertas.forEach((a) => alertaPopup(box, a));
+    marker.bindPopup(box, { maxWidth: 280 });
+  });
+
+  sinComuna.forEach((a) => {
     const icon = L.divIcon({
       className: 'stn-icon',
       html: `<span class="alerta alerta-${a.nivel}">${emojiEvento(a.evento)}</span>`,
@@ -2081,9 +2144,10 @@ function paintAlertas(group) {
     box.appendChild(pNivel);
     marker.bindPopup(box, { maxWidth: 280 });
   });
+
   $('#map-meta').textContent = alertasData.updated
-    ? `${conCoords.length} alertas · ${horaLocal(alertasData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${conCoords.length} alertas`;
+    ? `${todas.length} alertas · ${horaLocal(alertasData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `${todas.length} alertas`;
 }
 
 function paintVolcanes(group) {
@@ -3452,8 +3516,8 @@ function renderChips() {
 }
 
 // Catastro de comunas (INE, web/comunas.json): fuente local instantánea, sin
-// red. Se carga una sola vez, al primer foco del buscador — no hace falta
-// antes porque nadie escribe sin haber tocado el input primero.
+// red. Se carga una sola vez, al primer foco del buscador o al activar la
+// capa de alertas (lazy en CAPAS.alertas) — lo que ocurra primero.
 let comunasData = null;
 let comunasCargando = false;
 async function cargarComunas() {
@@ -3464,6 +3528,7 @@ async function cargarComunas() {
     if (res.ok) comunasData = await res.json();
   } catch (_) { /* sin comunas.json: el buscador cae solo al geocoding remoto */ }
   comunasCargando = false;
+  if (capasActivas.has('alertas')) renderMapa();
 }
 
 // Coincidencias por prefijo primero (más relevantes), luego por infijo.
