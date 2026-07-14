@@ -127,3 +127,10 @@ INCOMING_DIR = Path(os.environ.get("CLIMA_INCOMING", ROOT / "data" / "incoming")
 CORTES_PATH = Path(os.environ.get("CLIMA_CORTES", ROOT / "web" / "cortes.json"))
 FARMACIAS_PATH = Path(os.environ.get("CLIMA_FARMACIAS", ROOT / "web" / "farmacias.json"))
 COMUNAS_PATH = ROOT / "web" / "comunas.json"  # catastro INE versionado, no lo genera la ingesta
+
+# ── Watchdog de frescura (aviso a Slack, ver watchdog.py) ───────
+# Patrón "dormido" (igual que combustible.py): sin webhook, el watchdog
+# no hace nada. El estado de transiciones (para no re-notificar) vive en
+# CLIMA_WATCHDOG_STATE, junto a los demás datos de /data en prod.
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+WATCHDOG_STATE_PATH = Path(os.environ.get("CLIMA_WATCHDOG_STATE", ROOT / "data" / "watchdog_state.json"))

@@ -48,12 +48,14 @@ services:
       CLIMA_FARMACIAS: /data/farmacias.json
       CLIMA_COMBUSTIBLE: /data/combustible.json
       CLIMA_INCOMING: /data/incoming
+      CLIMA_WATCHDOG_STATE: /data/watchdog_state.json
       DMC_USUARIO: ${DMC_USUARIO:-}
       DMC_TOKEN: ${DMC_TOKEN:-}
       DMC_STATIONS: ${DMC_STATIONS:-}
       FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
       CNE_EMAIL: ${CNE_EMAIL:-}
       CNE_PASSWORD: ${CNE_PASSWORD:-}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
     volumes:
       - ./ingesta:/app/ingesta:ro
       - ./deploy/crontab:/crontab-src:ro
