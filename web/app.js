@@ -299,6 +299,12 @@ const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
 // Normaliza para comparar texto sin tildes ni mayúsculas ("Ñuñoa" ~ "nunoa").
 const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+// Estado del catastro de comunas (se llena en cargarComunas, más abajo).
+// Declarado aquí arriba porque CAPAS.alertas.tieneData() lo lee durante la
+// restauración de capas al cargar el script (TDZ si estuviera después).
+let comunasData = null;
+let comunasCargando = false;
+
 function fetchJSON(url) {
   return fetch(url).then((res) => {
     if (!res.ok) throw new Error(`HTTP ${res.status} en ${new URL(url, location.href).hostname}`);
@@ -3518,8 +3524,8 @@ function renderChips() {
 // Catastro de comunas (INE, web/comunas.json): fuente local instantánea, sin
 // red. Se carga una sola vez, al primer foco del buscador o al activar la
 // capa de alertas (lazy en CAPAS.alertas) — lo que ocurra primero.
-let comunasData = null;
-let comunasCargando = false;
+// comunasData/comunasCargando se declaran antes de CAPAS: la restauración de
+// capas desde localStorage los evalúa al cargar el script.
 async function cargarComunas() {
   if (comunasData || comunasCargando) return;
   comunasCargando = true;
