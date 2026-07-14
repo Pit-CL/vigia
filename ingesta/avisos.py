@@ -193,13 +193,17 @@ VARS = ["wind_speed_10m", "temperature_2m", "precipitation", "snowfall",
 VARS_CALIBRABLES = [v for v in VARS if v in config.CALIBRABLE_VARS]
 
 
-def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str) -> tuple[dict, dict]:
-    """(series, por_modelo):
+def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str) -> tuple[dict, dict, dict]:
+    """(series, por_modelo, series_crudo):
     - series: {variable: [(valid_time, mediana_entre_modelos)]}, ordenado, sin None.
     - por_modelo: {variable: {model: [(valid_time, value)]}}, ordenado, sin None.
       Base del acuerdo de ensamble (B1): cada model=... es un modelo determinista
       distinto archivado con member=-1 (ver forecasts en db.py); la mediana entre
       todas esas filas por hora es lo que arma `series`.
+    - series_crudo: igual forma que `series`, pero SIN la corrección de sesgo
+      (auditoría de avisos_emitidos, ver _valor_crudo). Para variables fuera de
+      VARS_CALIBRABLES es idéntica a `series` (calibrate.correct nunca se les
+      aplica).
 
     Para las variables en VARS_CALIBRABLES, cada valor se corrige por sesgo
     (calibrate.correct, gate + shrinkage incluidos) antes de entrar a la
@@ -213,20 +217,25 @@ def _series_estacion(con, station_id: str, run_tag: str, desde: str, hasta: str)
         (station_id, run_tag, *VARS, desde, hasta))
     run_dt = datetime.fromisoformat(run_tag + ":00")
     por_hora: dict = {}
+    por_hora_crudo: dict = {}
     por_modelo_raw: dict = {}
-    for var, model, vt, val in rows:
-        if val is None:
+    for var, model, vt, val_crudo in rows:
+        if val_crudo is None:
             continue
+        val = val_crudo
         if var in VARS_CALIBRABLES:
             lead_hours = (datetime.fromisoformat(vt) - run_dt).total_seconds() / 3600
-            val = calibrate.correct(con, station_id, model, var, lead_hours, val)
+            val = calibrate.correct(con, station_id, model, var, lead_hours, val_crudo)
         por_hora.setdefault(var, {}).setdefault(vt, []).append(val)
+        por_hora_crudo.setdefault(var, {}).setdefault(vt, []).append(val_crudo)
         por_modelo_raw.setdefault(var, {}).setdefault(model, []).append((vt, val))
     series = {var: [(vt, statistics.median(horas[vt])) for vt in sorted(horas)]
               for var, horas in por_hora.items()}
+    series_crudo = {var: [(vt, statistics.median(horas[vt])) for vt in sorted(horas)]
+                     for var, horas in por_hora_crudo.items()}
     por_modelo = {var: {m: sorted(vals) for m, vals in modelos.items()}
                   for var, modelos in por_modelo_raw.items()}
-    return series, por_modelo
+    return series, por_modelo, series_crudo
 
 
 def _rolling_sum(serie: list, n_horas: int) -> list:
@@ -728,6 +737,69 @@ def _avisos_estacion(series: dict, por_modelo: dict, st: dict,
     return avisos
 
 
+# Variable subyacente del campo "valor" de cada tipo de aviso (auditoría de
+# avisos_emitidos, ver _valor_crudo). None = compuesto sin un único valor
+# crudo bien definido.
+_TIPO_VARIABLE = {
+    "viento": "wind_speed_10m", "helada": "temperature_2m", "calor": "temperature_2m",
+    "lluvia": "precipitation", "lluvia_persistente": "precipitation", "nieve": "snowfall",
+    "rafagas": "wind_gusts_10m", "presion": "pressure_msl", "nieve_cota_baja": "precipitation",
+    "ola_calor": "temperature_2m", "ola_frio": "temperature_2m", "tormenta": "cape",
+    "uv": "uv_index", "aluvional": "precipitation",
+    "incendio": None,  # compuesto de 3 variables calibrables, ver _valor_crudo
+}
+
+
+def _valor_crudo(tipo: str, valid_time: str, series_crudo: dict) -> float | None:
+    """Valor SIN corrección de bias para el mismo (variable, valid_time) que
+    produjo el "valor" ya corregido del aviso — auditoría de avisos_emitidos
+    (regla: nunca cambiar la lógica de emisión, esto solo la observa).
+
+    - Variables no calibrables (precipitation, snowfall, wind_gusts_10m, cape,
+      uv_index): crudo == corregido por construcción, `series_crudo` ya trae
+      el mismo valor (calibrate.correct nunca se les aplica).
+    - "presion": el valor emitido es una CAÍDA entre el inicio y el fin de una
+      ventana de 24 h, no un punto — se recalcula la caída con _rolling_caida
+      sobre la serie cruda y se busca la ventana que termina en valid_time.
+    - "incendio": la emisión la gatillan EN CONJUNTO tres variables calibrables
+      (temperatura, humedad relativa, viento) en la misma hora, pero solo la
+      temperatura queda expuesta como "valor" — un único valor_crudo no
+      reflejaría si fue la corrección de HR o de viento la que disparó o
+      suprimió el aviso, así que se guarda NULL (ver _TIPO_VARIABLE).
+    - Resto (viento/helada/calor/rafagas/ola_calor/ola_frio/tormenta/uv): punto
+      de la mediana cruda en el mismo valid_time del pico ya corregido.
+
+    Redondeado a 1 decimal como "valor" (ver _aviso): sin este redondeo, con
+    bias 0 igual aparecerían diferencias espurias entre la mediana cruda sin
+    redondear y el "valor" ya redondeado, que no reflejan corrección real.
+    """
+    if tipo == "presion":
+        caidas = dict(_rolling_caida(series_crudo.get("pressure_msl") or [], 24))
+        val = caidas.get(valid_time)
+    else:
+        var = _TIPO_VARIABLE.get(tipo)
+        if var is None:
+            return None
+        val = dict(series_crudo.get(var) or []).get(valid_time)
+    return round(val, 1) if val is not None else None
+
+
+def _guardar_avisos_emitidos(con, run_ts: str, avisos: list, series_crudo_por_estacion: dict) -> None:
+    """Inserta en avisos_emitidos una fila por cada aviso de esta corrida, con
+    su valor_crudo (ver _valor_crudo). Aditivo: nunca borra ni pisa histórico
+    (solo INSERT); la retención de 365 días se aplica aparte en update()."""
+    for a in avisos:
+        valid_time = a["hora_peak"][:-4]  # hora_peak = valid_time + ":00Z"
+        series_crudo = series_crudo_por_estacion[a["estacion_id"]]
+        valor_crudo = _valor_crudo(a["tipo"], valid_time, series_crudo)
+        con.execute(
+            "INSERT INTO avisos_emitidos(run_ts, station_id, tipo, nivel, valor,"
+            " valor_crudo, unidad, umbral, acuerdo, valid_time) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (run_ts, a["estacion_id"], a["tipo"], a["nivel"], a["valor"],
+             valor_crudo, a["unidad"], a.get("umbral"), a.get("acuerdo"), valid_time),
+        )
+
+
 def update(con, fetched_at: str) -> int:
     ahora = datetime.now(timezone.utc)
     desde = ahora.strftime("%Y-%m-%dT%H:%M")
@@ -736,6 +808,7 @@ def update(con, fetched_at: str) -> int:
     avisos = []
     acumulados = []
     run_tags_usados = []
+    series_crudo_por_estacion = {}
     for st in config.STATIONS:
         run_tag = con.execute(
             "SELECT MAX(run_tag) FROM forecasts WHERE station=? AND member=-1",
@@ -745,13 +818,22 @@ def update(con, fetched_at: str) -> int:
         run_tags_usados.append(run_tag)
         # Una sola consulta de series por estación: avisos y acumulados
         # comparten la misma mediana horaria multi-modelo.
-        series, por_modelo = _series_estacion(con, st["id"], run_tag, desde, hasta)
+        series, por_modelo, series_crudo = _series_estacion(con, st["id"], run_tag, desde, hasta)
+        series_crudo_por_estacion[st["id"]] = series_crudo
         viento_umbral = _umbral_climatologico(con, st["id"], "wind_speed_10m",
                                                VIENTO_AMARILLO, VIENTO_NARANJA, VIENTO_ROJO)
         calor_umbral = _umbral_climatologico(con, st["id"], "temperature_2m",
                                               CALOR_AMARILLO, CALOR_NARANJA, CALOR_ROJO)
         avisos.extend(_avisos_estacion(series, por_modelo, st, viento_umbral, calor_umbral))
         acumulados.append(_acumulado_estacion(st, series))
+
+    # Histórico de auditoría (regla: cambio aditivo, nunca toca el JSON
+    # público ni la lógica de emisión de arriba). run_ts = fetched_at, el
+    # mismo run_at que run.py usa para el "avisos" de ingest_log — permite
+    # cruzar ambas tablas (ver comentario de avisos_emitidos en db.py).
+    _guardar_avisos_emitidos(con, fetched_at, avisos, series_crudo_por_estacion)
+    con.execute("DELETE FROM avisos_emitidos WHERE run_ts < datetime('now', '-365 days')")
+    con.commit()
 
     payload = {
         "updated": ahora.strftime("%Y-%m-%d %H:%M UTC"),
