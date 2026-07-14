@@ -1493,6 +1493,27 @@ dialog::backdrop {
 .av-naranja { border-color: var(--vol-naranja); }
 .av-rojo { border-color: var(--alerta-roja); }
 
+/* ── Crecidas de ríos (GloFAS/Copernicus vía Open-Meteo, no oficial) ──
+   Mismo look que .alerta/.aviso-* (círculo + emoji); sin nivel el borde
+   queda en tono neutro porque el dato "río normal" también informa. */
+.creci-amarillo { border-color: var(--alerta-amarilla); }
+.creci-naranja { border-color: var(--vol-naranja); }
+.creci-rojo { border-color: var(--alerta-roja); }
+.creci-normal { border-color: var(--ink-soft); }
+
+.ck-amarillo, .ck-naranja, .ck-rojo, .ck-normal {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid;
+  background: var(--bg-panel);
+}
+.ck-amarillo { border-color: var(--alerta-amarilla); }
+.ck-naranja { border-color: var(--vol-naranja); }
+.ck-rojo { border-color: var(--alerta-roja); }
+.ck-normal { border-color: var(--ink-soft); }
+
 /* ── Volcanes: alerta técnica (SERNAGEOMIN RNVV) ─────────────── */
 
 /* Reset del ícono contenedor de Leaflet, igual que .stn-icon/.foco. */

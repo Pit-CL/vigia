@@ -64,7 +64,7 @@ Instalable, con tema automático claro/oscuro, filtro «Chile» / «cerca de tu 
 
 ## Capas del mapa
 
-Trece capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
+Catorce capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
 
 | Capa | Qué muestra |
 |---|---|
@@ -78,6 +78,7 @@ Trece capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
 | 🌋 Volcanes | Semáforo técnico de la RNVV (SERNAGEOMIN) |
 | 💨 Avisos Vigía | Avisos propios: viento, ráfagas, helada, lluvia, lluvia persistente, caída de presión, calor, ola de calor, ola de frío, nieve, nieve en cota baja, riesgo aluvional, tormenta eléctrica, UV, riesgo de incendio |
 | ⛰️ Remociones | Catastro histórico de remociones en masa (SENAPRED) |
+| 🌊 Ríos | Pronóstico de crecidas GloFAS/Copernicus (Open-Meteo Flood), 29 ríos — no oficial, no reemplaza a la DGA/SENAPRED |
 | 🌊 Costa | Marea, oleaje, temperatura del mar y aviso de marejadas (32 puntos) |
 | 🏃 Evacuación | Vías y zonas de inundación por tsunami, más rutas de evacuación volcánica |
 | 🚑 Emergencia | Centros de salud, bomberos, Carabineros y puntos de encuentro |
@@ -88,7 +89,7 @@ El botón **🇨🇱 Chile** encuadra el mapa al país completo; el mapa admite 
 
 1. **Verificación pública, no promesas.** Casi ninguna app de clima muestra cuánto se equivoca. Vigía archiva cada pronóstico y publica su error real por modelo y plazo.
 2. **Honestidad sísmica.** Los terremotos no se pueden predecir — ninguna app seria lo hace. Lo que sí se puede mostrar es estadística real (Omori para réplicas, PAGER para impacto estimado), siempre etiquetada como tal.
-3. **Honestidad de autoridad.** La marea que se ve es de un modelo global, no la tabla oficial del SHOA; los avisos propios (viento, ráfagas, helada, lluvia, lluvia persistente, presión, calor, olas de calor/frío, nieve, nieve en cota baja, aluvional, tormenta, UV, incendio, marejadas) no son un boletín oficial de la DMC o el SHOA; el PTWC no es la autoridad para Chile (lo es el SHOA/SNAM); el catastro de remociones es histórico, no un pronóstico. Cada capa deja explícito qué es y qué no es.
+3. **Honestidad de autoridad.** La marea que se ve es de un modelo global, no la tabla oficial del SHOA; los avisos propios (viento, ráfagas, helada, lluvia, lluvia persistente, presión, calor, olas de calor/frío, nieve, nieve en cota baja, aluvional, tormenta, UV, incendio, marejadas) no son un boletín oficial de la DMC o el SHOA; el PTWC no es la autoridad para Chile (lo es el SHOA/SNAM); el catastro de remociones es histórico, no un pronóstico; el pronóstico de crecidas es de un modelo global (GloFAS/Copernicus), no la autoridad para Chile (lo es la DGA/SENAPRED). Cada capa deja explícito qué es y qué no es.
 4. **Todo con fuentes oficiales citadas.** DMC, CSN, SENAPRED, SERNAGEOMIN, NASA, USGS, SHOA, PTWC — cada dato apunta a su origen y licencia (ver tabla abajo).
 5. **Cero costo de operación, cero dependencias oscuras.** Ingesta 100 % Python estándar, sin CDNs de terceros, CSP estricta.
 
