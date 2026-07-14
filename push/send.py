@@ -458,10 +458,12 @@ def _ensure_schema(con: sqlite3.Connection) -> None:
     con.commit()
 
 
-def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], titulo: str, body: str, url: str) -> set[str]:
+def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], titulo: str, body: str, url: str) -> tuple[set[str], set[str]]:
     """Envía a la lista de suscripciones ya filtrada para este evento.
-    Devuelve los endpoints que resultaron caducados (404/410) para que el
-    caller los descarte."""
+    Devuelve (caducados, fallidos): caducados son los endpoints 404/410 (la
+    sub ya se borró, no tiene sentido reintentar); fallidos son los que
+    tuvieron un error transitorio (red, 5xx, firma) y deben reintentarse en
+    el próximo ciclo de cron — el caller no debe marcarlos como enviados."""
     payload = json.dumps({"title": titulo, "body": body, "url": url})
     vapid_private_key = os.environ["VAPID_PRIVATE_KEY"]
     # docker-compose.yml define VAPID_CONTACT: ${VAPID_CONTACT:-}, así que si no
@@ -470,6 +472,7 @@ def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], ti
     # solo lo hace si la key falta. Con "or" se cubre además ausencia real.
     contacto = os.environ.get("VAPID_CONTACT") or "rafaelfariaspoblete@gmail.com"
     caducados = set()
+    fallidos = set()
 
     for endpoint, p256dh, auth in subs:
         sub_info = {"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}}
@@ -488,11 +491,13 @@ def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], ti
                 caducados.add(endpoint)
                 print(f"[push] suscripción caducada ({status}), eliminada: {endpoint[:48]}...")
             else:
+                fallidos.add(endpoint)
                 print(f"[push] error enviando a {endpoint[:48]}...: {exc}")
         except Exception as exc:  # red/DNS/cifrado: nunca debe tumbar el cron
+            fallidos.add(endpoint)
             print(f"[push] error inesperado enviando a {endpoint[:48]}...: {exc}")
 
-    return caducados
+    return caducados, fallidos
 
 
 def seleccionar(eventos: list[dict], subs: list[tuple], ya_enviados: set[tuple[str, str]]) -> list[tuple[dict, list[tuple[str, str, str]]]]:
@@ -541,8 +546,10 @@ def main() -> None:
         return
 
     for ev, destinatarios in seleccionar(eventos, subs, ya_enviados):
-        caducados = _enviar_evento(con, destinatarios, ev["titulo"], ev["body"], ev["url"])
+        caducados, fallidos = _enviar_evento(con, destinatarios, ev["titulo"], ev["body"], ev["url"])
         for endpoint, _, _ in destinatarios:
+            if endpoint in fallidos:
+                continue  # error transitorio: no se marca, el próximo ciclo de cron reintenta
             con.execute(
                 "INSERT OR IGNORE INTO sent(event_id, endpoint, sent_at) VALUES (?, ?, datetime('now'))",
                 (ev["id"], endpoint),
