@@ -2113,7 +2113,7 @@ function paintAlertas(group) {
     const icon = L.divIcon({
       className: 'stn-icon',
       html: `<span class="alerta alerta-${peor.nivel}">${emojiEvento(peor.evento)}</span>`,
-      iconSize: [30, 30], iconAnchor: [15, 15],
+      iconSize: [38, 38], iconAnchor: [19, 19],
     });
     const marker = L.marker([centroide.lat, centroide.lon], { icon, title: centroide.n }).addTo(group);
     const box = document.createElement('div');
@@ -2127,7 +2127,7 @@ function paintAlertas(group) {
     const icon = L.divIcon({
       className: 'stn-icon',
       html: `<span class="alerta alerta-${a.nivel}">${emojiEvento(a.evento)}</span>`,
-      iconSize: [30, 30], iconAnchor: [15, 15],
+      iconSize: [38, 38], iconAnchor: [19, 19],
     });
     const marker = L.marker([a.lat, a.lon], { icon, title: a.evento }).addTo(group);
     const comunas = a.comunas.slice(0, 5).join(', ') + (a.comunas.length > 5 ? ` y ${a.comunas.length - 5} más` : '');
@@ -2206,7 +2206,7 @@ function paintAvisos(group) {
     const icon = L.divIcon({
       className: 'stn-icon',
       html: `<span class="alerta aviso-${a.nivel}">${AVISO_EMOJI[a.tipo] || '⚠️'}</span>`,
-      iconSize: [30, 30], iconAnchor: [15, 15],
+      iconSize: [38, 38], iconAnchor: [19, 19],
     });
     const marker = L.marker([a.lat, a.lon], { icon, title: a.nombre }).addTo(group);
     const box = document.createElement('div');
@@ -2599,7 +2599,7 @@ function paintCrecidas(group) {
     const icon = L.divIcon({
       className: 'stn-icon',
       html: `<span class="alerta ${clase}">🌊</span>`,
-      iconSize: [30, 30], iconAnchor: [15, 15],
+      iconSize: [38, 38], iconAnchor: [19, 19],
     });
     const marker = L.marker([p.lat, p.lon], { icon, title: `${p.rio} — ${p.comuna}` }).addTo(group);
     const box = document.createElement('div');
