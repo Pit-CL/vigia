@@ -5,21 +5,33 @@ El PTWC no es la autoridad oficial para Chile (lo es el SHOA/SNAM), pero es la
 única fuente pública en tiempo real de boletines de tsunami del Pacífico.
 Por eso el cruce con sismos propios: ante un sismo mayor y costero, Vigía
 recomienda evacuar sin esperar el boletín (que puede tardar minutos u horas
-en publicarse o nunca mencionar Chile explícitamente).
+en publicarse o nunca mencionar Chile explícitamente) — y ese cruce se
+evalúa SIEMPRE, incluso si el PTWC no responde.
 
 Sin tabla propia (como avisos.py/marea.py): se recalcula entero en cada
-corrida. Si la red falla, se propaga la excepción y el tsunami.json anterior
-queda vigente — nunca se escribe un JSON corrupto o vacío.
+corrida. Si el fetch o el parseo del PTWC fallan, la excepción NO se
+propaga: se sigue con `cap=None` (equivalente a "sin amenaza vigente") y el
+payload queda con `"ptwc": "sin_datos"` (vs `"ok"`) para que el frontend
+pueda distinguir "no hay amenaza" de "no sabemos" — pero tsunami.json se
+reescribe igual, porque el respaldo sísmico de abajo es justo para ese
+escenario.
+
+Semántica de `cap_url is None` (verificado con curl real a PHEBAtom.xml,
+2026-07-14): el feed del PTWC siempre trae la entry del último evento
+registrado — aunque haya expirado hace días y ya no sea una amenaza vigente
+(eso lo maneja `_clasificar` con el chequeo de `expires`, y cuenta como
+lectura exitosa: `"ptwc": "ok"`). Que la entry no traiga link a CAP es
+entonces un feed malformado/excepcional, no "sin boletines recientes" —
+por eso también cuenta como `"ptwc": "sin_datos"`.
 """
 import json
 import sqlite3
-import urllib.request
 from datetime import datetime, timedelta, timezone
 from xml.etree import ElementTree as ET
 
 import config
+import sources
 
-UA = "vigia-ingesta/1.0 (proyecto open source; vigia.cavara.cl)"
 API_ATOM = "https://www.tsunami.gov/events/xml/PHEBAtom.xml"
 
 VENTANA_SISMO_H = 1
@@ -51,9 +63,10 @@ def _findtext(el, name) -> str | None:
 
 
 def _fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=30) as res:
-        return res.read().decode("utf-8", errors="replace")
+    """Reintenta 2× con backoff corto (mismo patrón que sources.http_get_json);
+    tras agotar los intentos levanta RuntimeError con la URL sin query string."""
+    text, _ = sources.http_get_text(url)
+    return text
 
 
 def _parse_dt(s: str | None) -> datetime | None:
@@ -103,11 +116,12 @@ def _clasificar(cap: dict, ahora) -> tuple[str, str, bool]:
         return "sin_amenaza", "Sin amenaza de tsunami vigente para Chile", False
 
     evento = cap.get("event") or ""
-    area_texto = f"{evento} {cap.get('areaDesc') or ''}".upper()
-    es_alerta = any(k in evento for k in ("Warning", "Watch", "Advisory"))
+    evento_upper = evento.upper()
+    area_texto = f"{evento_upper} {(cap.get('areaDesc') or '').upper()}"
+    es_alerta = any(k in evento_upper for k in ("WARNING", "WATCH", "ADVISORY"))
     if es_alerta and ("CHILE" in area_texto or cap.get("severity") in ("Extreme", "Severe")):
         return "amenaza", cap.get("headline") or evento, True
-    if "Information" in evento:
+    if "INFORMATION" in evento_upper:
         mensaje = f"Último boletín del PTWC ({evento}): no es una amenaza para Chile"
         return "informativo", mensaje, True
     return "sin_amenaza", "Sin amenaza de tsunami vigente para Chile", True
@@ -129,14 +143,23 @@ def _hay_sismo_mayor_costero(con, ahora) -> bool:
 
 def update(con, fetched_at: str) -> int:
     ahora = datetime.now(timezone.utc)
-    atom_xml = _fetch(API_ATOM)
-    cap_url = _ultima_cap_url(atom_xml)
 
-    if cap_url is None:
-        cap, estado, mensaje, vigente = None, "sin_amenaza", "Sin amenaza de tsunami vigente para Chile", False
-    else:
-        cap = _parse_cap(_fetch(cap_url))
-        estado, mensaje, vigente = _clasificar(cap, ahora)
+    cap = None
+    ptwc_ok = False
+    estado, mensaje, vigente = "sin_amenaza", "Sin amenaza de tsunami vigente para Chile", False
+    try:
+        atom_xml = _fetch(API_ATOM)
+        cap_url = _ultima_cap_url(atom_xml)
+        if cap_url is not None:
+            cap = _parse_cap(_fetch(cap_url))
+            estado, mensaje, vigente = _clasificar(cap, ahora)
+            ptwc_ok = True
+        # cap_url is None con fetch exitoso: feed malformado (ver semántica
+        # documentada arriba) — no se sube ptwc_ok, cae a "sin_datos".
+    except (RuntimeError, ET.ParseError):
+        # PTWC caído o feed corrupto: no propagamos la excepción. El cruce
+        # sísmico de abajo se evalúa igual — es el respaldo para este caso.
+        pass
 
     if estado != "amenaza" and _hay_sismo_mayor_costero(con, ahora):
         estado, mensaje = "precaucion", MSG_PRECAUCION
@@ -154,6 +177,7 @@ def update(con, fetched_at: str) -> int:
         "estado": estado,
         "mensaje": mensaje,
         "boletin": boletin,
+        "ptwc": "ok" if ptwc_ok else "sin_datos",
         "fuente": "PTWC (NOAA) + catálogo sísmico propio",
         "nota": ("La autoridad oficial de alerta de tsunami en Chile es el SHOA (SNAM);"
                  " ante un sismo fuerte en la costa no esperes confirmación: evacúa"),
