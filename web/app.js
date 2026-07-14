@@ -2788,6 +2788,33 @@ function pintarMiUbicacion(lat, lon, accuracy) {
   ]).addTo(map);
 }
 
+// Pide la ubicación con reintento, compartido por todo gesto que la necesite
+// (centrar el mapa, punto de encuentro más cercano). Primer intento por red
+// (rápido pero en desktop 10 s se quedaba corto y descartaba posiciones
+// cacheadas útiles): 20 s de plazo y acepta una posición de hasta 5 min de
+// antigüedad, de sobra para centrar un mapa. Si falla por falta de señal o
+// timeout, reintenta UNA vez forzando el GPS (enableHighAccuracy) — en móvil
+// eso suele resolver donde la ubicación por red falla, y en desktop no
+// empeora nada. `msg` es el contenedor de estado a actualizar durante el
+// reintento para que el usuario no crea que el botón murió.
+function obtenerPosicion(msg, onOk, onErr) {
+  const intentar = (opciones, permiteReintento) => {
+    navigator.geolocation.getCurrentPosition(
+      onOk,
+      (err) => {
+        if (permiteReintento && (err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE)) {
+          if (msg) msg.textContent = 'Buscando tu ubicación… reintentando con GPS';
+          intentar({ enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }, false);
+          return;
+        }
+        onErr(err);
+      },
+      opciones,
+    );
+  };
+  intentar({ enableHighAccuracy: false, timeout: 20000, maximumAge: 300000 }, true);
+}
+
 function centrarEnMiUbicacion() {
   const msg = document.getElementById('map-locate-msg');
   if (!ensureMap() || !msg) return;
@@ -2798,7 +2825,8 @@ function centrarEnMiUbicacion() {
   }
   msg.hidden = false;
   msg.textContent = 'Buscando tu ubicación…';
-  navigator.geolocation.getCurrentPosition(
+  obtenerPosicion(
+    msg,
     (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
       msg.hidden = true;
@@ -2806,7 +2834,6 @@ function centrarEnMiUbicacion() {
       pintarMiUbicacion(latitude, longitude, accuracy);
     },
     (err) => mostrarErrorGeolocation(err, msg),
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
   );
 }
 
@@ -3266,7 +3293,8 @@ function setupPuntoCercano() {
       return;
     }
     out.textContent = 'Buscando tu ubicación…';
-    navigator.geolocation.getCurrentPosition(
+    obtenerPosicion(
+      out,
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         if (!emergenciaData) {
@@ -3308,7 +3336,6 @@ function setupPuntoCercano() {
         out.appendChild(verBtn);
       },
       (err) => mostrarErrorGeolocation(err, out),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 },
     );
   });
 }
