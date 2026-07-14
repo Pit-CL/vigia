@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=76">
+  <link rel="stylesheet" href="app.css?v=77">
 </head>
 <body>
 
@@ -174,31 +174,40 @@
       <span id="map-meta" class="panel-meta">todo Chile</span>
       <button class="info-btn" data-info="mapa" aria-label="¿De dónde salen estas mediciones?">?</button>
     </header>
-    <div class="map-modes" role="group" aria-label="Capas del mapa">
-      <button id="basemap-toggle" class="map-mode" aria-pressed="false" title="Cambiar el estilo del mapa base (no confundir con la capa 🛰️ Satélite)">🗺️ Mapa: Calles</button>
-      <span class="map-sep" aria-hidden="true"></span>
-      <button class="map-mode" data-capa="temp" aria-pressed="true">🌡️ Temperatura</button>
-      <button class="map-mode" data-capa="aire" aria-pressed="false">🌫️ Aire</button>
-      <button class="map-mode" data-capa="precipitacion" aria-pressed="false">💧 Lluvia/nieve</button>
-      <span class="map-sep" aria-hidden="true"></span>
-      <button class="map-mode" data-capa="satelite" aria-pressed="false">🛰️ Satélite</button>
-      <button class="map-mode" data-capa="sismos" aria-pressed="false">〰️ Sismos</button>
-      <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
-      <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
-      <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
-      <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos Vigía</button>
-      <button class="map-mode" data-capa="remociones" aria-pressed="false">⛰️ Remociones</button>
-      <button class="map-mode" data-capa="crecidas" aria-pressed="false">🌊 Ríos</button>
-      <button class="map-mode" data-capa="cortes" aria-pressed="false">⚡ Cortes</button>
-      <button class="map-mode" data-capa="combustible" aria-pressed="false">⛽ Combustible</button>
-      <button class="map-mode" data-capa="marea" aria-pressed="false">🌊 Costa</button>
-      <button class="map-mode" data-capa="evacuacion" aria-pressed="false">🏃 Evacuación</button>
-      <button class="map-mode" data-capa="farmacias" aria-pressed="false">💊 Farmacias</button>
-      <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
-      <span class="map-sep" aria-hidden="true"></span>
-      <button class="map-mode map-chile">🇨🇱 Chile</button>
-      <button id="map-locate-btn" class="map-mode" title="Centrar el mapa en tu ubicación">📍 Centrar</button>
-      <button id="map-fullscreen-btn" class="map-mode" aria-label="Mapa a pantalla completa" aria-pressed="false">⛶</button>
+    <div class="map-modes">
+      <div class="map-group" role="group" aria-label="Vista">
+        <span class="map-group-label">Vista</span>
+        <button id="basemap-toggle" class="map-mode" aria-pressed="false" title="Cambiar el estilo del mapa base (no confundir con la capa 🛰️ Satélite)">🗺️ Mapa: Calles</button>
+        <button class="map-mode map-chile">🇨🇱 Chile</button>
+        <button id="map-locate-btn" class="map-mode" title="Centrar el mapa en tu ubicación">📍 Centrar</button>
+        <button id="map-fullscreen-btn" class="map-mode" aria-label="Mapa a pantalla completa" aria-pressed="false">⛶</button>
+      </div>
+      <div class="map-group" role="group" aria-label="Clima">
+        <span class="map-group-label">Clima</span>
+        <button class="map-mode" data-capa="temp" aria-pressed="true">🌡️ Temperatura</button>
+        <button class="map-mode" data-capa="aire" aria-pressed="false">🌫️ Aire</button>
+        <button class="map-mode" data-capa="precipitacion" aria-pressed="false">💧 Lluvia/nieve</button>
+        <button class="map-mode" data-capa="satelite" aria-pressed="false">🛰️ Satélite</button>
+        <button class="map-mode" data-capa="marea" aria-pressed="false">🌅 Costa</button>
+        <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos Vigía</button>
+      </div>
+      <div class="map-group" role="group" aria-label="Riesgos">
+        <span class="map-group-label">Riesgos</span>
+        <button class="map-mode" data-capa="sismos" aria-pressed="false">〰️ Sismos</button>
+        <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
+        <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
+        <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
+        <button class="map-mode" data-capa="remociones" aria-pressed="false">⛰️ Remociones</button>
+        <button class="map-mode" data-capa="crecidas" aria-pressed="false">🌊 Ríos</button>
+      </div>
+      <div class="map-group" role="group" aria-label="Servicios y emergencia">
+        <span class="map-group-label">Servicios y emergencia</span>
+        <button class="map-mode" data-capa="cortes" aria-pressed="false">⚡ Cortes</button>
+        <button class="map-mode" data-capa="combustible" aria-pressed="false">⛽ Combustible</button>
+        <button class="map-mode" data-capa="farmacias" aria-pressed="false">💊 Farmacias</button>
+        <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
+        <button class="map-mode" data-capa="evacuacion" aria-pressed="false">🏃 Evacuación</button>
+      </div>
     </div>
     <div id="satelite-control" class="satelite-control" hidden>
       <button id="satelite-play" class="map-mode" aria-pressed="false" title="Reproducir/pausar últimos frames">▶</button>
@@ -419,6 +428,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=76"></script>
+<script src="app.js?v=77"></script>
 </body>
 </html>
