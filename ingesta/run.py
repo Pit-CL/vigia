@@ -205,7 +205,7 @@ def main() -> int:
     # propio ciclo horario y las corridas se apilan. estaciones.json sí se
     # refresca en cada corrida de observaciones (es barato: última obs).
     if do_forecasts:
-        ok &= step(con, run_at, "verificacion", lambda: verify.write(con))
+        ok &= step(con, run_at, "verificacion", lambda: verify.write(con, run_at))
         ok &= step(con, run_at, "calibracion", lambda: calibrate.update(con))
         ok &= step(con, run_at, "bias_json", lambda: calibrate.export_json(con))
     if do_obs or do_forecasts:
