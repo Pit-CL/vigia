@@ -115,6 +115,10 @@ TSUNAMI_AREAS_PATH = Path(os.environ.get("CLIMA_TSUNAMI_AREAS", ROOT / "web" / "
 MAREA_PATH = Path(os.environ.get("CLIMA_MAREA", ROOT / "web" / "marea.json"))
 TSUNAMI_PATH = Path(os.environ.get("CLIMA_TSUNAMI", ROOT / "web" / "tsunami.json"))
 
+# Pronóstico de crecidas de ríos (GloFAS/Copernicus vía Open-Meteo Flood API).
+# Puntos curados en rios_cl.py; umbrales propios en la tabla crecidas_umbral.
+CRECIDAS_PATH = Path(os.environ.get("CLIMA_CRECIDAS", ROOT / "web" / "crecidas.json"))
+
 # ── Satélite (omen): fuentes que bloquean IPs de datacenter ─────
 # INCOMING_DIR es donde satelite/fetch_cl.py sube los JSON crudos por scp
 # (sec.json, farmacias_raw.json); ingesta/cortes.py solo los lee, nunca

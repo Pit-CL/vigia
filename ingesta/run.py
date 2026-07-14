@@ -15,6 +15,7 @@ import avisos
 import combustible
 import config
 import cortes
+import crecidas
 import db
 import emergencia
 import farmacias
@@ -121,6 +122,8 @@ def main() -> int:
     ap.add_argument("--volcanes", action="store_true", help="alerta técnica volcánica (SERNAGEOMIN RNVV)")
     ap.add_argument("--marea", action="store_true", help="marea, oleaje y temperatura del mar (Open-Meteo Marine)")
     ap.add_argument("--tsunami", action="store_true", help="estado de amenaza de tsunami (PTWC + catálogo sísmico)")
+    ap.add_argument("--crecidas", action="store_true",
+                     help="pronóstico de crecidas de ríos (GloFAS/Copernicus vía Open-Meteo Flood API)")
     ap.add_argument("--cortes", action="store_true",
                      help="cortes de luz SEC (best effort, vía satélite en omen — solo lee incoming/, sin red)")
     ap.add_argument("--farmacias", action="store_true",
@@ -128,7 +131,7 @@ def main() -> int:
     ap.add_argument("--combustible", action="store_true",
                      help="precios de bencina en línea (CNE, dormida sin CNE_EMAIL/CNE_PASSWORD — accesible directo desde el VPS)")
     ap.add_argument("--hazards", action="store_true",
-                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + cortes + farmacias + combustible)")
+                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + crecidas + cortes + farmacias + combustible)")
     ap.add_argument("--emergencia", action="store_true",
                      help="infraestructura de emergencia comunitaria (SENAPRED, cuasi-estático semanal)")
     ap.add_argument("--remociones", action="store_true",
@@ -140,13 +143,14 @@ def main() -> int:
         args.forecasts or args.all or args.sismos or args.incendios
         or args.alertas or args.volcanes or args.hazards or args.emergencia
         or args.remociones or args.avisos or args.marea or args.tsunami
-        or args.cortes or args.farmacias or args.combustible)
+        or args.cortes or args.farmacias or args.combustible or args.crecidas)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
     do_volcanes = args.volcanes or args.hazards or args.all
     do_marea = args.marea or args.all
     do_tsunami = args.tsunami or args.hazards or args.all
+    do_crecidas = args.crecidas or args.hazards or args.all
     do_cortes = args.cortes or args.hazards or args.all
     do_farmacias = args.farmacias or args.hazards or args.all
     do_combustible = args.combustible or args.hazards or args.all
@@ -184,6 +188,8 @@ def main() -> int:
         # Depende de la tabla `quakes` (sismos.py): si corre solo, sin
         # --sismos en esta misma invocación, usa la tabla de una corrida previa.
         ok &= step(con, run_at, "tsunami", lambda: tsunami.update(con, run_at))
+    if do_crecidas:
+        ok &= step(con, run_at, "crecidas", lambda: crecidas.update(con, run_at))
     if do_cortes:
         ok &= step(con, run_at, "cortes", lambda: cortes.update(con, run_at))
     if do_farmacias:

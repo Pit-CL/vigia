@@ -49,6 +49,7 @@ Vigía es una PWA gratuita que junta, en un solo mapa de Chile, el pronóstico d
 - **Marea, oleaje y temperatura del mar** en 32 puntos de la costa chilena (Open-Meteo Marine), más **aviso de marejadas** propio cuando el modelo proyecta olas de 3,5 m o más — dejando claro que la marea de modelo no reemplaza las tablas oficiales del **SHOA** ni las marejadas oficiales que declara el SHOA/Armada.
 - **Catastro de remociones en masa**: 1.218 eventos históricos de SENAPRED (aluviones, deslizamientos, derrumbes) — es un registro histórico, no un pronóstico.
 - **Acumulados de lluvia y nieve** a 48 horas.
+- **Pronóstico de crecidas de ríos** en 29 puntos curados (GloFAS/Copernicus vía Open-Meteo Flood API), con nivel amarillo/naranja/rojo según el caudal del pronóstico a 7 días frente a umbrales propios de período de retorno (percentiles de las máximas anuales del reanálisis histórico) — modelo global ~5 km, ciego para esteros y ríos chicos: la autoridad oficial es la **DGA** (Dirección General de Aguas) y **SENAPRED**, no este pronóstico.
 
 ### 🚑 Emergencia comunitaria
 
@@ -135,6 +136,7 @@ Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingest
 | Catastro de remociones en masa (SENAPRED, ArcGIS) | 1.218 eventos históricos (aluviones, deslizamientos, derrumbes) | Datos públicos del Estado de Chile |
 | [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api) | Marea, oleaje y temperatura del mar en 32 puntos de la costa | CC BY 4.0 |
 | [PTWC](https://www.tsunami.gov/) (NOAA) | Boletines de amenaza de tsunami para el Pacífico | Dominio público |
+| [GloFAS](https://global-flood.emergency.copernicus.eu/) (Copernicus) vía [Open-Meteo Flood API](https://open-meteo.com/en/docs/flood-api) | Pronóstico de caudal de ríos en 29 puntos curados | CC BY 4.0 |
 | [INE](https://www.ine.gob.cl/) (censo) | Comunas y su geolocalización para el buscador | Datos públicos del Estado de Chile |
 | [NASA GIBS](https://www.earthdata.nasa.gov/data/tools/gibs) (GOES-East GeoColor, NOAA) | Imagen satelital de nubes y tormentas sobre Chile | Dominio público |
 

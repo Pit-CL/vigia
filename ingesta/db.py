@@ -67,6 +67,18 @@ CREATE INDEX IF NOT EXISTS idx_forecasts_lookup
   ON forecasts(station, variable, valid_time);
 CREATE INDEX IF NOT EXISTS idx_observations_lookup
   ON observations(station, variable, obs_time);
+
+-- Umbrales de crecida por punto de río (ver ingesta/crecidas.py), calculados
+-- una sola vez desde el reanálisis histórico GloFAS (bootstrap). Tabla propia:
+-- estos puntos NO son estaciones (regla 6 de CLAUDE.md), no hay ground truth.
+CREATE TABLE IF NOT EXISTS crecidas_umbral (
+  punto   TEXT PRIMARY KEY,
+  rp2     REAL NOT NULL,   -- período de retorno ~2 años (mediana de máximas anuales)
+  rp5     REAL NOT NULL,   -- ~5 años (percentil 80)
+  rp20    REAL NOT NULL,   -- ~20 años (percentil 95)
+  n_anios INTEGER NOT NULL,
+  updated TEXT NOT NULL
+);
 """
 
 
