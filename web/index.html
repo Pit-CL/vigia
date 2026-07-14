@@ -195,12 +195,14 @@
       <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
       <span class="map-sep" aria-hidden="true"></span>
       <button class="map-mode map-chile">🇨🇱 Chile</button>
+      <button id="map-locate-btn" class="map-mode" title="Centrar el mapa en tu ubicación">📍 Centrar</button>
       <button id="map-fullscreen-btn" class="map-mode" aria-label="Mapa a pantalla completa" aria-pressed="false">⛶</button>
     </div>
     <div id="satelite-control" class="satelite-control" hidden>
       <button id="satelite-play" class="map-mode" aria-pressed="false" title="Reproducir/pausar últimos frames">▶</button>
       <span id="satelite-hora" class="panel-meta">—</span>
     </div>
+    <div id="map-locate-msg" class="panel-note" hidden></div>
     <div id="map" aria-label="Mapa de estaciones con observaciones reales">
       <div class="map-rosa" aria-hidden="true"><span class="rosa-n">N</span><span class="rosa-e">E</span><span class="rosa-s">S</span><span class="rosa-o">O</span><span class="rosa-aguja"></span></div>
     </div>
