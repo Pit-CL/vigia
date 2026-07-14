@@ -131,7 +131,8 @@ def _eventos(metric_serie: list, spec: dict) -> list:
     return eventos
 
 
-def _evaluar_tipo(con, tipo: str, spec: dict, ahora: datetime) -> dict:
+def _evaluar_tipo(con, tipo: str, spec: dict, ahora: datetime,
+                  cobertura_desde: datetime | None) -> dict:
     desde_dt = ahora - timedelta(days=WINDOW_DIAS)
     margen_h = spec.get("ventana_h", 0) + TOLERANCIA_H
     desde_obs = (desde_dt - timedelta(hours=margen_h)).isoformat()
@@ -177,7 +178,14 @@ def _evaluar_tipo(con, tipo: str, spec: dict, ahora: datetime) -> dict:
             else:
                 falsas += 1
 
-        misses += sum(1 for c in cubierto if not c)
+        # Un exceedance observado solo cuenta como miss si OCURRIÓ cuando ya
+        # existía cobertura de avisos (la tabla avisos_emitidos partió el
+        # 14-07-2026): cruces anteriores no podían tener aviso y contarlos
+        # inflaría los misses con un POD=0 falso durante los primeros 14 días.
+        misses += sum(
+            1 for (ini, _fin), c in zip(eventos, cubierto)
+            if not c and (cobertura_desde is not None and ini >= cobertura_desde)
+        )
 
     n = hits + falsas + misses
     pod = round(hits / (hits + misses), 3) if (hits + misses) else None
@@ -192,11 +200,17 @@ def _evaluar_tipo(con, tipo: str, spec: dict, ahora: datetime) -> dict:
 
 def compute(con, ahora: datetime | None = None) -> dict:
     ahora = ahora or datetime.now(timezone.utc).replace(tzinfo=None)
-    tipos = {tipo: _evaluar_tipo(con, tipo, spec, ahora) for tipo, spec in TIPOS_VERIFICABLES.items()}
+    # Inicio de la cobertura del histórico de avisos: antes de esto no puede
+    # haber misses (no existía registro contra el cual fallar).
+    row = con.execute("SELECT MIN(run_ts) FROM avisos_emitidos").fetchone()
+    cobertura_desde = _dt(row[0][:16]) if row and row[0] else None
+    tipos = {tipo: _evaluar_tipo(con, tipo, spec, ahora, cobertura_desde)
+             for tipo, spec in TIPOS_VERIFICABLES.items()}
     n_avisos_evaluados = sum(r["hits"] + r["falsas"] for r in tipos.values())
     return {
         "ventana_dias": WINDOW_DIAS,
         "tolerancia_horas": TOLERANCIA_H,
+        "cobertura_desde": row[0] if row else None,
         "n_avisos_evaluados": n_avisos_evaluados,
         "nota": "ola_calor/ola_frio verifican el cruce puntual del umbral amarillo,"
                 " sin exigir el sostenido de 3 días que exige la emisión (simplificación v1)",
