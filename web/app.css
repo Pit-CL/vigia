@@ -1459,13 +1459,14 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--bg-panel);
   border: 3px solid;
   box-shadow: var(--shadow-1);
-  font-size: 15px;
+  font-size: 19px;
+  line-height: 1;
 }
 .alerta-roja { border-color: var(--alerta-roja); }
 .alerta-amarilla { border-color: var(--alerta-amarilla); }
