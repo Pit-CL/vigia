@@ -7,6 +7,15 @@
   <meta name="description" content="Pronóstico del tiempo multi-modelo verificable y centro de riesgos naturales de Chile: sismos, incendios, alertas oficiales y emergencias. Datos de ECMWF, GFS, ICON, GEM, ARPEGE y AIFS, observaciones oficiales en vivo y verificación pública de aciertos.">
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f2ea">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b111d">
+  <!-- Vista previa al compartir el link (Open Graph + Twitter Card) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Vigía">
+  <meta property="og:title" content="Vigía — clima y riesgos naturales · Chile">
+  <meta property="og:description" content="Pronóstico multi-modelo verificable y centro de riesgos naturales de Chile: sismos, incendios, alertas oficiales, tsunami y emergencias, con verificación pública de aciertos.">
+  <meta property="og:url" content="https://vigia.cavara.cl/">
+  <meta property="og:image" content="https://vigia.cavara.cl/icons/icon-512.png">
+  <meta property="og:locale" content="es_CL">
+  <meta name="twitter:card" content="summary">
   <title>Vigía — clima y riesgos naturales · Chile</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
@@ -113,7 +122,7 @@
       <button class="riesgo-tile" data-capa="volcanes" hidden><span class="rt-emoji">🌋</span><b id="rt-volcanes">–</b><small>volcanes en alerta</small></button>
       <button class="riesgo-tile" data-capa="avisos" hidden><span class="rt-emoji">💨</span><b id="rt-avisos">–</b><small>avisos Vigía</small></button>
       <button class="riesgo-tile" data-capa="cortes" hidden><span class="rt-emoji">⚡</span><b id="rt-cortes">–</b><small>comunas con cortes SEC</small></button>
-      <button class="riesgo-tile" data-capa="crecidas" hidden><span class="rt-emoji">🌊</span><b id="rt-crecidas">–</b><small>ríos en crecida</small></button>
+      <button class="riesgo-tile" data-capa="crecidas" hidden><span class="rt-emoji">🏞️</span><b id="rt-crecidas">–</b><small>ríos en crecida</small></button>
     </div>
     <ol id="riesgo-eventos" class="riesgo-eventos"></ol>
     <div class="riesgo-acciones">
@@ -180,6 +189,7 @@
         <button id="basemap-toggle" class="map-mode" aria-pressed="false" title="Cambiar el estilo del mapa base (no confundir con la capa 🛰️ Satélite)">🗺️ Mapa: Calles</button>
         <button class="map-mode map-chile">🇨🇱 Chile</button>
         <button id="map-locate-btn" class="map-mode" title="Centrar el mapa en tu ubicación">📍 Centrar</button>
+        <button class="map-mode" data-capa="satelite" aria-pressed="false" title="Imagen satelital GOES-East sobre el mapa">🛰️ Satélite</button>
         <button id="map-fullscreen-btn" class="map-mode" aria-label="Mapa a pantalla completa" aria-pressed="false">⛶</button>
       </div>
       <div class="map-group" role="group" aria-label="Clima">
@@ -187,18 +197,17 @@
         <button class="map-mode" data-capa="temp" aria-pressed="true">🌡️ Temperatura</button>
         <button class="map-mode" data-capa="aire" aria-pressed="false">🌫️ Aire</button>
         <button class="map-mode" data-capa="precipitacion" aria-pressed="false">💧 Lluvia/nieve</button>
-        <button class="map-mode" data-capa="satelite" aria-pressed="false">🛰️ Satélite</button>
-        <button class="map-mode" data-capa="marea" aria-pressed="false">🌅 Costa</button>
-        <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos Vigía</button>
+        <button class="map-mode" data-capa="marea" aria-pressed="false">🌊 Marea/oleaje</button>
       </div>
       <div class="map-group" role="group" aria-label="Riesgos">
         <span class="map-group-label">Riesgos</span>
         <button class="map-mode" data-capa="sismos" aria-pressed="false">〰️ Sismos</button>
         <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
         <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
+        <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos Vigía</button>
         <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
         <button class="map-mode" data-capa="remociones" aria-pressed="false">⛰️ Remociones</button>
-        <button class="map-mode" data-capa="crecidas" aria-pressed="false">🌊 Ríos</button>
+        <button class="map-mode" data-capa="crecidas" aria-pressed="false">🏞️ Ríos</button>
       </div>
       <div class="map-group" role="group" aria-label="Servicios y emergencia">
         <span class="map-group-label">Servicios y emergencia</span>
