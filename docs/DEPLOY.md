@@ -38,7 +38,7 @@ Cloudflare aporta el TLS y la CDN del borde; el origen nunca queda expuesto dire
 
 **Dominio canónico:** `vigia.cavara.cl`. El dominio anterior, `clima.cavara.cl`, sigue activo en paralelo (mismo ingress, mismo servicio) para no romper las PWAs ya instaladas — un redirect 301 no las actualiza porque el service worker y la CSP `connect-src 'self'` no siguen redirects entre orígenes. Su retiro queda para más adelante.
 
-**Servidor:** repo y prod viven en la misma máquina (Hostinger, São Paulo, `/opt/vigia`); el deploy es local con `bash deploy/deploy.sh`, sin ssh de por medio. nginx escucha en `127.0.0.1:${VIGIA_HTTP_PORT:-8100}` — el puerto 8100 por defecto está libre en este VPS. El Cloudflare Tunnel de este VPS es compartido con Iktus: el mismo túnel enruta `vigia.cavara.cl`/`clima.cavara.cl` (a `http://localhost:8100`) además de `erpiktus.cavara.cl`, `iktus.cavara.cl` e `iktus2.cavara.cl`; su configuración vive en `/etc/cloudflared/config.yml` de este VPS, no en este repo. Reiniciar `cloudflared` corta esos sitios de Iktus por unos segundos — evita hacerlo salvo que sea necesario.
+**Servidor:** repo y prod viven en la misma máquina (`/opt/vigia`); el deploy es local con `bash deploy/deploy.sh`, sin ssh de por medio. nginx escucha en `127.0.0.1:${VIGIA_HTTP_PORT:-8100}` — el puerto 8100 por defecto está libre en este VPS. El Cloudflare Tunnel de este VPS es compartido: el mismo túnel enruta `vigia.cavara.cl`/`clima.cavara.cl` (a `http://localhost:8100`) además de otros sitios del mismo VPS; su configuración vive en `/etc/cloudflared/config.yml`, no en este repo. Reiniciar `cloudflared` corta esos otros sitios por unos segundos — evita hacerlo salvo que sea necesario.
 
 **Backup:** `deploy/backup.sh` corre por cron del host (domingo 04:30) y respalda `clima.db` (hot backup vía `sqlite3` stdlib, con `integrity_check`), `.env` y `watchdog_state.json` en `/home/rafael/Backups/vigia/vigia-YYYYMMDD.tar.gz` (chmod 600, conserva los últimos 8). Avisa a Slack si falla, cuando `SLACK_WEBHOOK_URL` está configurado.
 
@@ -71,7 +71,7 @@ Definición en [`deploy/crontab`](../deploy/crontab) y [`push/crontab`](../push/
 ## Satélite omen (fuentes que bloquean IPs de datacenter)
 
 SEC (cortes de luz) y MINSAL (farmacias de turno) responden solo desde IPs
-residenciales chilenas: fallan desde este VPS (Hostinger, datacenter) y
+residenciales chilenas: fallan desde este VPS (IP de datacenter) y
 funcionan desde `omen` (verificado). `ingesta/cortes.py` en el VPS **no
 fetchea la red**: solo lee `data/incoming/sec.json`, subido por scp desde
 `satelite/fetch_cl.py` corriendo en cron en omen. Instalación completa,

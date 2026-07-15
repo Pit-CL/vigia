@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Copia offsite del backup semanal de Vigía a Google Drive.
 
-Sube a la carpeta "vigia-backups" del Drive de hola@rollitos.cl (misma
-cuenta donde ya suben los backups del ERP-Rollitos; Rafael autorizó
-explícitamente reutilizar ese OAuth en vez de crear uno nuevo para Vigía).
+Sube a la carpeta "vigia-backups" del Drive de la cuenta configurada en el
+`.env` de prod (se reutiliza un OAuth ya existente, autorizado explícitamente,
+en vez de crear uno nuevo para Vigía).
 
 Solo librería estándar (regla del repo, ver CLAUDE.md): la subida usa el
 protocolo resumable de Drive API v3 sobre urllib, streameando el archivo
