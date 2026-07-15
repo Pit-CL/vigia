@@ -157,7 +157,7 @@ No necesitas ninguna clave: las observaciones llegan por METAR (NOAA, abierto) y
 
 - `DMC_USUARIO` / `DMC_TOKEN`: 10 estaciones automáticas adicionales de la DMC ([registro gratuito](https://climatologia.meteochile.gob.cl)).
 - `FIRMS_MAP_KEY`: capa de incendios activos ([registro gratuito](https://firms.modaps.eosdis.nasa.gov/api/)); sin ella queda dormida (0 focos, sin error).
-- `VAPID_PRIVATE_KEY` / `VAPID_PUBLIC_KEY` / `VAPID_CONTACT`: solo si vas a correr el contenedor `push` de notificaciones.
+- `VAPID_PRIVATE_KEY` / `VAPID_PUBLIC_KEY` / `VAPID_SUB`: solo si vas a correr el contenedor `push` de notificaciones (`VAPID_SUB` en formato `mailto:correo`; sin ella los push a FCM/Chrome fallan).
 
 ## Producción
 
