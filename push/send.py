@@ -11,11 +11,20 @@ Umbrales: nacionales para subs sin ubicación (comportamiento original).
 Subs con ubicación (opt-in "solo mi zona") agregan un criterio de cercanía
 con umbral más bajo — ver `_cumple()`.
 
-Además del Web Push, en el mismo ciclo se procesa un suscriptor Slack fijo
-(la zona del operador, vía SLACK_WEBHOOK_URL/SLACK_ZONA_*) con su propio
-criterio anti-spam y textos accionables — ver `_procesar_slack()`. Dormido
-si SLACK_WEBHOOK_URL no está configurado (mismo patrón que
+Además del Web Push, en el mismo ciclo se procesa un suscriptor Slack
+multi-zona (SLACK_ZONAS, con fallback a la zona única legacy
+SLACK_ZONA_LAT/LON/REGION) — ver `_procesar_slack()`. Dormido si
+SLACK_WEBHOOK_URL no está configurado (mismo patrón que
 ingesta/watchdog.py, que usa el mismo webhook para otro fin).
+
+Eventos NACIONALES (tsunami, sismos M≥6.5/PAGER, volcanes, alertas rojas) se
+envían UNA vez a todo el canal (endpoint `slack:nacional`), sin importar
+cuántas zonas haya configuradas. Eventos DE ZONA (sismo local M≥5.5/200km,
+alerta amarilla de la región de la zona, avisos Vigía cercanos, focos de
+incendio cercanos) se envían una vez por zona (endpoint `slack:zona:<nombre>`)
+con el nombre de la zona en el texto. Migración: los eventos ya enviados bajo
+el endpoint legacy `slack:zona` (una sola zona, esquema anterior) no se
+reenvían — ver `_enviar_dedup`.
 """
 import argparse
 import json
@@ -36,6 +45,8 @@ SISMOS_PATH = Path(os.environ.get("PUSH_SISMOS", "/data/sismos.json"))
 ALERTAS_PATH = Path(os.environ.get("PUSH_ALERTAS", "/data/alertas.json"))
 VOLCANES_PATH = Path(os.environ.get("PUSH_VOLCANES", "/data/volcanes.json"))
 TSUNAMI_PATH = Path(os.environ.get("PUSH_TSUNAMI", "/data/tsunami.json"))
+AVISOS_PATH = Path(os.environ.get("PUSH_AVISOS", "/data/avisos.json"))
+INCENDIOS_PATH = Path(os.environ.get("PUSH_INCENDIOS", "/data/incendios.json"))
 
 SITE_URL = "https://vigia.cavara.cl/"
 KIT_URL = "https://vigia.cavara.cl/emergencia.html#kit"
@@ -58,7 +69,7 @@ RADIO_KM_ZONA = 200
 # descartaría eventos que sí calificarían para alguna sub.
 MAG_MIN_ZONA_PISO = 4.5
 
-# ── Suscriptor Slack (zona fija del operador) ───────────────────
+# ── Suscriptor Slack (multi-zona) ───────────────────────────────
 # Todas con default vacío → funcionalidad dormida (mismo patrón que
 # ingesta/watchdog.py y combustible.py).
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
@@ -76,9 +87,18 @@ def _float_env(nombre: str):
 SLACK_ZONA_LAT = _float_env("SLACK_ZONA_LAT")
 SLACK_ZONA_LON = _float_env("SLACK_ZONA_LON")
 
-# Endpoint sintético estable: reusa la tabla `sent` (event_id, endpoint) para
-# el dedup del suscriptor Slack, igual que cualquier sub de Web Push.
+# Avisos Vigía / incendios: radio de cercanía a la zona (constantes propias,
+# distintas de RADIO_KM_ZONA que es para sismos).
+RADIO_KM_AVISO_ZONA = 75      # avisos Vigía (viento, lluvia, calor, etc.)
+RADIO_KM_INCENDIO_ZONA = 50   # focos de calor FIRMS
+
+# Endpoints sintéticos estables: reusan la tabla `sent` (event_id, endpoint)
+# para el dedup del suscriptor Slack, igual que cualquier sub de Web Push.
+# SLACK_ENDPOINT es el esquema PRE multi-zona (una sola zona, todos los
+# eventos mezclados) — se sigue consultando en el dedup como endpoint legacy
+# para no reenviar algo que ya se mandó antes de esta migración.
 SLACK_ENDPOINT = "slack:zona"
+SLACK_ENDPOINT_NACIONAL = "slack:nacional"
 SENAPRED_URL = "https://senapred.cl/alertas/"
 FRASE_CIERRE = "— Vigía · esto NO reemplaza a los canales oficiales (SHOA/SENAPRED)."
 MENSAJE_PRUEBA_ZONA = (
@@ -129,6 +149,26 @@ EXPLICA_NIVEL = {
     "roja": "la amenaza está en desarrollo y puede requerir evacuación u otra acción inmediata; sigue YA las instrucciones oficiales.",
 }
 
+# Port de AVISO_EMOJI/AVISO_TIPO_LABEL (web/app.js) para los mensajes de
+# Slack de avisos Vigía — mismo criterio que EXPLICA_EVENTO arriba: si se
+# edita uno, editar el otro.
+AVISO_EMOJI_SLACK = {
+    "viento": "💨", "helada": "❄️", "lluvia": "🌧️", "lluvia_persistente": "🌧️",
+    "calor": "🌡️", "aluvional": "⛰️💧", "nieve": "❄️", "incendio": "🔥",
+    "rafagas": "🌪️", "presion": "📉", "nieve_cota_baja": "🏔️❄️",
+    "ola_calor": "🥵", "ola_frio": "🥶", "tormenta": "⛈️", "uv": "☀️",
+}
+AVISO_TIPO_LABEL_SLACK = {
+    "viento": "viento", "helada": "helada", "lluvia": "lluvia intensa",
+    "lluvia_persistente": "lluvia persistente", "calor": "calor extremo",
+    "aluvional": "riesgo aluvional", "nieve": "nieve", "incendio": "riesgo de incendio",
+    "rafagas": "ráfagas de viento", "presion": "caída de presión (temporal)",
+    "nieve_cota_baja": "nieve en cota baja", "ola_calor": "ola de calor",
+    "ola_frio": "ola de frío", "tormenta": "tormenta eléctrica", "uv": "UV extremo",
+}
+
+CL_TZ = ZoneInfo("America/Santiago")
+
 
 def _explica_evento(evento: str) -> str:
     evento = evento or ""
@@ -146,6 +186,17 @@ def _dist_km(lat1, lon1, lat2, lon2) -> float:
     dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(math.sqrt(a))
+
+
+def _rumbo(lat0: float, lon0: float, lat: float, lon: float) -> str:
+    """Rumbo aproximado (8 puntos cardinales) desde (lat0,lon0) hacia
+    (lat,lon) — usado para ubicar un foco de incendio respecto de la zona."""
+    y = math.sin(math.radians(lon - lon0)) * math.cos(math.radians(lat))
+    x = (math.cos(math.radians(lat0)) * math.sin(math.radians(lat))
+         - math.sin(math.radians(lat0)) * math.cos(math.radians(lat)) * math.cos(math.radians(lon - lon0)))
+    brng = (math.degrees(math.atan2(y, x)) + 360) % 360
+    puntos = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"]
+    return puntos[round(brng / 45) % 8]
 
 
 def _post_slack(texto: str) -> bool:
@@ -173,6 +224,48 @@ def _load_json(path: Path) -> dict:
         return json.loads(path.read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
+
+
+def _cargar_zonas() -> list[dict]:
+    """Zonas configuradas para el suscriptor Slack. Prioridad:
+    1. SLACK_ZONAS (JSON array: [{"nombre","lat","lon","region"}, ...]). Si
+       está presente pero malformada (JSON inválido o campos faltantes), se
+       loguea un error SIN el valor crudo (podría no ser sensible, pero no
+       hay necesidad de imprimirlo) y se devuelve lista vacía — el operador
+       queda sin avisos hasta corregir el env, no falla el resto del cron.
+    2. Fallback legacy: SLACK_ZONA_LAT/LON/REGION arma una zona única
+       llamada "zona" (mismo nombre que usaba el mensaje de prueba antes de
+       multi-zona) — así el deploy no requiere tocar el .env de prod.
+       Se marca `legacy=True` para que `_procesar_slack` también consulte el
+       endpoint `slack:zona` (esquema pre multi-zona) en el dedup de esta
+       zona y no re-spamee lo ya enviado.
+    """
+    raw = os.environ.get("SLACK_ZONAS", "")
+    if raw.strip():
+        try:
+            data = json.loads(raw)
+            if not isinstance(data, list):
+                raise ValueError("SLACK_ZONAS debe ser un array JSON")
+            zonas = []
+            for z in data:
+                zonas.append({
+                    "nombre": str(z["nombre"]),
+                    "lat": float(z["lat"]),
+                    "lon": float(z["lon"]),
+                    "region": str(z.get("region") or ""),
+                    "legacy": False,
+                })
+            return zonas
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            print("[slack] SLACK_ZONAS malformada (JSON inválido o falta nombre/lat/lon), ignorando")
+            return []
+
+    if SLACK_ZONA_LAT is not None and SLACK_ZONA_LON is not None:
+        return [{
+            "nombre": "zona", "lat": SLACK_ZONA_LAT, "lon": SLACK_ZONA_LON,
+            "region": SLACK_ZONA_REGION, "legacy": True,
+        }]
+    return []
 
 
 def _eventos_sismos() -> list[dict]:
@@ -253,7 +346,8 @@ def _eventos_tsunami_slack(con: sqlite3.Connection) -> list[dict]:
     se rastrea la transición de estado en `slack_estado`: mientras el
     estado no cambie, el id es estable (dedup real); al salir del estado
     (o cambiar a otro), se genera un id nuevo — igual que watchdog.py hace
-    con su propio archivo de estado, pero aquí vive en push.db."""
+    con su propio archivo de estado, pero aquí vive en push.db.
+    NACIONAL: se envía una sola vez sin importar cuántas zonas haya."""
     data = _load_json(TSUNAMI_PATH)
     estado = data.get("estado")
     if estado not in ("amenaza", "precaucion"):
@@ -288,58 +382,95 @@ def _eventos_tsunami_slack(con: sqlite3.Connection) -> list[dict]:
     return [{"id": f"tsunami:{estado}:{since}", "texto": f"{texto}\n{FRASE_CIERRE}"}]
 
 
-def _eventos_sismos_slack(sismos_base: list[dict]) -> list[dict]:
-    """Mismo criterio que el push de zona (M≥5.5 en el radio de zona) más
-    los nacionales — reusa la lista y el flag `nacional` ya calculados por
-    `_eventos_sismos()` (que ya incorpora el criterio PAGER, no solo
-    M≥6.5, para no duplicar esa lógica con una regla más angosta)."""
-    con_ubicacion = SLACK_ZONA_LAT is not None and SLACK_ZONA_LON is not None
-    sub = {"lat": SLACK_ZONA_LAT, "lon": SLACK_ZONA_LON, "radio_km": None, "mag_min": None}
-    tz = ZoneInfo("America/Santiago")
+def _eventos_sismos_slack_nacional(sismos_base: list[dict], zonas: list[dict]) -> list[dict]:
+    """Sismos de registro nacional (M≥6.5 o PAGER amarillo+): UN solo mensaje
+    (endpoint slack:nacional) sin importar cuántas zonas haya configuradas.
+    Si el epicentro cae a <=RADIO_KM_ZONA de alguna zona, el texto agrega la
+    advertencia de evacuación y nombra la(s) zona(s) cercana(s); si no, va un
+    texto informativo sin acción de zona (no hay una zona a la que referir)."""
     eventos = []
     for ev in sismos_base:
-        if not _cumple(ev, sub):
+        if not ev["nacional"]:
             continue
-        hora = ev["utc_time"].astimezone(tz).strftime("%H:%M")
-        cerca = con_ubicacion and _dist_km(SLACK_ZONA_LAT, SLACK_ZONA_LON, ev["lat"], ev["lon"]) <= RADIO_KM_ZONA
+        hora = ev["utc_time"].astimezone(CL_TZ).strftime("%H:%M")
+        cercanas = [z["nombre"] for z in zonas
+                    if _dist_km(z["lat"], z["lon"], ev["lat"], ev["lon"]) <= RADIO_KM_ZONA]
         base = f"🌎 *Sismo M{ev['mag']:.1f}* — {ev['ref']}, {hora} hora local."
-        if cerca:
-            texto = (f"{base} Si el sismo te impidió mantenerte en pie o duró más de un minuto, aléjate de "
-                      "la playa y evacúa sin esperar confirmación oficial.")
+        if cercanas:
+            texto = (f"{base} Cerca de {', '.join(cercanas)}: si el sismo te impidió mantenerte en pie o "
+                      "duró más de un minuto, aléjate de la playa y evacúa sin esperar confirmación oficial.")
         else:
-            texto = f"{base} Sismo de registro nacional; no requiere acción en tu zona."
+            texto = f"{base} Sismo de registro nacional; no requiere acción inmediata."
         eventos.append({"id": ev["id"], "texto": f"{texto}\n{FRASE_CIERRE}"})
     return eventos
 
 
-def _eventos_alertas_slack() -> list[dict]:
-    """Rojas de cualquier región + rojas y amarillas de SLACK_ZONA_REGION.
-    Nunca temprana_preventiva (spam) — a diferencia de `_eventos_alertas()`,
-    que solo manda rojas, aquí se necesita también la amarilla local."""
+def _eventos_sismos_slack_zona(sismos_base: list[dict], zona: dict) -> list[dict]:
+    """Sismos LOCALES de esta zona: M≥5.5 dentro de 200 km (vía `_cumple`),
+    excluidos los nacionales (esos van una sola vez por
+    `_eventos_sismos_slack_nacional`, no se duplican aquí)."""
+    sub = {"lat": zona["lat"], "lon": zona["lon"], "radio_km": None, "mag_min": None}
     eventos = []
-    for al in _load_json(ALERTAS_PATH).get("alertas", []):
-        nivel = al.get("nivel")
-        if nivel not in ("roja", "amarilla"):
+    for ev in sismos_base:
+        if ev["nacional"] or not _cumple(ev, sub):
             continue
-        region = al.get("region") or "Chile"
-        if nivel == "amarilla" and region != SLACK_ZONA_REGION:
-            continue
-        categoria = al.get("categoria", "")
-        evento = al.get("evento") or categoria
-        desde = al.get("desde") or ""
-        comunas = al.get("comunas") or []
-        resumen_comunas = ", ".join(comunas[:3]) + (f" y {len(comunas) - 3} más" if len(comunas) > 3 else "")
-        emoji = "🔴" if nivel == "roja" else "🟡"
-        lugar = f"{region} ({resumen_comunas})" if resumen_comunas else region
+        hora = ev["utc_time"].astimezone(CL_TZ).strftime("%H:%M")
         texto = (
-            f"{emoji} *Alerta {nivel.capitalize()} SENAPRED* — {evento} en {lugar}.\n"
-            f"{EXPLICA_NIVEL.get(nivel, '')}\n{_explica_evento(evento)}\n"
-            f"Detalle oficial: {SENAPRED_URL}")
+            f"🌎 *[{zona['nombre']}] Sismo M{ev['mag']:.1f}* — {ev['ref']}, {hora} hora local. Si el sismo "
+            "te impidió mantenerte en pie o duró más de un minuto, aléjate de la playa y evacúa sin esperar "
+            "confirmación oficial.")
+        eventos.append({"id": ev["id"], "texto": f"{texto}\n{FRASE_CIERRE}"})
+    return eventos
+
+
+def _texto_alerta_slack(al: dict, prefijo: str = "") -> str:
+    nivel = al.get("nivel")
+    region = al.get("region") or "Chile"
+    evento = al.get("evento") or al.get("categoria", "")
+    comunas = al.get("comunas") or []
+    resumen_comunas = ", ".join(comunas[:3]) + (f" y {len(comunas) - 3} más" if len(comunas) > 3 else "")
+    emoji = "🔴" if nivel == "roja" else "🟡"
+    lugar = f"{region} ({resumen_comunas})" if resumen_comunas else region
+    return (
+        f"{emoji} {prefijo}*Alerta {nivel.capitalize()} SENAPRED* — {evento} en {lugar}.\n"
+        f"{EXPLICA_NIVEL.get(nivel, '')}\n{_explica_evento(evento)}\n"
+        f"Detalle oficial: {SENAPRED_URL}")
+
+
+def _eventos_alertas_slack_nacional(alertas: list[dict]) -> list[dict]:
+    """Rojas de cualquier región: UN solo mensaje (endpoint slack:nacional)."""
+    eventos = []
+    for al in alertas:
+        if al.get("nivel") != "roja":
+            continue
+        categoria, region = al.get("categoria", ""), al.get("region") or "Chile"
+        desde = al.get("desde") or ""
+        texto = _texto_alerta_slack(al)
+        eventos.append({"id": f"alerta:{categoria}:{region}:{desde}", "texto": f"{texto}\n{FRASE_CIERRE}"})
+    return eventos
+
+
+def _eventos_alertas_slack_zona(zona: dict, alertas: list[dict]) -> list[dict]:
+    """Amarillas de la región de esta zona únicamente (nunca temprana
+    preventiva, es spam). Sin región configurada, la zona no recibe
+    amarillas (las rojas siguen llegando igual vía el canal nacional)."""
+    if not zona.get("region"):
+        return []
+    eventos = []
+    for al in alertas:
+        if al.get("nivel") != "amarilla" or (al.get("region") or "Chile") != zona["region"]:
+            continue
+        categoria, region = al.get("categoria", ""), al.get("region") or "Chile"
+        desde = al.get("desde") or ""
+        texto = _texto_alerta_slack(al, prefijo=f"[{zona['nombre']}] ")
         eventos.append({"id": f"alerta:{categoria}:{region}:{desde}", "texto": f"{texto}\n{FRASE_CIERRE}"})
     return eventos
 
 
 def _eventos_volcanes_slack() -> list[dict]:
+    """NACIONAL: alerta de volcán no tiene una zona natural (el radio de
+    peligro real depende del volcán, no de RADIO_KM_ZONA) — se manda una
+    sola vez, igual que antes de multi-zona."""
     eventos = []
     for ev in _eventos_volcanes():
         nombre = ev["id"].split(":")[1]
@@ -351,29 +482,144 @@ def _eventos_volcanes_slack() -> list[dict]:
     return eventos
 
 
-def _eventos_slack(con: sqlite3.Connection, sismos_base: list[dict]) -> list[dict]:
+def _dia_relativo(fecha, hoy) -> str:
+    delta = (fecha - hoy).days
+    if delta == 0:
+        return "hoy"
+    if delta == 1:
+        return "mañana"
+    if delta == 2:
+        return "pasado mañana"
+    return fecha.strftime("%d-%m")
+
+
+def _eventos_avisos_slack(zona: dict, avisos: list[dict]) -> list[dict]:
+    """Avisos Vigía (propios, no oficiales) de estaciones a <=RADIO_KM_AVISO_ZONA
+    de la zona, cualquier nivel (amarillo incluido).
+
+    Dedup/escalada: event_id = aviso:{estacion_id}:{tipo}:{fecha-local}:{nivel}.
+    Mientras el aviso siga en el mismo nivel el mismo día, el id no cambia
+    (aunque el valor fluctúe entre corridas) → no se reenvía. Si el nivel
+    sube (amarillo→naranja→rojo) el id cambia → se envía de nuevo,
+    notificando la escalada. Si baja, el id vuelve a uno ya enviado ese día
+    → no se reenvía (ya se avisó de ese nivel)."""
+    eventos = []
+    for a in avisos:
+        lat, lon = a.get("lat"), a.get("lon")
+        if lat is None or lon is None:
+            continue
+        if _dist_km(zona["lat"], zona["lon"], lat, lon) > RADIO_KM_AVISO_ZONA:
+            continue
+        try:
+            peak_utc = datetime.strptime(a["hora_peak"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except (KeyError, ValueError):
+            continue
+        peak_local = peak_utc.astimezone(CL_TZ)
+        hoy = datetime.now(CL_TZ).date()
+        dia = _dia_relativo(peak_local.date(), hoy)
+        hora = peak_local.strftime("%H:%M")
+        emoji = AVISO_EMOJI_SLACK.get(a["tipo"], "⚠️")
+        etiqueta = AVISO_TIPO_LABEL_SLACK.get(a["tipo"], a["tipo"])
+        acuerdo = f" (acuerdo {a['acuerdo']} modelos)" if a.get("acuerdo") else ""
+        texto = (
+            f"{emoji} [{zona['nombre']}] Aviso Vigía nivel {a['nivel']}: {etiqueta} {a['valor']} {a['unidad']} "
+            f"peak {dia} {hora} en {a['nombre']}{acuerdo} — aviso propio, no oficial.")
+        fecha_local = peak_local.strftime("%Y-%m-%d")
+        event_id = f"aviso:{a['estacion_id']}:{a['tipo']}:{fecha_local}:{a['nivel']}"
+        eventos.append({"id": event_id, "texto": texto})
+    return eventos
+
+
+def _eventos_incendios_slack(zona: dict, focos: list[dict]) -> list[dict]:
+    """Focos de calor FIRMS a <=RADIO_KM_INCENDIO_ZONA de la zona.
+
+    Dedup: los focos FIRMS se re-detectan en cada pasada satelital, así que
+    el event_id agrupa por celda (~1 km, lat/lon redondeados a 2 decimales)
+    y fecha local — avisa un foco nuevo en esa celda una vez por día, sin
+    repetir el mismo foco todo el día en cada pasada."""
+    eventos = []
+    for f in focos:
+        lat, lon = f.get("lat"), f.get("lon")
+        if lat is None or lon is None:
+            continue
+        dist = _dist_km(zona["lat"], zona["lon"], lat, lon)
+        if dist > RADIO_KM_INCENDIO_ZONA:
+            continue
+        try:
+            acq = datetime.strptime(f["utc"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc)
+        except (KeyError, ValueError):
+            continue
+        acq_local = acq.astimezone(CL_TZ)
+        celda_lat, celda_lon = round(lat, 2), round(lon, 2)
+        fecha_local = acq_local.strftime("%Y-%m-%d")
+        event_id = f"incendio:{celda_lat}:{celda_lon}:{fecha_local}"
+        rumbo = _rumbo(zona["lat"], zona["lon"], lat, lon)
+        texto = (
+            f"🔥 [{zona['nombre']}] Foco de incendio detectado a {round(dist)} km al {rumbo} "
+            f"(satélite NASA, {acq_local.strftime('%H:%M')} h) — foco de calor, no necesariamente un "
+            "incendio confirmado.")
+        eventos.append({"id": event_id, "texto": texto})
+    return eventos
+
+
+def _eventos_nacionales_slack(con: sqlite3.Connection, sismos_base: list[dict],
+                               zonas: list[dict], alertas: list[dict]) -> list[dict]:
     return (
         _eventos_tsunami_slack(con)
-        + _eventos_sismos_slack(sismos_base)
-        + _eventos_alertas_slack()
+        + _eventos_sismos_slack_nacional(sismos_base, zonas)
+        + _eventos_alertas_slack_nacional(alertas)
         + _eventos_volcanes_slack()
     )
 
 
+def _eventos_zona_slack(sismos_base: list[dict], zona: dict, alertas: list[dict],
+                         avisos: list[dict], focos: list[dict]) -> list[dict]:
+    return (
+        _eventos_sismos_slack_zona(sismos_base, zona)
+        + _eventos_alertas_slack_zona(zona, alertas)
+        + _eventos_avisos_slack(zona, avisos)
+        + _eventos_incendios_slack(zona, focos)
+    )
+
+
+def _enviar_dedup(con: sqlite3.Connection, event_id: str, texto: str, endpoint: str,
+                   endpoints_legacy: list[str], ya_enviados: set[tuple[str, str]]) -> None:
+    """Envía un evento de Slack con dedup por (event_id, endpoint) y además
+    consulta `endpoints_legacy` (endpoints del esquema pre multi-zona) para
+    no reenviar algo ya notificado antes de esta migración."""
+    if (event_id, endpoint) in ya_enviados:
+        return
+    if any((event_id, ep) in ya_enviados for ep in endpoints_legacy):
+        return
+    if _post_slack(texto):
+        con.execute(
+            "INSERT OR IGNORE INTO sent(event_id, endpoint, sent_at) VALUES (?, ?, datetime('now'))",
+            (event_id, endpoint))
+        con.commit()
+        ya_enviados.add((event_id, endpoint))
+
+
 def _procesar_slack(con: sqlite3.Connection, sismos_base: list[dict], ya_enviados: set[tuple[str, str]]) -> None:
-    """Suscriptor Slack de la zona fija del operador: independiente de si
-    hay suscripciones Web Push (no depende de la tabla `subs`)."""
+    """Suscriptor Slack multi-zona: independiente de si hay suscripciones
+    Web Push (no depende de la tabla `subs`)."""
     if not SLACK_WEBHOOK_URL:
         return
-    for ev in _eventos_slack(con, sismos_base):
-        if (ev["id"], SLACK_ENDPOINT) in ya_enviados:
-            continue
-        if _post_slack(ev["texto"]):
-            con.execute(
-                "INSERT OR IGNORE INTO sent(event_id, endpoint, sent_at) VALUES (?, ?, datetime('now'))",
-                (ev["id"], SLACK_ENDPOINT))
-            con.commit()
-            ya_enviados.add((ev["id"], SLACK_ENDPOINT))
+    zonas = _cargar_zonas()
+    if not zonas:
+        return
+
+    alertas = _load_json(ALERTAS_PATH).get("alertas", [])
+    avisos = _load_json(AVISOS_PATH).get("avisos", [])
+    focos = _load_json(INCENDIOS_PATH).get("focos", [])
+
+    for ev in _eventos_nacionales_slack(con, sismos_base, zonas, alertas):
+        _enviar_dedup(con, ev["id"], ev["texto"], SLACK_ENDPOINT_NACIONAL, [SLACK_ENDPOINT], ya_enviados)
+
+    for zona in zonas:
+        endpoint = f"slack:zona:{zona['nombre']}"
+        endpoints_legacy = [SLACK_ENDPOINT] if zona.get("legacy") else []
+        for ev in _eventos_zona_slack(sismos_base, zona, alertas, avisos, focos):
+            _enviar_dedup(con, ev["id"], ev["texto"], endpoint, endpoints_legacy, ya_enviados)
 
 
 def _evento_kit(ahora: datetime) -> dict:
