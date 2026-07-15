@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=85">
+  <link rel="stylesheet" href="app.css?v=86">
 </head>
 <body>
 
@@ -205,6 +205,7 @@
         <button class="map-mode" data-capa="incendios" aria-pressed="false">🔥 Incendios</button>
         <button class="map-mode" data-capa="alertas" aria-pressed="false">⚠️ Alertas</button>
         <button class="map-mode" data-capa="avisos" aria-pressed="false">💨 Avisos Vigía</button>
+        <button class="map-mode" data-capa="viento" aria-pressed="false">💨 Viento fuerte</button>
         <button class="map-mode" data-capa="volcanes" aria-pressed="false">🌋 Volcanes</button>
         <button class="map-mode" data-capa="remociones" aria-pressed="false">⛰️ Remociones</button>
         <button class="map-mode" data-capa="crecidas" aria-pressed="false">🏞️ Ríos</button>
@@ -274,6 +275,11 @@
       <span class="av-naranja"></span><span>Naranja</span>
       <span class="av-rojo"></span><span>Rojo</span>
       <span>· 💨 viento · ❄️ helada · 🌧️ lluvia · 🌧️ lluvia persistente · 🌡️ calor · ⛰️💧 aluvional · ❄️ nieve · 🔥 incendio · 🌪️ ráfagas · 📉 presión · 🏔️❄️ nieve en cota baja · 🥵 ola de calor · 🥶 ola de frío · ⛈️ tormenta · ☀️ UV extremo</span>
+    </div>
+    <div id="map-legend-viento" class="map-legend" aria-hidden="true" hidden>
+      <span class="av-amarillo"></span><span>Bf 5-6</span>
+      <span class="av-naranja"></span><span>Bf 7-8</span>
+      <span class="av-rojo"></span><span>Bf ≥ 9</span>
     </div>
     <div id="map-legend-crecidas" class="map-legend" aria-hidden="true" hidden>
       <span class="ck-amarillo"></span><span>Amarillo</span>
@@ -437,6 +443,6 @@
 
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/leaflet.js"></script>
-<script src="app.js?v=85"></script>
+<script src="app.js?v=86"></script>
 </body>
 </html>

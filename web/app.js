@@ -631,6 +631,16 @@ function beaufort(kmh) {
   return { grado: i, nombre: BEAUFORT[i][1] };
 }
 
+// Capa "Viento fuerte": umbral Bf 5 (brisa moderada) — bajo eso el viento
+// observado no es noticiable en el mapa. Severidad por grado Beaufort, mismo
+// semáforo de color que los avisos (.aviso-amarillo/naranja/rojo en app.css).
+const UMBRAL_VIENTO_KMH = 29;
+function severidadViento(grado) {
+  if (grado >= 9) return 'rojo';
+  if (grado >= 7) return 'naranja';
+  return 'amarillo';
+}
+
 function renderNow(best) {
   const c = best.current;
   // Si hay una central de monitoreo cerca, "Condiciones actuales" son su
@@ -662,8 +672,12 @@ function renderNow(best) {
   $('#now-desc').textContent = desc;
   $('#now-feels').textContent = feels == null ? '—' : `${Math.round(feels)} °C`;
   $('#now-rh').textContent = rh == null ? '—' : `${Math.round(rh)} %`;
-  $('#now-wind').textContent = wsp == null ? '—'
-    : `${Math.round(wsp)} km/h ${compass(wdir)} · Bf ${beaufort(wsp).grado} (${beaufort(wsp).nombre})`;
+  // innerHTML en vez de textContent: envuelve "Bf N (nombre)" en un <span>
+  // para que el wrap no separe el grado de su nombre (ver .bf-tag en
+  // app.css). Sin riesgo XSS: wsp/wdir son numéricos y beaufort()/compass()
+  // solo devuelven strings de listas fijas, nada viene de una fuente externa.
+  $('#now-wind').innerHTML = wsp == null ? '—'
+    : `${Math.round(wsp)} km/h ${compass(wdir)} · <span class="bf-tag">Bf ${beaufort(wsp).grado} (${beaufort(wsp).nombre})</span>`;
   $('#now-pres').textContent = pres == null ? '—' : `${Math.round(pres)} hPa`;
   document.title = `${Math.round(temp)}°C ${place.name} — Vigía`;
 }
@@ -1496,8 +1510,10 @@ function paintSatelite() {
 
 // Capas del mapa: 'temp' y 'aire' son excluyentes entre sí (misma medición,
 // una a la vez); 'sismos', 'incendios', 'alertas', 'volcanes', 'remociones',
-// 'evacuacion' y 'emergencia' son independientes y se pueden combinar con
-// cualquiera. 'evacuacion' y 'emergencia' son lazy: ~9.000 puntos + vías/áreas
+// 'evacuacion', 'emergencia' y 'viento' son independientes y se pueden
+// combinar con cualquiera (incluida 'temp': 'viento' reusa la misma
+// estaciones.json ya cargada, sin ser del grupo 'medicion'). 'evacuacion' y
+// 'emergencia' son lazy: ~9.000 puntos + vías/áreas
 // cuasi-estáticos que no se cargan salvo que el usuario encienda alguna de
 // las dos (ni en la carga inicial ni en el refresco). 'remociones' es lazy
 // por su propia cuenta: ~1.200 puntos igual de cuasi-estáticos, pero es un
@@ -1513,6 +1529,7 @@ const CAPAS = {
   alertas:       { paint: paintAlertas, lazy: cargarComunas, tieneData: () => comunasData !== null },
   volcanes:      { paint: paintVolcanes },
   avisos:        { paint: paintAvisos },
+  viento:        { paint: paintViento },
   remociones:    { paint: paintRemociones, lazy: loadRemociones, tieneData: () => remocionesData !== null },
   crecidas:      { paint: paintCrecidas, lazy: loadCrecidas, tieneData: () => crecidasData !== null },
   cortes:        { paint: paintCortes },
@@ -1535,7 +1552,7 @@ const CAPAS = {
 // acción más urgente (hacia dónde ir), por sobre el resto. 'satelite' va
 // primero: es la capa menos accionable, su texto en #map-meta no debe pisar
 // el de ninguna otra.
-const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'crecidas', 'cortes', 'combustible', 'avisos', 'temp', 'aire', 'precipitacion', 'marea', 'farmacias', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'crecidas', 'cortes', 'combustible', 'avisos', 'viento', 'temp', 'aire', 'precipitacion', 'marea', 'farmacias', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1688,6 +1705,7 @@ function renderMapa() {
   document.getElementById('map-legend-alertas').hidden = !capasActivas.has('alertas');
   document.getElementById('map-legend-volcanes').hidden = !capasActivas.has('volcanes');
   document.getElementById('map-legend-avisos').hidden = !capasActivas.has('avisos');
+  document.getElementById('map-legend-viento').hidden = !capasActivas.has('viento');
   document.getElementById('map-legend-remociones').hidden = !capasActivas.has('remociones');
   document.getElementById('map-legend-crecidas').hidden = !capasActivas.has('crecidas');
   document.getElementById('map-legend-combustible').hidden = !capasActivas.has('combustible');
@@ -1866,6 +1884,52 @@ function paintPrecip(group) {
   $('#map-meta').textContent = avisosData.updated
     ? `${resumen} · acumulado 48 h · ${horaLocal(avisosData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${acerca}${vencido}`
     : `${resumen} · acumulado 48 h${acerca}${vencido}`;
+}
+
+// Viento fuerte observado: misma fuente que paintTemp (estaciones.json ya
+// cargada), sin grouping por celda — a diferencia de temp/aire/precip, las
+// estaciones sobre el umbral son pocas y no se apilan visualmente.
+function paintViento(group) {
+  const est = estacionesData.estaciones.filter((e) =>
+    e.obs && e.obs.wind_speed_10m != null && e.obs.wind_speed_10m >= UMBRAL_VIENTO_KMH
+    && e.obs.wind_direction_10m != null);
+  if (!est.length) {
+    if (capasActivas.size === 1) $('#map-meta').textContent = `Viento: ninguna estación sobre ${UMBRAL_VIENTO_KMH} km/h ahora`;
+    return;
+  }
+  est.forEach((e) => {
+    const v = e.obs.wind_speed_10m;
+    const dir = e.obs.wind_direction_10m;
+    const bf = beaufort(v);
+    const sev = severidadViento(bf.grado);
+    // Hacia dónde VA el viento (no de dónde viene): misma convención que el
+    // chip de avance de incendios (vientoEnFoco/paintIncendios más arriba).
+    const rumbo = (dir + 180) % 360;
+    const icon = L.divIcon({
+      className: 'viento-icon',
+      html: `<span class="viento-flecha">➤</span><span class="stn-label viento-${sev}">${Math.round(v)} km/h</span>`,
+      iconSize: [78, 26], iconAnchor: [39, 13],
+    });
+    const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(group);
+    // Rotación por CSSOM tras crear el marcador: la CSP (style-src 'self')
+    // bloquea el atributo style inline (mismo patrón que .foco-flecha).
+    const el = marker.getElement();
+    const flecha = el && el.querySelector('.viento-flecha');
+    if (flecha) flecha.style.transform = `rotate(${rumbo - 90}deg)`;
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong'); h.textContent = e.nombre; box.appendChild(h);
+    box.appendChild(popupRows([
+      ['Viento', `${Math.round(v)} km/h · Bf ${bf.grado} (${bf.nombre})`],
+      ['Dirección', `desde el ${compass(dir)}`],
+      ['Hora obs.', e.obs_time ? `${horaLocal(e.obs_time)} h` : null],
+    ]));
+    marker.bindPopup(box, { maxWidth: 260 });
+  });
+  const resumen = est.length === 1 ? '1 estación' : `${est.length} estaciones`;
+  $('#map-meta').textContent = estacionesData.updated
+    ? `Viento fuerte: ${resumen} sobre ${UMBRAL_VIENTO_KMH} km/h · ${horaLocal(estacionesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
+    : `Viento fuerte: ${resumen} sobre ${UMBRAL_VIENTO_KMH} km/h`;
 }
 
 // Chip de impacto estimado PAGER (USGS) — mismo semáforo verde/amarillo/
