@@ -618,6 +618,19 @@ function sensacion(t, vKmh) {
   return t;
 }
 
+// Umbral km/h donde empieza el grado siguiente (viento sostenido a 10 m; escala
+// Beaufort estándar: grado 1 = 1-5, grado 2 = 6-11, grado 3 = 12-19, etc).
+const BEAUFORT = [
+  [1, 'calma'], [6, 'ventolina'], [12, 'brisa muy débil'], [20, 'brisa débil'],
+  [29, 'brisa moderada'], [39, 'brisa fresca'], [50, 'viento fuerte'],
+  [62, 'viento muy fuerte'], [75, 'temporal'], [89, 'temporal fuerte'],
+  [103, 'temporal muy fuerte'], [118, 'borrasca'], [Infinity, 'huracán'],
+];
+function beaufort(kmh) {
+  const i = BEAUFORT.findIndex(([max]) => kmh < max);
+  return { grado: i, nombre: BEAUFORT[i][1] };
+}
+
 function renderNow(best) {
   const c = best.current;
   // Si hay una central de monitoreo cerca, "Condiciones actuales" son su
@@ -649,7 +662,8 @@ function renderNow(best) {
   $('#now-desc').textContent = desc;
   $('#now-feels').textContent = feels == null ? '—' : `${Math.round(feels)} °C`;
   $('#now-rh').textContent = rh == null ? '—' : `${Math.round(rh)} %`;
-  $('#now-wind').textContent = wsp == null ? '—' : `${Math.round(wsp)} km/h ${compass(wdir)}`;
+  $('#now-wind').textContent = wsp == null ? '—'
+    : `${Math.round(wsp)} km/h ${compass(wdir)} · Bf ${beaufort(wsp).grado} (${beaufort(wsp).nombre})`;
   $('#now-pres').textContent = pres == null ? '—' : `${Math.round(pres)} hPa`;
   document.title = `${Math.round(temp)}°C ${place.name} — Vigía`;
 }
@@ -916,7 +930,7 @@ function openDay(i) {
     ['☀️ UV máx', d.uv_index_max?.[i] != null ? r1(d.uv_index_max[i]) : '—'],
     ['🌅 Sale el sol', d.sunrise?.[i] ? d.sunrise[i].slice(11, 16) : '—'],
     ['🌇 Se pone', d.sunset?.[i] ? d.sunset[i].slice(11, 16) : '—'],
-    ['💨 Viento máx', `${Math.round(windMax)} km/h`],
+    ['💨 Viento máx', `${Math.round(windMax)} km/h · Bf ${beaufort(windMax).grado} (${beaufort(windMax).nombre})`],
     ['💧 Humedad prom.', rhMean != null ? `${rhMean} %` : '—'],
     ['🌧️ Lluvia total', `${r1(d.precipitation_sum[i]) ?? 0} mm`],
   ];
