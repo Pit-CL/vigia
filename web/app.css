@@ -1526,6 +1526,10 @@ dialog::backdrop {
   color: var(--ink);
   transform-origin: 50% 50%;
 }
+/* El flex del contenedor achica .stn-label bajo el ancho del iconSize y
+   "NN km/h" envuelve en dos líneas (bug reportado: la píldora quedaba el
+   doble de alta que las de temperatura) — nowrap fuerza una sola línea. */
+.viento-icon .stn-label { white-space: nowrap; }
 .stn-label.viento-amarillo { background-color: var(--alerta-amarilla); }
 .stn-label.viento-naranja { background-color: var(--vol-naranja); color: #fff; border-color: rgba(0,0,0,0.35); }
 .stn-label.viento-rojo { background-color: var(--alerta-roja); color: #fff; border-color: rgba(0,0,0,0.35); }
