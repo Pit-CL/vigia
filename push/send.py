@@ -906,7 +906,11 @@ def main() -> None:
         print("[push] VAPID_SUB no configurada (formato mailto:correo): los envíos a "
               "endpoints FCM (Chrome) van a fallar con 'Missing sub from claims'")
 
+    caducados_global: set[str] = set()
     for ev, destinatarios in seleccionar(eventos, subs, ya_enviados):
+        destinatarios = [d for d in destinatarios if d[0] not in caducados_global]
+        if not destinatarios:
+            continue
         caducados, fallidos = _enviar_evento(con, destinatarios, ev["titulo"], ev["body"], ev["url"])
         for endpoint, _, _ in destinatarios:
             if endpoint in fallidos:
@@ -916,8 +920,7 @@ def main() -> None:
                 (ev["id"], endpoint),
             )
         con.commit()
-        if caducados:
-            subs = [s for s in subs if s[0] not in caducados]
+        caducados_global |= caducados
 
     con.close()
 

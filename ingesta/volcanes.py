@@ -75,6 +75,14 @@ def _texto_normalizado(html_text: str) -> str:
     return _normalizar(extractor.texto())
 
 
+def _find_nombre(texto_norm: str, nombre_norm: str) -> int:
+    """Busca nombre_norm como palabra completa, no como substring de un
+    nombre compuesto más largo (ej. "san pedro" no debe matchear dentro de
+    "san pedro-pellado", otro volcán real y distinto en VOLCANES)."""
+    m = re.search(rf"(?<![a-z0-9-]){re.escape(nombre_norm)}(?![a-z0-9-])", texto_norm)
+    return m.start() if m else -1
+
+
 class _TextExtractorConAlt(_TextExtractor):
     """Como _TextExtractor, pero suma el atributo alt de <img> como texto:
     en el fallback de SERNAGEOMIN el nivel de alerta solo aparece ahí (ej.
@@ -100,7 +108,7 @@ def _parse_parcial(html_text: str) -> dict[str, str]:
     detectados = {}
     for nombre in VOLCANES:
         nombre_norm = _normalizar(nombre)
-        pos = texto_norm.find(nombre_norm)
+        pos = _find_nombre(texto_norm, nombre_norm)
         if pos < 0:
             continue
         antes = texto_norm[max(0, pos - VENTANA_BUSQUEDA):pos]
@@ -122,7 +130,7 @@ def _parse(html_text: str) -> dict[str, str]:
     detectados = {}
     for nombre in VOLCANES:
         nombre_norm = _normalizar(nombre)
-        pos = texto_norm.find(nombre_norm)
+        pos = _find_nombre(texto_norm, nombre_norm)
         if pos < 0:
             continue
         ventana = texto_norm[pos + len(nombre_norm): pos + len(nombre_norm) + VENTANA_BUSQUEDA]

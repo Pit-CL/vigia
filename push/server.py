@@ -121,6 +121,9 @@ def _client_ip(handler: BaseHTTPRequestHandler) -> str:
 
 def _rate_limited(ip: str) -> bool:
     now = time.monotonic()
+    for otra_ip, hits in list(_rate.items()):
+        if otra_ip != ip and now - hits[-1] >= RATE_LIMIT_WINDOW_S:
+            del _rate[otra_ip]  # IP inactiva: purgada para no crecer sin límite
     hits = [t for t in _rate.get(ip, []) if now - t < RATE_LIMIT_WINDOW_S]
     hits.append(now)
     _rate[ip] = hits
