@@ -1472,7 +1472,7 @@ function actualizarBotonPlaySatelite() {
   if (!btn) return;
   const activo = !!sateliteTimer;
   btn.disabled = sateliteFrames.length < 2;
-  btn.textContent = activo ? '⏸' : '▶';
+  btn.textContent = activo ? '⏸ Pausar' : '▶ Animar';
   btn.setAttribute('aria-pressed', String(activo));
 }
 
@@ -3070,7 +3070,7 @@ function setupMapaFullscreen() {
     const on = activo();
     btn.setAttribute('aria-pressed', String(on));
     btn.setAttribute('aria-label', on ? 'Salir de pantalla completa' : 'Mapa a pantalla completa');
-    btn.textContent = on ? '✕' : '⛶';
+    btn.textContent = on ? '✕ Salir' : '⛶ Pantalla completa';
   }
 
   function onEsc(e) {
