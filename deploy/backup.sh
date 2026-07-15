@@ -82,6 +82,17 @@ tar czf "$TAR_PATH" -C "$TMP_DIR" $ARCHIVOS || fail "no se pudo crear $TAR_PATH"
 chmod 600 "$TAR_PATH"
 echo "==> Backup creado: $TAR_PATH ($(du -h "$TAR_PATH" | cut -f1))"
 
+# Copia offsite a Google Drive (best-effort): el backup local YA está OK en
+# este punto, así que un fallo acá NUNCA debe tumbar el resto del script —
+# backup_drive.py maneja su propio aviso a Slack y sale con éxito si no hay
+# credenciales GDRIVE_* configuradas (patrón "dormido").
+set -a; . "$ENV_PATH"; set +a
+if [ -n "${GDRIVE_REFRESH_TOKEN:-}" ]; then
+    echo "==> Subiendo copia offsite a Google Drive..."
+    python3 "$(dirname "$0")/backup_drive.py" "$TAR_PATH" \
+        || echo "AVISO: la copia offsite a Drive falló (ver arriba); el backup local sí quedó OK."
+fi
+
 echo "==> Rotando (conservar los últimos $KEEP)..."
 ls -1t "$BACKUP_DIR"/vigia-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].tar.gz 2>/dev/null \
     | tail -n +$((KEEP + 1)) \
