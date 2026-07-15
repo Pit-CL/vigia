@@ -38,15 +38,16 @@ echo "    versión v=$N_INDEX consistente entre index.html y sw.js"
 
 # app.css debe compartir la versión de app.js en AMBOS archivos: el smoke
 # post-deploy lo exige, y fallar aquí evita desplegar algo que el smoke
-# rechazará (ya pasó dos veces: PRs que subían solo app.js).
-for f in web/index.html web/sw.js; do
+# rechazará (ya pasó dos veces: PRs que subían solo app.js). emergencia.html
+# también carga app.css directo (sin app.js) y sufrió el mismo drift una vez.
+for f in web/index.html web/sw.js web/emergencia.html; do
   N_CSS="$(grep -oE 'app\.css\?v=[0-9]+' "$EXPORT_DIR/$f" | head -1 | grep -oE '[0-9]+$')"
   if [ "$N_CSS" != "$N_INDEX" ]; then
     echo "ERROR: $f usa app.css?v=$N_CSS pero app.js?v=$N_INDEX — sincroniza ambos antes de desplegar" >&2
     exit 1
   fi
 done
-echo "    app.css?v=$N_INDEX sincronizado con app.js en index.html y sw.js"
+echo "    app.css?v=$N_INDEX sincronizado con app.js en index.html, sw.js y emergencia.html"
 
 echo "==> Copiando a $DESTINO (local)..."
 rsync -a --delete \
