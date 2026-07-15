@@ -60,7 +60,11 @@ rsync -a --delete \
   "$EXPORT_DIR/" "$DESTINO"
 
 echo "==> Reiniciando contenedores..."
-(cd "$DESTINO" && docker compose up -d && docker compose restart web)
+# restart explícito de TODOS los servicios: `up -d` no recrea contenedores cuyo
+# config/imagen no cambió (el código va por bind-mount), e ingesta/push cargan
+# su crontab a /etc/crontabs/root solo en el arranque — sin restart, un crontab
+# nuevo queda en disco pero no rige (pasó con #111).
+(cd "$DESTINO" && docker compose up -d && docker compose restart)
 
 echo "==> Esperando 3 s antes del smoke test..."
 sleep 3
