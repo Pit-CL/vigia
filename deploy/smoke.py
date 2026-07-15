@@ -183,16 +183,25 @@ def check_json_fresco_laxo(base, archivo, maximo):
         ok(f"/{archivo}: actualizado hace {edad} (máximo {maximo})")
 
 
-def check_emergencia(base):
+def check_emergencia(base, n_index):
     try:
-        status, _headers, _body = get(base + "/emergencia.html")
+        status, _headers, body = get(base + "/emergencia.html")
     except Exception as e:
         falla(f"GET /emergencia.html -> excepción: {e}")
         return
     if status != 200:
         falla(f"GET /emergencia.html -> status {status} (esperado 200)")
+        return
+    ok("GET /emergencia.html -> 200")
+
+    texto = body.decode("utf-8", errors="replace")
+    m_css = re.search(r"app\.css\?v=(\d+)", texto)
+    if not m_css:
+        falla("no se encontró app.css?v=N en emergencia.html")
+    elif n_index and m_css.group(1) != n_index:
+        falla(f"emergencia.html usa app.css?v={m_css.group(1)} pero index.html usa v={n_index} — desincronizados")
     else:
-        ok("GET /emergencia.html -> 200")
+        ok(f"emergencia.html: app.css comparte versión v={m_css.group(1)} con index.html")
 
 
 def main():
@@ -232,7 +241,7 @@ def main():
     check_json_fresco_laxo(base, "farmacias.json", timedelta(hours=26))
     check_json_fresco_laxo(base, "combustible.json", timedelta(hours=26))
     check_json_fresco_laxo(base, "crecidas.json", timedelta(hours=26))
-    check_emergencia(base)
+    check_emergencia(base, n_index)
 
     print()
     if fallas:
