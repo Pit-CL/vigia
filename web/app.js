@@ -1347,7 +1347,14 @@ async function loadEmergencia() {
   tsunamiViasData = vias;
   tsunamiAreasData = areas;
   emergenciaPromise = null;
-  if (capasActivas.has('emergencia') || capasActivas.has('evacuacion')) renderMapa();
+  const activa = capasActivas.has('emergencia') || capasActivas.has('evacuacion');
+  // Los 3 fetch fallaron (sin red y sin DATA_CACHE previa, ver warmupEvacuacion
+  // más arriba): la capa quedaría vacía en silencio. Avisar en vez de mostrar
+  // un mapa mudo (regla de honestidad de frescura del proyecto).
+  if (activa && !emg && !vias && !areas && !navigator.onLine) {
+    mostrarOffline(true, 'Sin conexión: no se pudieron cargar las rutas de evacuación. Prepara tu zona (📦) cuando tengas señal.');
+  }
+  if (activa) renderMapa();
 }
 
 // remociones.json es el catastro histórico de remociones en masa (~1.218
@@ -3870,6 +3877,26 @@ if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
+// ── Warmup offline de evacuación ───────────────────────────────
+// Los ~3,2 MB de datos de evacuación (rutas, áreas de tsunami, puntos de
+// encuentro oficiales) hoy solo entran a DATA_CACHE si el usuario activa la
+// capa evacuación con red (loadEmergencia es lazy). En una emergencia real la
+// red se cae antes de que eso pase: forzamos un fetch en idle tras la carga
+// para que el fetch-handler del SW los persista sin que el usuario active
+// nada. Solo calienta la caché HTTP (no parsea a memoria, no llama
+// renderMapa); sin red falla silencioso y se reintenta la próxima sesión.
+// Mismo patrón que PACK_JSON de "Preparar mi zona" (más abajo).
+const EVAC_WARMUP = ['emergencia.json', 'tsunami_vias.json', 'tsunami_areas.json'];
+function warmupEvacuacion() {
+  if (!navigator.onLine || !('serviceWorker' in navigator)) return;
+  for (const f of EVAC_WARMUP) fetch(f).catch(() => {});
+}
+if ('requestIdleCallback' in window) {
+  requestIdleCallback(warmupEvacuacion, { timeout: 10000 });
+} else {
+  setTimeout(warmupEvacuacion, 4000);
+}
+
 async function loadAireSinca() {
   try {
     const res = await fetch('aire.json', { cache: 'no-store' });
@@ -4235,12 +4262,16 @@ function ultimaActualizacionLocal() {
   return horaLocal(masReciente.replace(' UTC', 'Z').replace(' ', 'T'));
 }
 
-function mostrarOffline(mostrar) {
+function mostrarOffline(mostrar, mensaje) {
   const bar = $('#offline-bar');
   if (!bar) return;
   if (!mostrar) { bar.hidden = true; return; }
-  const hora = ultimaActualizacionLocal();
-  bar.textContent = `⚠ Sin conexión — mostrando los últimos datos guardados${hora ? ` (actualizados ${hora} h)` : ''}`;
+  if (mensaje) {
+    bar.textContent = `⚠ ${mensaje}`;
+  } else {
+    const hora = ultimaActualizacionLocal();
+    bar.textContent = `⚠ Sin conexión — mostrando los últimos datos guardados${hora ? ` (actualizados ${hora} h)` : ''}`;
+  }
   bar.hidden = false;
 }
 
