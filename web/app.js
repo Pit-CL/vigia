@@ -3220,10 +3220,21 @@ function riesgoEventos() {
   const items = [];
 
   for (const a of alertasData ? alertasData.alertas : []) {
-    const score = a.nivel === 'roja' ? 100 : a.nivel === 'amarilla' ? 60 : a.nivel === 'temprana_preventiva' ? 30 : 0;
+    const fecha = parseFechaAlerta(a.desde);
+    let score;
+    if (a.nivel === 'roja') score = 100;
+    else if (a.nivel === 'amarilla') score = 60;
+    else if (a.nivel === 'temprana_preventiva') {
+      // Una ATP puede llevar meses vigente: pasado ese punto es contexto de
+      // fondo, no noticia, así que baja bajo los avisos meteo (25) — estos
+      // siempre describen las próximas horas. Sin fecha parseable, se trata
+      // como antigua (mismo criterio conservador).
+      const diasVigente = fecha ? (ahora - fecha.getTime()) / 86400e3 : Infinity;
+      score = diasVigente > 30 ? 15 : 30;
+    } else score = 0;
     if (!score) continue;
     items.push({
-      score, fecha: parseFechaAlerta(a.desde), capa: 'alertas', lat: a.lat, lon: a.lon,
+      score, fecha, capa: 'alertas', lat: a.lat, lon: a.lon,
       emoji: emojiEvento(a.evento),
       texto: `${NIVEL_ALERTA_LABEL[a.nivel] || a.nivel} · ${a.evento} · ${a.region} (${a.n_comunas} comuna${a.n_comunas === 1 ? '' : 's'})`,
     });
