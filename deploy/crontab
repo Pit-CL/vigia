@@ -1,7 +1,8 @@
 # Ingesta Sinóptica (TZ del contenedor: America/Santiago)
-# Observaciones METAR/DMC cada hora; pronósticos 2 veces al día; sismos +
-# estado de tsunami cada 10 min; incendios (FIRMS) y alertas (SENAPRED) cada
-# hora; volcanes (RNVV) 2x/día; marea/oleaje (Open-Meteo Marine) 4x/día;
+# Observaciones METAR/DMC cada hora; pronósticos 2 veces al día; sismos cada
+# 2 min (baja latencia de notificación) y estado de tsunami cada 10 min;
+# incendios (FIRMS) y alertas (SENAPRED) cada hora; volcanes (RNVV) 2x/día;
+# marea/oleaje (Open-Meteo Marine) 4x/día;
 # infraestructura de emergencia (SENAPRED) y catastro de remociones en masa
 # (SENAPRED) 1x/semana (ambas cuasi-estáticas); cortes de luz SEC cada 15 min
 # y farmacias de turno MINSAL 2x/día (barato: solo leen data/incoming/*.json
@@ -17,7 +18,8 @@
 4,14,24,34,44,54 * * * * python3 /app/ingesta/watchdog.py >> /data/ingesta.log 2>&1
 7 * * * * python3 /app/ingesta/run.py >> /data/ingesta.log 2>&1
 37 1,13 * * * python3 /app/ingesta/run.py --forecasts >> /data/ingesta.log 2>&1
-*/10 * * * * python3 /app/ingesta/run.py --sismos --tsunami >> /data/ingesta.log 2>&1
+*/2 * * * * python3 /app/ingesta/run.py --sismos >> /data/ingesta.log 2>&1
+3-59/10 * * * * python3 /app/ingesta/run.py --tsunami >> /data/ingesta.log 2>&1
 22 * * * * python3 /app/ingesta/run.py --incendios --alertas >> /data/ingesta.log 2>&1
 52 8,20 * * * python3 /app/ingesta/run.py --volcanes >> /data/ingesta.log 2>&1
 19 3,9,15,21 * * * python3 /app/ingesta/run.py --marea >> /data/ingesta.log 2>&1
