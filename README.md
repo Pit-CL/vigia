@@ -62,6 +62,8 @@ Vigía es una PWA gratuita que junta, en un solo mapa de Chile, el pronóstico d
 
 Instalable, con tema automático claro/oscuro, filtro «Chile» / «cerca de tu ciudad», zoom a nivel calle, y tiles del mapa de tu zona cacheados para que la guía de emergencia funcione sin conexión.
 
+<img src="docs/screenshot-movil.png" alt="Vigía en el celular, instalado como PWA" width="280">
+
 ## Capas del mapa
 
 Catorce capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
@@ -133,13 +135,13 @@ Tres contenedores (`docker-compose.yml`): **`web`** (nginx estático), **`ingest
 | [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/) | Focos de calor / incendios activos (VIIRS 375 m) | Cita NASA FIRMS |
 | [SENAPRED](https://senapred.cl/) (ArcGIS) | Alertas vigentes | Datos públicos del Estado de Chile |
 | [SERNAGEOMIN](https://rnvv.sernageomin.cl/) (RNVV) | Semáforo de alerta técnica volcánica | Datos públicos del Estado de Chile |
-| [Visor Chile Preparado](https://www.chilepreparado.cl/) (SENAPRED) | Centros de salud, bomberos, Carabineros, puntos de encuentro, vías de evacuación, zonas de inundación | Datos públicos del Estado de Chile |
+| [Visor Chile Preparado](https://www.visorchilepreparado.cl/) (SENAPRED) | Centros de salud, bomberos, Carabineros, puntos de encuentro, vías de evacuación, zonas de inundación | Datos públicos del Estado de Chile |
 | Catastro de remociones en masa (SENAPRED, ArcGIS) | 1.218 eventos históricos (aluviones, deslizamientos, derrumbes) | Datos públicos del Estado de Chile |
 | [Open-Meteo Marine](https://open-meteo.com/en/docs/marine-weather-api) | Marea, oleaje y temperatura del mar en 32 puntos de la costa | CC BY 4.0 |
 | [PTWC](https://www.tsunami.gov/) (NOAA) | Boletines de amenaza de tsunami para el Pacífico | Dominio público |
 | [GloFAS](https://global-flood.emergency.copernicus.eu/) (Copernicus) vía [Open-Meteo Flood API](https://open-meteo.com/en/docs/flood-api) | Pronóstico de caudal de ríos en 29 puntos curados | CC BY 4.0 |
 | [INE](https://www.ine.gob.cl/) (censo) | Comunas y su geolocalización para el buscador | Datos públicos del Estado de Chile |
-| [NASA GIBS](https://www.earthdata.nasa.gov/data/tools/gibs) (GOES-East GeoColor, NOAA) | Imagen satelital de nubes y tormentas sobre Chile | Dominio público |
+| [NASA GIBS](https://www.earthdata.nasa.gov/technology/global-imagery-browse-services-gibs) (GOES-East GeoColor, NOAA) | Imagen satelital de nubes y tormentas sobre Chile | Dominio público |
 
 ## Correr en local
 
