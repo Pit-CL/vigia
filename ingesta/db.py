@@ -167,6 +167,7 @@ RANGO_FISICO = {
     "dew_point_2m": (-60, 40),
     "relative_humidity_2m": (0, 100),
     "wind_speed_10m": (0, 250),
+    "wind_gusts_10m": (0, 250),
     "precipitation": (0, 120),
     "cloud_cover": (0, 100),
 }

@@ -96,6 +96,7 @@ const OBS_LABELS = {
   relative_humidity_2m: ['Humedad relativa', '%'],
   pressure_msl: ['Presión (nivel del mar)', 'hPa'],
   wind_speed_10m: ['Viento (prom. 10 min)', 'km/h'],
+  wind_gusts_10m: ['Ráfagas (máx)', 'km/h'],
   wind_direction_10m: ['Dirección del viento', '°'],
   visibility: ['Visibilidad', 'm'],
   cloud_cover: ['Nubosidad', '%'],
@@ -639,6 +640,25 @@ function severidadViento(grado) {
   if (grado >= 9) return 'rojo';
   if (grado >= 7) return 'naranja';
   return 'amarillo';
+}
+
+// Umbral de ráfaga (km/h) para calificar en la capa: mismo umbral amarillo
+// nacional que usa ingesta/avisos.py:111 (RAFAGAS_AMARILLO/NARANJA/ROJO) para
+// el aviso de ráfagas — constante solo en Python, replicada aquí a mano.
+const UMBRAL_RAFAGA_KMH = 90;
+const RAFAGA_NARANJA_KMH = 120;
+const RAFAGA_ROJO_KMH = 150;
+function severidadRafaga(g) {
+  if (g >= RAFAGA_ROJO_KMH) return 'rojo';
+  if (g >= RAFAGA_NARANJA_KMH) return 'naranja';
+  if (g >= UMBRAL_RAFAGA_KMH) return 'amarillo';
+  return null;
+}
+const SEV_RANGO = { amarillo: 1, naranja: 2, rojo: 3 };
+function peorSeveridad(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  return SEV_RANGO[b] > SEV_RANGO[a] ? b : a;
 }
 
 function renderNow(best) {
@@ -1891,26 +1911,37 @@ function paintPrecip(group) {
 // estaciones sobre el umbral son pocas y no se apilan visualmente.
 function paintViento(group) {
   const est = estacionesData.estaciones.filter((e) =>
-    e.obs && e.obs.wind_speed_10m != null && e.obs.wind_speed_10m >= UMBRAL_VIENTO_KMH
-    && e.obs.wind_direction_10m != null);
+    e.obs && e.obs.wind_direction_10m != null && (
+      (e.obs.wind_speed_10m != null && e.obs.wind_speed_10m >= UMBRAL_VIENTO_KMH) ||
+      (e.obs.wind_gusts_10m != null && e.obs.wind_gusts_10m >= UMBRAL_RAFAGA_KMH)
+    ));
   if (!est.length) {
     if (capasActivas.size === 1) $('#map-meta').textContent = `Viento: ninguna estación sobre ${UMBRAL_VIENTO_KMH} km/h ahora`;
     return;
   }
   est.forEach((e) => {
     const v = e.obs.wind_speed_10m;
+    const g = e.obs.wind_gusts_10m;
     const dir = e.obs.wind_direction_10m;
-    const bf = beaufort(v);
-    const sev = severidadViento(bf.grado);
+    // Beaufort del sostenido solo cuenta si POR SÍ SOLO cruza el umbral de la
+    // capa; si la estación entró solo por ráfaga, la severidad es la de la
+    // ráfaga (un sostenido bajo no "diluye" el peligro de la ráfaga).
+    const sevViento = (v != null && v >= UMBRAL_VIENTO_KMH) ? severidadViento(beaufort(v).grado) : null;
+    const sevRafaga = g != null ? severidadRafaga(g) : null;
+    const sev = peorSeveridad(sevViento, sevRafaga) || 'amarillo';
     // Hacia dónde VA el viento (no de dónde viene): misma convención que el
     // chip de avance de incendios (vientoEnFoco/paintIncendios más arriba).
     const rumbo = (dir + 180) % 360;
+    const vTxt = v == null ? '—' : Math.round(v);
+    const rafagaTxt = sevRafaga ? ` · raf ${Math.round(g)}` : '';
     const icon = L.divIcon({
       className: 'viento-icon',
-      html: `<span class="viento-flecha">➤</span><span class="stn-label viento-${sev}">${Math.round(v)} km/h</span>`,
-      // Ancho holgado para "NNN km/h" (3 dígitos, ej. temporales >99 km/h):
-      // flecha 14px + gap 3px + label mono 0.82rem con padding 3px 8px.
-      iconSize: [96, 24], iconAnchor: [48, 12],
+      html: `<span class="viento-flecha">➤</span><span class="stn-label viento-${sev}">${vTxt} km/h${rafagaTxt}</span>`,
+      // Ancho holgado para "NNN km/h · raf NNN" (peor caso: sostenido Y ráfaga
+      // de 3 dígitos, ej. 150 km/h · raf 300) — medido con Playwright para el
+      // caso de 2 dígitos ("33 km/h · raf 98" → 146px de label), + margen para
+      // el caso de 3 dígitos: flecha 14px + gap 3px + label mono 0.82rem.
+      iconSize: [190, 24], iconAnchor: [95, 12],
     });
     const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(group);
     // Rotación por CSSOM tras crear el marcador: la CSP (style-src 'self')
@@ -1922,7 +1953,9 @@ function paintViento(group) {
     box.className = 'stn-popup';
     const h = document.createElement('strong'); h.textContent = e.nombre; box.appendChild(h);
     box.appendChild(popupRows([
-      ['Viento', `${Math.round(v)} km/h · Bf ${bf.grado} (${bf.nombre})`],
+      ['Viento', v == null ? null : `${Math.round(v)} km/h · Bf ${beaufort(v).grado} (${beaufort(v).nombre})`],
+      // Sin grado Beaufort: la escala es solo para viento sostenido, no ráfagas.
+      ['Ráfagas', g == null ? null : `${Math.round(g)} km/h`],
       ['Dirección', `desde el ${compass(dir)}`],
       ['Hora obs.', e.obs_time ? `${horaLocal(e.obs_time)} h` : null],
     ]));
