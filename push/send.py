@@ -19,12 +19,19 @@ ingesta/watchdog.py, que usa el mismo webhook para otro fin).
 
 Eventos NACIONALES (tsunami, sismos M≥6.5/PAGER, volcanes, alertas rojas) se
 envían UNA vez a todo el canal (endpoint `slack:nacional`), sin importar
-cuántas zonas haya configuradas. Eventos DE ZONA (sismo local M≥5.5/200km,
-alerta amarilla de la región de la zona, avisos Vigía cercanos, focos de
-incendio cercanos) se envían una vez por zona (endpoint `slack:zona:<nombre>`)
-con el nombre de la zona en el texto. Migración: los eventos ya enviados bajo
-el endpoint legacy `slack:zona` (una sola zona, esquema anterior) no se
-reenvían — ver `_enviar_dedup`.
+cuántas zonas haya configuradas. Eventos DE ZONA raros/urgentes (sismo local
+M≥5.5/200km, alerta amarilla de la región de la zona) se envían individuales,
+una vez por zona (endpoint `slack:zona:<nombre>`) con el nombre de la zona en
+el texto. Migración: los eventos ya enviados bajo el endpoint legacy
+`slack:zona` (una sola zona, esquema anterior) no se reenvían — ver
+`_enviar_dedup`.
+
+Avisos Vigía cercanos y focos de incendio cercanos, en cambio, pueden llegar
+en ráfagas de decenas por ciclo (un frente de lluvia genera un aviso por
+estación) — se agrupan en UN solo mensaje "digest" por zona por ciclo, ver
+`_digest_zona_slack`. El dedup sigue siendo por evento individual (cada
+aviso/foco incluido en el digest se marca enviado); el digest solo cambia el
+empaque de envío, no qué se considera nuevo.
 """
 import argparse
 import json
@@ -34,6 +41,7 @@ import re
 import sqlite3
 import urllib.error
 import urllib.request
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -166,6 +174,14 @@ AVISO_TIPO_LABEL_SLACK = {
     "nieve_cota_baja": "nieve en cota baja", "ola_calor": "ola de calor",
     "ola_frio": "ola de frío", "tormenta": "tormenta eléctrica", "uv": "UV extremo",
 }
+
+# Digest por zona (avisos Vigía + incendios, ver _digest_zona_slack): orden
+# de severidad para ordenar/contar, mismo criterio que SEV_RANGO en
+# web/app.js. Tope de líneas para no generar un mensaje gigante cuando un
+# frente de lluvia produce decenas de avisos en el mismo ciclo.
+NIVEL_RANGO_SLACK = {"amarillo": 1, "naranja": 2, "rojo": 3}
+MAX_AVISOS_DIGEST = 8
+MAX_FOCOS_DIGEST = 6
 
 CL_TZ = ZoneInfo("America/Santiago")
 
@@ -502,7 +518,12 @@ def _eventos_avisos_slack(zona: dict, avisos: list[dict]) -> list[dict]:
     (aunque el valor fluctúe entre corridas) → no se reenvía. Si el nivel
     sube (amarillo→naranja→rojo) el id cambia → se envía de nuevo,
     notificando la escalada. Si baja, el id vuelve a uno ya enviado ese día
-    → no se reenvía (ya se avisó de ese nivel)."""
+    → no se reenvía (ya se avisó de ese nivel).
+
+    Devuelve datos estructurados (no texto ya armado): `_digest_zona_slack`
+    los ordena y agrupa en un solo mensaje por zona en vez de mandar uno por
+    aviso (ver PR fix/slack-digest-por-zona — un frente de lluvia genera un
+    aviso por estación, decenas por ciclo)."""
     eventos = []
     for a in avisos:
         lat, lon = a.get("lat"), a.get("lon")
@@ -518,15 +539,17 @@ def _eventos_avisos_slack(zona: dict, avisos: list[dict]) -> list[dict]:
         hoy = datetime.now(CL_TZ).date()
         dia = _dia_relativo(peak_local.date(), hoy)
         hora = peak_local.strftime("%H:%M")
-        emoji = AVISO_EMOJI_SLACK.get(a["tipo"], "⚠️")
         etiqueta = AVISO_TIPO_LABEL_SLACK.get(a["tipo"], a["tipo"])
         acuerdo = f" (acuerdo {a['acuerdo']} modelos)" if a.get("acuerdo") else ""
-        texto = (
-            f"{emoji} [{zona['nombre']}] Aviso Vigía nivel {a['nivel']}: {etiqueta} {a['valor']} {a['unidad']} "
-            f"peak {dia} {hora} en {a['nombre']}{acuerdo} — aviso propio, no oficial.")
+        linea = (
+            f"• {a['nivel']} · {etiqueta} {a['valor']} {a['unidad']} peak {dia} {hora}"
+            f" — {a['nombre']}{acuerdo}")
         fecha_local = peak_local.strftime("%Y-%m-%d")
         event_id = f"aviso:{a['estacion_id']}:{a['tipo']}:{fecha_local}:{a['nivel']}"
-        eventos.append({"id": event_id, "texto": texto})
+        eventos.append({
+            "id": event_id, "tipo": a["tipo"], "nivel": a["nivel"],
+            "valor": a["valor"], "linea": linea,
+        })
     return eventos
 
 
@@ -536,7 +559,10 @@ def _eventos_incendios_slack(zona: dict, focos: list[dict]) -> list[dict]:
     Dedup: los focos FIRMS se re-detectan en cada pasada satelital, así que
     el event_id agrupa por celda (~1 km, lat/lon redondeados a 2 decimales)
     y fecha local — avisa un foco nuevo en esa celda una vez por día, sin
-    repetir el mismo foco todo el día en cada pasada."""
+    repetir el mismo foco todo el día en cada pasada.
+
+    Devuelve datos estructurados (no texto ya armado), igual que
+    `_eventos_avisos_slack` — ver `_digest_zona_slack`."""
     eventos = []
     for f in focos:
         lat, lon = f.get("lat"), f.get("lon")
@@ -554,12 +580,59 @@ def _eventos_incendios_slack(zona: dict, focos: list[dict]) -> list[dict]:
         fecha_local = acq_local.strftime("%Y-%m-%d")
         event_id = f"incendio:{celda_lat}:{celda_lon}:{fecha_local}"
         rumbo = _rumbo(zona["lat"], zona["lon"], lat, lon)
-        texto = (
-            f"🔥 [{zona['nombre']}] Foco de incendio detectado a {round(dist)} km al {rumbo} "
-            f"(satélite NASA, {acq_local.strftime('%H:%M')} h) — foco de calor, no necesariamente un "
-            "incendio confirmado.")
-        eventos.append({"id": event_id, "texto": texto})
+        eventos.append({
+            "id": event_id, "dist": dist, "rumbo": rumbo,
+            "hora": acq_local.strftime("%H:%M"),
+        })
     return eventos
+
+
+def _digest_zona_slack(zona: dict, avisos_nuevos: list[dict], focos_nuevos: list[dict]) -> str | None:
+    """Arma UN solo mensaje Slack con los avisos Vigía y focos de incendio
+    NUEVOS de esta zona en el ciclo (ya pasaron el dedup, ver _procesar_slack).
+    None si no hay nada nuevo — nunca se manda un "resumen vacío".
+
+    Avisos: ordenados de peor a mejor nivel (rojo>naranja>amarillo) y por
+    valor dentro del nivel; máx MAX_AVISOS_DIGEST líneas, el resto se resume
+    en "… y N más". El emoji del encabezado es el del tipo de aviso más
+    severo (mismo criterio que EXPLICA_EVENTO: no inventar un tono nuevo).
+    La marca "aviso propio, no oficial" va UNA vez en el encabezado.
+
+    Incendios: sección propia en el mismo mensaje si hay focos nuevos,
+    tope MAX_FOCOS_DIGEST items."""
+    partes = []
+
+    if avisos_nuevos:
+        avisos_ordenados = sorted(
+            avisos_nuevos, key=lambda a: (-NIVEL_RANGO_SLACK.get(a["nivel"], 0), -a["valor"]))
+        conteos = Counter(a["nivel"] for a in avisos_nuevos)
+        resumen_niveles = ", ".join(
+            f"{conteos[n]} {n}s" for n in ("rojo", "naranja", "amarillo") if conteos.get(n))
+        emoji = AVISO_EMOJI_SLACK.get(avisos_ordenados[0]["tipo"], "⚠️")
+        plural = len(avisos_nuevos) != 1
+        encabezado = (
+            f"{emoji} [{zona['nombre']}] {len(avisos_nuevos)} {'avisos' if plural else 'aviso'} Vigía"
+            f" {'nuevos' if plural else 'nuevo'} en tu radio ({resumen_niveles}) — aviso propio, no oficial")
+        lineas = [a["linea"] for a in avisos_ordenados[:MAX_AVISOS_DIGEST]]
+        restantes = len(avisos_ordenados) - len(lineas)
+        if restantes > 0:
+            lineas.append(f"… y {restantes} más (ver mapa en vigia.cavara.cl)")
+        partes.append("\n".join([encabezado] + lineas))
+
+    if focos_nuevos:
+        prefijo_zona = "" if avisos_nuevos else f"[{zona['nombre']}] "
+        items = [f"a {round(f['dist'])} km al {f['rumbo']} ({f['hora']} h)"
+                 for f in focos_nuevos[:MAX_FOCOS_DIGEST]]
+        restantes = len(focos_nuevos) - len(items)
+        if restantes > 0:
+            items.append(f"… y {restantes} más")
+        partes.append(
+            f"🔥 {prefijo_zona}{len(focos_nuevos)} focos nuevos (satélite NASA, foco de calor no confirmado): "
+            + ", ".join(items))
+
+    if not partes:
+        return None
+    return "\n\n".join(partes)
 
 
 def _eventos_nacionales_slack(con: sqlite3.Connection, sismos_base: list[dict],
@@ -572,14 +645,23 @@ def _eventos_nacionales_slack(con: sqlite3.Connection, sismos_base: list[dict],
     )
 
 
-def _eventos_zona_slack(sismos_base: list[dict], zona: dict, alertas: list[dict],
-                         avisos: list[dict], focos: list[dict]) -> list[dict]:
+def _eventos_zona_slack_individuales(sismos_base: list[dict], zona: dict, alertas: list[dict]) -> list[dict]:
+    """Eventos de zona que siguen yendo individuales: sismos locales y
+    alertas SENAPRED amarillas — son raros y urgentes, no ameritan digest
+    (a diferencia de avisos Vigía/incendios, ver `_digest_zona_slack`)."""
     return (
         _eventos_sismos_slack_zona(sismos_base, zona)
         + _eventos_alertas_slack_zona(zona, alertas)
-        + _eventos_avisos_slack(zona, avisos)
-        + _eventos_incendios_slack(zona, focos)
     )
+
+
+def _dedup_pendiente(event_id: str, endpoint: str, endpoints_legacy: list[str],
+                      ya_enviados: set[tuple[str, str]]) -> bool:
+    """True si `event_id` NO se ha enviado aún bajo `endpoint` ni bajo
+    ninguno de los `endpoints_legacy` (esquema pre multi-zona)."""
+    if (event_id, endpoint) in ya_enviados:
+        return False
+    return not any((event_id, ep) in ya_enviados for ep in endpoints_legacy)
 
 
 def _enviar_dedup(con: sqlite3.Connection, event_id: str, texto: str, endpoint: str,
@@ -587,9 +669,7 @@ def _enviar_dedup(con: sqlite3.Connection, event_id: str, texto: str, endpoint: 
     """Envía un evento de Slack con dedup por (event_id, endpoint) y además
     consulta `endpoints_legacy` (endpoints del esquema pre multi-zona) para
     no reenviar algo ya notificado antes de esta migración."""
-    if (event_id, endpoint) in ya_enviados:
-        return
-    if any((event_id, ep) in ya_enviados for ep in endpoints_legacy):
+    if not _dedup_pendiente(event_id, endpoint, endpoints_legacy, ya_enviados):
         return
     if _post_slack(texto):
         con.execute(
@@ -597,6 +677,26 @@ def _enviar_dedup(con: sqlite3.Connection, event_id: str, texto: str, endpoint: 
             (event_id, endpoint))
         con.commit()
         ya_enviados.add((event_id, endpoint))
+
+
+def _enviar_digest_zona(con: sqlite3.Connection, zona: dict, endpoint: str,
+                         avisos_nuevos: list[dict], focos_nuevos: list[dict],
+                         ya_enviados: set[tuple[str, str]]) -> None:
+    """Manda el digest de avisos+incendios nuevos de la zona en UN mensaje y,
+    si el POST tuvo éxito, marca cada event_id incluido como enviado bajo
+    `endpoint` — el dedup sigue siendo por evento individual, el digest solo
+    cambia el empaque de envío."""
+    texto = _digest_zona_slack(zona, avisos_nuevos, focos_nuevos)
+    if texto is None:
+        return
+    if not _post_slack(texto):
+        return
+    for ev in avisos_nuevos + focos_nuevos:
+        con.execute(
+            "INSERT OR IGNORE INTO sent(event_id, endpoint, sent_at) VALUES (?, ?, datetime('now'))",
+            (ev["id"], endpoint))
+        ya_enviados.add((ev["id"], endpoint))
+    con.commit()
 
 
 def _procesar_slack(con: sqlite3.Connection, sismos_base: list[dict], ya_enviados: set[tuple[str, str]]) -> None:
@@ -618,8 +718,15 @@ def _procesar_slack(con: sqlite3.Connection, sismos_base: list[dict], ya_enviado
     for zona in zonas:
         endpoint = f"slack:zona:{zona['nombre']}"
         endpoints_legacy = [SLACK_ENDPOINT] if zona.get("legacy") else []
-        for ev in _eventos_zona_slack(sismos_base, zona, alertas, avisos, focos):
+
+        for ev in _eventos_zona_slack_individuales(sismos_base, zona, alertas):
             _enviar_dedup(con, ev["id"], ev["texto"], endpoint, endpoints_legacy, ya_enviados)
+
+        avisos_nuevos = [a for a in _eventos_avisos_slack(zona, avisos)
+                          if _dedup_pendiente(a["id"], endpoint, endpoints_legacy, ya_enviados)]
+        focos_nuevos = [f for f in _eventos_incendios_slack(zona, focos)
+                         if _dedup_pendiente(f["id"], endpoint, endpoints_legacy, ya_enviados)]
+        _enviar_digest_zona(con, zona, endpoint, avisos_nuevos, focos_nuevos, ya_enviados)
 
 
 def _evento_kit(ahora: datetime) -> dict:
