@@ -176,6 +176,7 @@ def ingest_metar(con, fetched_at: str) -> int:
             ("dew_point_2m", dewp),
             ("wind_direction_10m", num(ob.get("wdir"))),          # 'VRB' queda fuera
             ("wind_speed_10m", None if num(ob.get("wspd")) is None else round(ob["wspd"] * 1.852, 1)),
+            ("wind_gusts_10m", None if num(ob.get("wgst")) is None else round(ob["wgst"] * 1.852, 1)),
             ("pressure_msl", num(ob.get("altim"))),
             ("visibility", None if num(ob.get("visib")) is None else round(ob["visib"] * 1609.34)),
             ("cloud_cover", _CLOUD_PCT.get(ob.get("cover"))),
@@ -210,6 +211,10 @@ def ingest_metar(con, fetched_at: str) -> int:
 
 _NUM_RE = re.compile(r"-?\d+(?:\.\d+)?")
 
+# Ráfagas (wind_gusts_10m): la documentación pública de getDatosRecientesEma
+# describe "fuerzaDelViento10MinutosMax" (máximo instantáneo del período de
+# 10 min), pero no se verificó contra un payload real (sin DMC_TOKEN en este
+# entorno) — no se agrega hasta confirmar el campo en un raw_payload real.
 _DMC_FIELDS = [
     ("temperatura", "temperature_2m", 1.0),
     ("puntoDeRocio", "dew_point_2m", 1.0),
