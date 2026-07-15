@@ -1,7 +1,7 @@
 # Satélite omen — fuentes que bloquean IPs de datacenter
 
 SEC (cortes de luz) y MINSAL (farmacias de turno) responden solo desde IPs
-residenciales chilenas: fallan desde el VPS (Hostinger, datacenter) y
+residenciales chilenas: fallan desde el VPS (IP de datacenter) y
 funcionan desde `omen` (verificado). Este directorio corre **en omen**, no
 en el VPS — sube JSON crudos al VPS, que los procesa (`ingesta/cortes.py`,
 `ingesta/farmacias.py`).
