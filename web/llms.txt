@@ -1,0 +1,10 @@
+# Vigía
+
+> Clima por comuna en Chile con verificación pública de exactitud, más un centro de riesgos naturales en vivo (sismos, tsunami, incendios, alertas SENAPRED, volcanes). Gratuito, sin publicidad, código abierto (MIT).
+
+Vigía combina varios modelos meteorológicos internacionales (ECMWF, GFS, ICON, GEM, ARPEGE) con observaciones reales de la Dirección Meteorológica de Chile (DMC) y la red METAR/OMM, y publica en público cuánto se equivoca cada modelo frente a lo que realmente ocurrió. Cubre las 346 comunas de Chile, de Arica a la Antártica.
+
+## Páginas
+
+- [Vigía](https://vigia.cavara.cl/): pronóstico del tiempo por comuna con verificación pública de aciertos, más el centro de riesgos naturales de Chile (sismos, tsunami, incendios, alertas SENAPRED, volcanes, calidad del aire, marea y crecidas de ríos).
+- [Qué hacer en una emergencia](https://vigia.cavara.cl/emergencia.html): guía práctica offline con protocolos ante sismo, tsunami, incendio y otras emergencias en Chile.

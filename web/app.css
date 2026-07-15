@@ -683,6 +683,13 @@ main {
 
 .colophon p { margin: 4px 0; }
 
+.colophon h2 {
+  margin: 16px 0 4px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
 .archive-status {
   font-family: var(--font-mono);
   font-size: 0.7rem;
