@@ -83,6 +83,15 @@ MAG_MIN_ZONA_PISO = 4.5
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 SLACK_ZONA_REGION = os.environ.get("SLACK_ZONA_REGION", "")
 
+# ── Claim VAPID 'sub' (RFC 8292) ────────────────────────────────
+# pywebpush exige vapid_claims={"sub": "mailto:..."} para firmar el push;
+# sin un 'sub' válido, los endpoints FCM (Chrome) rechazan el envío con
+# WebPushException "Missing 'sub' from claims". Formato esperado en la env:
+# "mailto:correo@dominio". Sin VAPID_SUB configurada, se advierte una vez
+# por corrida en main() (no por cada suscriptor) y el envío sigue fallando
+# igual que hoy — no hay email por defecto porque el repo es público.
+VAPID_SUB = os.environ.get("VAPID_SUB", "")
+
 
 def _float_env(nombre: str):
     valor = os.environ.get(nombre, "")
@@ -819,11 +828,6 @@ def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], ti
     el próximo ciclo de cron — el caller no debe marcarlos como enviados."""
     payload = json.dumps({"title": titulo, "body": body, "url": url})
     vapid_private_key = os.environ["VAPID_PRIVATE_KEY"]
-    # docker-compose.yml define VAPID_CONTACT: ${VAPID_CONTACT:-}, así que si no
-    # se configuró en el .env de prod la var llega como string vacío (presente,
-    # no ausente) y os.environ.get(k, default) NO cae al default en ese caso —
-    # solo lo hace si la key falta. Con "or" se cubre además ausencia real.
-    contacto = os.environ.get("VAPID_CONTACT") or "rafaelfariaspoblete@gmail.com"
     caducados = set()
     fallidos = set()
 
@@ -834,7 +838,7 @@ def _enviar_evento(con: sqlite3.Connection, subs: list[tuple[str, str, str]], ti
                 subscription_info=sub_info,
                 data=payload,
                 vapid_private_key=vapid_private_key,
-                vapid_claims={"sub": "mailto:" + contacto},
+                vapid_claims={"sub": VAPID_SUB},
             )
         except WebPushException as exc:
             status = exc.response.status_code if exc.response is not None else None
@@ -897,6 +901,10 @@ def main() -> None:
     if not subs:
         con.close()
         return
+
+    if not VAPID_SUB:
+        print("[push] VAPID_SUB no configurada (formato mailto:correo): los envíos a "
+              "endpoints FCM (Chrome) van a fallar con 'Missing sub from claims'")
 
     for ev, destinatarios in seleccionar(eventos, subs, ya_enviados):
         caducados, fallidos = _enviar_evento(con, destinatarios, ev["titulo"], ev["body"], ev["url"])
