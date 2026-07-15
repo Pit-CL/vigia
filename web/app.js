@@ -1908,7 +1908,9 @@ function paintViento(group) {
     const icon = L.divIcon({
       className: 'viento-icon',
       html: `<span class="viento-flecha">➤</span><span class="stn-label viento-${sev}">${Math.round(v)} km/h</span>`,
-      iconSize: [78, 26], iconAnchor: [39, 13],
+      // Ancho holgado para "NNN km/h" (3 dígitos, ej. temporales >99 km/h):
+      // flecha 14px + gap 3px + label mono 0.82rem con padding 3px 8px.
+      iconSize: [96, 24], iconAnchor: [48, 12],
     });
     const marker = L.marker([e.lat, e.lon], { icon, title: e.nombre }).addTo(group);
     // Rotación por CSSOM tras crear el marcador: la CSP (style-src 'self')
