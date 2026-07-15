@@ -618,12 +618,13 @@ function sensacion(t, vKmh) {
   return t;
 }
 
-// Umbral superior exclusivo de cada grado Beaufort en km/h (viento sostenido a 10 m).
+// Umbral km/h donde empieza el grado siguiente (viento sostenido a 10 m; escala
+// Beaufort estándar: grado 1 = 1-5, grado 2 = 6-11, grado 3 = 12-19, etc).
 const BEAUFORT = [
-  [1, 'calma'], [5, 'ventolina'], [11, 'brisa muy débil'], [19, 'brisa débil'],
-  [28, 'brisa moderada'], [38, 'brisa fresca'], [49, 'viento fuerte'],
-  [61, 'viento muy fuerte'], [74, 'temporal'], [88, 'temporal fuerte'],
-  [102, 'temporal muy fuerte'], [117, 'borrasca'], [Infinity, 'huracán'],
+  [1, 'calma'], [6, 'ventolina'], [12, 'brisa muy débil'], [20, 'brisa débil'],
+  [29, 'brisa moderada'], [39, 'brisa fresca'], [50, 'viento fuerte'],
+  [62, 'viento muy fuerte'], [75, 'temporal'], [89, 'temporal fuerte'],
+  [103, 'temporal muy fuerte'], [118, 'borrasca'], [Infinity, 'huracán'],
 ];
 function beaufort(kmh) {
   const i = BEAUFORT.findIndex(([max]) => kmh < max);
