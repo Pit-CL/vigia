@@ -698,6 +698,7 @@ function renderNow(best) {
   const rh = o && o.relative_humidity_2m != null ? o.relative_humidity_2m : c.relative_humidity_2m;
   const wsp = o && o.wind_speed_10m != null ? o.wind_speed_10m : c.wind_speed_10m;
   const wdir = o && o.wind_direction_10m != null ? o.wind_direction_10m : c.wind_direction_10m;
+  const gust = o && o.wind_gusts_10m != null ? o.wind_gusts_10m : c.wind_gusts_10m;
   const pres = o && o.pressure_msl != null ? o.pressure_msl : c.pressure_msl;
   const feels = o ? sensacion(temp, wsp) : c.apparent_temperature;
 
@@ -716,8 +717,9 @@ function renderNow(best) {
   // para que el wrap no separe el grado de su nombre (ver .bf-tag en
   // app.css). Sin riesgo XSS: wsp/wdir son numéricos y beaufort()/compass()
   // solo devuelven strings de listas fijas, nada viene de una fuente externa.
+  const rafagaTxt = gust != null && gust > wsp ? ` · ráf. ${Math.round(gust)} km/h` : '';
   $('#now-wind').innerHTML = wsp == null ? '—'
-    : `${Math.round(wsp)} km/h ${compass(wdir)} · <span class="bf-tag">Bf ${beaufort(wsp).grado} (${beaufort(wsp).nombre})</span>`;
+    : `${Math.round(wsp)} km/h ${compass(wdir)} · <span class="bf-tag">Bf ${beaufort(wsp).grado} (${beaufort(wsp).nombre})</span>${rafagaTxt}`;
   $('#now-pres').textContent = pres == null ? '—' : `${Math.round(pres)} hPa`;
   document.title = `${Math.round(temp)}°C ${place.name} — Vigía`;
 }
