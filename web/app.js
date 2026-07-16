@@ -11,6 +11,14 @@ const API_GEO = 'https://geocoding-api.open-meteo.com/v1/search';
 const API_AIRE = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const TZ = 'America/Santiago';
 
+// index.html precarga vendor/leaflet.css con <link rel="preload"> (no bloquea
+// el render); acá se aplica como stylesheet real. Para cuando este script
+// (defer) corre, el archivo ya está en la caché del navegador por el
+// preload, así que no hay una espera de red nueva ni un salto visible.
+document.head.appendChild(Object.assign(document.createElement('link'), {
+  rel: 'stylesheet', href: 'vendor/leaflet.css',
+}));
+
 // ── ICAP: índice de calidad del aire chileno (D.S. 12/2011 MMA) ──
 // La concentración de MP2,5 (promedio móvil 24 h) se mapea a un índice por
 // tramos lineales; los puntos de quiebre 50/80/110/170 µg/m³ son los umbrales
