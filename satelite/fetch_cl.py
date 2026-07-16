@@ -21,12 +21,17 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 SEC_URL = "https://apps.sec.cl/INTONLINEv1/ClientesAfectados/GetPorFecha"
+# Endpoint hermano: serie horaria de ~7 días (sin body). GetPorFecha exige
+# anho/mes/dia/hora exactos — si falta "hora" (o llega hora=0) devuelve el
+# snapshot de MEDIANOCHE, no el vigente (ver _fetch_sec). Igual que el
+# dashboard oficial (scripts/actions-page.js), se pide esta serie primero y
+# se usa el último registro publicado como referencia de fecha/hora.
+SEC_SERIE_URL = "https://apps.sec.cl/INTONLINEv1/ClientesAfectados/Get"
 MINSAL_URL = "https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php"
 
 # Destino en el VPS vía env VIGIA_SSH_DEST (se fija en la línea del crontab de
@@ -41,8 +46,27 @@ TIMEOUT_S = 30
 
 
 def _fetch_sec() -> dict:
-    hoy = datetime.now(ZoneInfo("America/Santiago"))
-    body = json.dumps({"anho": hoy.year, "mes": hoy.month, "dia": hoy.day}).encode("utf-8")
+    # Incidente 2026-07-16: sin "hora" (u hora=0) GetPorFecha respondió el
+    # snapshot de medianoche — Vigía mostró 13.643 clientes a nivel
+    # nacional cuando la SEC ya reportaba ~520.000. Por eso el primer paso
+    # es siempre pedir la serie horaria vigente.
+    req_serie = urllib.request.Request(SEC_SERIE_URL, method="POST", headers={
+        "User-Agent": UA, "Content-Type": "application/json", "Accept": "application/json",
+    })
+    with urllib.request.urlopen(req_serie, timeout=TIMEOUT_S) as res:
+        serie = json.loads(res.read().decode("utf-8"))
+
+    if not isinstance(serie, list) or not serie:
+        raise ValueError("ClientesAfectados/Get: serie horaria vacía o con formato inesperado")
+    ultimo = serie[-1]
+    try:
+        body = json.dumps({
+            "anho": ultimo["anho"], "mes": ultimo["mes"],
+            "dia": ultimo["dia"], "hora": ultimo["hora"],
+        }).encode("utf-8")
+    except (KeyError, TypeError) as err:
+        raise ValueError(f"ClientesAfectados/Get: último registro sin anho/mes/dia/hora: {err}")
+
     req = urllib.request.Request(SEC_URL, data=body, method="POST", headers={
         "User-Agent": UA, "Content-Type": "application/json", "Accept": "application/json",
     })

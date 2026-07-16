@@ -71,6 +71,9 @@ def _agregar(filas: list, comunas: dict) -> tuple[list, list]:
         comuna = _campo(fila, "COMUNA", "NOMBRE_COMUNA", "COMUNA_NOMBRE")
         if not comuna:
             continue
+        # El payload real de GetPorFecha no trae campo de empresa (verificado
+        # 2026-07-16): _campo() siempre da None aquí y "empresas" queda [].
+        # Se deja el fallback por si la fuente cambia de formato.
         empresa = _campo(fila, "EMPRESA", "NOMBRE_EMPRESA", "EMPRESA_NOMBRE")
         clientes_raw = _campo(fila, "CLIENTES_AFECTADOS", "CLIENTES", "N_CLIENTES_AFECTADOS")
         try:
