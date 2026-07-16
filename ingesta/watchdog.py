@@ -50,15 +50,27 @@ CHECKS = [
     ("avisos", config.AVISOS_PATH, 240,
      "avisos meteorológicos",
      "los avisos meteorológicos pueden no reflejar el pronóstico actual"),
+    # A diferencia de los anteriores (JSON publicados con campo "updated"),
+    # este es el crudo que sube satelite/fetch_cl.py por scp — ver
+    # ingesta/cortes.py y ingesta/farmacias.py. Si se congela, cortes.json y
+    # farmacias.json quedan sirviendo el último dato bueno marcado "stale"
+    # sin que nadie se entere (incidente 2026-07-16: 22 h ciego hasta que
+    # avisó la prensa, no el sistema).
+    ("satelite", config.INCOMING_DIR / "sec.json", 60,
+     "crudo del satélite (SEC cortes / MINSAL farmacias)",
+     "cortes de luz y farmacias de turno quedan congelados sin que nadie se entere"),
 ]
 
 
 def _leer_updated(path: Path):
-    """Datetime UTC del campo "updated", o None si el archivo falta o no
-    se puede parsear (ambos cuentan como falla)."""
+    """Datetime UTC de frescura del archivo: campo "updated" (JSON
+    publicados) o "fetched_utc" (crudo del satélite, ver satelite/fetch_cl.py).
+    None si el archivo falta o no se puede parsear (ambos cuentan como falla)."""
     try:
         data = json.loads(path.read_text())
-        return datetime.strptime(data["updated"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc)
+        if "updated" in data:
+            return datetime.strptime(data["updated"], "%Y-%m-%d %H:%M UTC").replace(tzinfo=timezone.utc)
+        return datetime.strptime(data["fetched_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     except Exception:
         return None
 

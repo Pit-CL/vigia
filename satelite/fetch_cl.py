@@ -73,8 +73,18 @@ def _escribir_y_subir(nombre: str, fetch_fn, tmpdir: str) -> bool:
         # del authorized_keys en el VPS (esa forced command solo intercepta
         # el protocolo scp clásico, no la subsystem request de sftp).
         # Verificado en omen (OpenSSH 9.6p1): sin -O el scp cuelga.
+        # ControlMaster=no + ControlPath=none: omen es la laptop personal de
+        # operación diaria, cuyo ~/.ssh/config trae bloques `Host *` con
+        # multiplexado (ControlMaster/ControlPath) puestos por otras
+        # herramientas ajenas a Vigía. Si ese ControlPath apunta a un
+        # directorio que no existe, el scp pierde la conexión sin subir
+        # nada (incidente 2026-07-16: 22 h sin datos de cortes/farmacias).
+        # Estas opciones fuerzan una conexión propia, sin depender de nada
+        # que otro script en omen pueda romper.
         subprocess.run(
-            ["scp", "-O", "-o", "ConnectTimeout=15", str(path), f"{SSH_DEST}:{INCOMING_DIR}/{nombre}"],
+            ["scp", "-O", "-o", "ConnectTimeout=15",
+             "-o", "ControlMaster=no", "-o", "ControlPath=none",
+             str(path), f"{SSH_DEST}:{INCOMING_DIR}/{nombre}"],
             check=True, capture_output=True, text=True, timeout=60,
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as err:
