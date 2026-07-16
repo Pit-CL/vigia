@@ -2926,7 +2926,7 @@ function paintCombustible(group) {
       const lon = grupo.reduce((s, p) => s + p.lon, 0) / grupo.length;
       const icon = L.divIcon({
         className: 'stn-icon',
-        html: `<span class="stn-label">⛽<b>${grupo.length}</b></span>`,
+        html: `<span class="stn-label combustible-precio">⛽<b>${grupo.length}</b></span>`,
         iconSize: [44, 26], iconAnchor: [22, 13],
       });
       const marker = L.marker([lat, lon], {
@@ -2946,7 +2946,7 @@ function paintCombustible(group) {
       const label = masBarato != null ? Math.round(masBarato) : '⛽';
       const icon = L.divIcon({
         className: 'stn-icon',
-        html: `<span class="stn-label">${label}${grupo.length > 1 ? ` <b>×${grupo.length}</b>` : ''}</span>`,
+        html: `<span class="stn-label combustible-precio">${label}${grupo.length > 1 ? ` <b>×${grupo.length}</b>` : ''}</span>`,
         iconSize: [56, 26], iconAnchor: [28, 13],
       });
       const titulo = grupo.length > 1
@@ -2980,7 +2980,7 @@ function paintCombustible(group) {
       const precio93 = precioValor(e.precios && e.precios.gasolina_93);
       const icon = L.divIcon({
         className: 'stn-icon',
-        html: `<span class="stn-label">${precio93 != null ? Math.round(precio93) : '⛽'}</span>`,
+        html: `<span class="stn-label combustible-precio">${precio93 != null ? Math.round(precio93) : '⛽'}</span>`,
         iconSize: [44, 26], iconAnchor: [22, 13],
       });
       const nombre = e.nombre || e.marca || 'Estación de servicio';

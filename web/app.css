@@ -1111,16 +1111,20 @@ dialog::backdrop {
   padding: 3px 8px;
   font: 600 0.82rem var(--font-mono);
   color: #0b111d;
-  /* Fondo fijo (no depende del tema): el texto es siempre oscuro, y sin esto
-     las capas que no traen su propia clase de color (combustible es la única,
-     ver paintCombustible) quedan ilegibles sobre el mapa base "Satelital"
-     (imagen fotográfica, a diferencia del fondo casi blanco de "Calles"). */
-  background-color: #fcfaf4;
   border: 1px solid rgba(11, 17, 29, 0.55);
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-1);
   font-variant-numeric: tabular-nums;
 }
+
+/* Fondo fijo para combustible: es la única capa que usa stn-label sin una
+   clase de nivel propia (pp-*/tc*/icap-* ya traen su color), así que sin
+   esto se leía bien sobre "Calles" (casi blanco) pero se perdía sobre
+   "Satelital" (imagen fotográfica). Selector de 2 clases a propósito: si
+   fuera background-color en .stn-label directo, pisaría por orden de
+   cascada (misma especificidad) el color de pp-*/tc*/icap-*, que se
+   declaran ANTES en este archivo — regresión real, ya se dio una vez. */
+.stn-label.combustible-precio { background-color: #fcfaf4; }
 
 .stn-popup strong { display: block; font-size: 0.9rem; margin-bottom: 2px; }
 /* display: block — dos <small> seguidos (p. ej. empresas + fecha de
