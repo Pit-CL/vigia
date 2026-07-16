@@ -13,6 +13,13 @@ DESTINO="/opt/vigia/"
 EXPORT_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPORT_DIR"' EXIT
 
+# Sin esto, un merge hecho en GitHub (no localmente) deja el origin/main local
+# desactualizado y el archive de abajo exporta el commit viejo en silencio
+# (pasó el 2026-07-16: dos deploys seguidos "verificados OK" que en realidad
+# no llevaban el último merge).
+echo "==> Actualizando origin/main..."
+git -C "$REPO_ROOT" fetch origin main --quiet
+
 echo "==> Exportando $REF..."
 git -C "$REPO_ROOT" archive "$REF" | tar -x -C "$EXPORT_DIR"
 
