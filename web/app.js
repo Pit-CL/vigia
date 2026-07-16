@@ -594,15 +594,27 @@ function wxToDesc(wx) {
 
 // Estación de observación más cercana con dato de temperatura reciente.
 // Para "Condiciones actuales": preferimos la medición REAL sobre el modelo.
+// Entre las estaciones dentro de maxKm, se prioriza la que tenga obs_time
+// más fresca (< OBS_FRESCA_MIN) por sobre la puramente más cercana: la red
+// DMC/EMA publica con cadencia irregular y puede quedar la más cercana
+// varias horas atrás mientras una METAR algo más lejana ya tiene dato de
+// la última hora (caso real: Jardín Botánico vs Torquemada en Viña del Mar).
+const OBS_FRESCA_MIN = 120;
 function estacionObsCercana(maxKm) {
   if (!estacionesData) return null;
-  let best = null;
+  const ahora = Date.now();
+  let cercana = null;
+  let fresca = null;
   for (const e of estacionesData.estaciones) {
     if (!e.obs || e.obs.temperature_2m == null) continue;
     const d = haversineKm(place.lat, place.lon, e.lat, e.lon);
-    if (!best || d < best.dist) best = { ...e, dist: d };
+    if (d > maxKm) continue;
+    const candidata = { ...e, dist: d };
+    if (!cercana || d < cercana.dist) cercana = candidata;
+    const edadMin = e.obs_time ? (ahora - Date.parse(e.obs_time)) / 60000 : Infinity;
+    if (edadMin <= OBS_FRESCA_MIN && (!fresca || d < fresca.dist)) fresca = candidata;
   }
-  return best && best.dist <= maxKm ? best : null;
+  return fresca || cercana;
 }
 
 // Estación METAR más cercana (<35 km) con fenómeno presente reciente.
