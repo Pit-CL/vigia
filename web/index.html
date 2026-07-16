@@ -48,9 +48,12 @@
   <link rel="preload" href="fonts/BricolageGrotesque-300-800-0.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/IBMPlexMono-400-1.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
-  <link rel="stylesheet" href="vendor/leaflet.css">
+  <!-- leaflet.css no bloquea el render inicial: solo lo necesita el panel del
+       mapa (no above-the-fold). Se precarga aquí (paralelo a los recursos
+       bloqueantes) y app.js lo aplica como stylesheet real al final. -->
+  <link rel="preload" href="vendor/leaflet.css" as="style">
   <script src="theme.js?v=1"></script>
-  <link rel="stylesheet" href="app.css?v=92">
+  <link rel="stylesheet" href="app.css?v=93">
 </head>
 <body>
 
@@ -474,6 +477,6 @@
 
 <script src="vendor/chart.umd.min.js" defer></script>
 <script src="vendor/leaflet.js" defer></script>
-<script src="app.js?v=92" defer></script>
+<script src="app.js?v=93" defer></script>
 </body>
 </html>
