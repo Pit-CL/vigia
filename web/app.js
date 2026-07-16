@@ -921,22 +921,21 @@ function renderDaily(best) {
     const [desc, icon] = wmo(d.weather_code[i]);
     const li = document.createElement('li');
     li.className = 'day';
-    li.title = `${desc} — toca para el detalle hora a hora`;
-    li.tabIndex = 0;
-    li.setAttribute('role', 'button');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'day-btn';
+    btn.title = `${desc} — toca para el detalle hora a hora`;
     const name = i === 0 ? 'hoy' : i === 1 ? 'mañana' : weekday(iso);
     const pp = d.precipitation_sum[i];
     const prob = d.precipitation_probability_max[i];
-    li.innerHTML = `
+    btn.innerHTML = `
       <span class="day-name">${name}</span>
       <span class="day-icon" aria-hidden="true">${icon}</span>
       <span class="day-max">${Math.round(d.temperature_2m_max[i])}°</span>
       <span class="day-min">${Math.round(d.temperature_2m_min[i])}°</span>
       <span class="day-pp">${pp >= 0.1 ? `${r1(pp)} mm · ` : ''}${prob != null ? prob + ' %' : ''}</span>`;
-    li.addEventListener('click', () => openDay(i));
-    li.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDay(i); }
-    });
+    btn.addEventListener('click', () => openDay(i));
+    li.appendChild(btn);
     ol.appendChild(li);
   });
 }

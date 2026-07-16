@@ -523,7 +523,15 @@ main {
   .day { scroll-snap-align: start; }
 }
 
-.day {
+/* .day-btn: <button> nativo dentro del <li class="day"> (grid item). Nativo
+   en vez de role="button" a mano en el <li> — el rol de "listitem" del <li>
+   queda intacto para lectores de pantalla/agentes IA, y el foco/Enter/Espacio
+   los da gratis el navegador. */
+.day-btn {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  appearance: none;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 8px 12px;
@@ -845,12 +853,12 @@ dialog::backdrop {
 
 /* ── Día clickeable ──────────────────────────────────────────── */
 
-.day {
+.day-btn {
   cursor: pointer;
   transition: transform 0.12s ease, border-color var(--tr), box-shadow var(--tr);
 }
 
-.day:hover, .day:focus-visible {
+.day-btn:hover, .day-btn:focus-visible {
   transform: translateY(-2px);
   border-color: var(--ink);
   box-shadow: var(--shadow-1);
@@ -1236,7 +1244,7 @@ dialog::backdrop {
 /* En táctil el hover de Leaflet no aplica; aseguramos que el pan del
    mapa no robe el scroll vertical de la página sin querer. */
 @media (hover: none) {
-  .day:hover { transform: none; }
+  .day-btn:hover { transform: none; }
 }
 
 /* ── Calidad del aire ────────────────────────────────────────── */
