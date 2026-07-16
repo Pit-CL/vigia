@@ -47,12 +47,60 @@
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
   <link rel="preload" href="fonts/BricolageGrotesque-300-800-0.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/IBMPlexMono-400-1.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="fonts/fonts.css">
+  <!-- fonts.css y theme.js van inline en vez de recursos externos: ambos son
+       diminutos y estáticos, y cada request externa agregaba un round-trip
+       completo al render bloqueante (medido con Lighthouse: ~160ms + ~470ms).
+       El contenido debe ser IDÉNTICO byte a byte al de web/fonts/fonts.css y
+       web/theme.js — si alguno cambia, hay que actualizar TAMBIÉN el hash
+       sha256 correspondiente en el CSP de deploy/nginx.conf, o el navegador
+       bloquea el bloque en silencio. -->
+  <style>
+    @font-face {
+      font-family: 'Bricolage Grotesque';
+      font-style: normal;
+      font-weight: 300 800;
+      font-stretch: 100%;
+      font-display: swap;
+      src: url(fonts/BricolageGrotesque-300-800-0.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(fonts/IBMPlexMono-400-1.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url(fonts/IBMPlexMono-500-2.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+    @font-face {
+      font-family: 'IBM Plex Mono';
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url(fonts/IBMPlexMono-600-3.woff2) format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+  </style>
   <!-- leaflet.css no bloquea el render inicial: solo lo necesita el panel del
        mapa (no above-the-fold). Se precarga aquí (paralelo a los recursos
        bloqueantes) y app.js lo aplica como stylesheet real al final. -->
   <link rel="preload" href="vendor/leaflet.css" as="style">
-  <script src="theme.js?v=1"></script>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('sinoptica.tema');
+        if (t === 'dark' || t === 'light') document.documentElement.dataset.tema = t;
+      } catch (e) { /* sin localStorage: queda auto */ }
+    })();
+  </script>
   <link rel="stylesheet" href="app.css?v=93">
 </head>
 <body>
