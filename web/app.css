@@ -1111,6 +1111,11 @@ dialog::backdrop {
   padding: 3px 8px;
   font: 600 0.82rem var(--font-mono);
   color: #0b111d;
+  /* Fondo fijo (no depende del tema): el texto es siempre oscuro, y sin esto
+     las capas que no traen su propia clase de color (combustible es la única,
+     ver paintCombustible) quedan ilegibles sobre el mapa base "Satelital"
+     (imagen fotográfica, a diferencia del fondo casi blanco de "Calles"). */
+  background-color: #fcfaf4;
   border: 1px solid rgba(11, 17, 29, 0.55);
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-1);
