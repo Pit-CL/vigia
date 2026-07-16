@@ -45,6 +45,8 @@
   </script>
   <link rel="preconnect" href="https://api.open-meteo.com" crossorigin>
   <link rel="preconnect" href="https://ensemble-api.open-meteo.com" crossorigin>
+  <link rel="preload" href="fonts/BricolageGrotesque-300-800-0.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/IBMPlexMono-400-1.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <script src="theme.js?v=1"></script>
@@ -114,7 +116,7 @@
       </div>
       <div class="aire-state">
         <span id="aire-nivel" class="aire-nivel">Cargando…</span>
-        <p id="aire-consejo" class="aire-consejo"></p>
+        <p id="aire-consejo" class="aire-consejo">Midiendo la calidad del aire…</p>
       </div>
     </div>
     <dl class="aire-detail">
@@ -470,8 +472,8 @@
   <div id="info-dialog-body" class="info-body"></div>
 </dialog>
 
-<script src="vendor/chart.umd.min.js"></script>
-<script src="vendor/leaflet.js"></script>
-<script src="app.js?v=91"></script>
+<script src="vendor/chart.umd.min.js" defer></script>
+<script src="vendor/leaflet.js" defer></script>
+<script src="app.js?v=91" defer></script>
 </body>
 </html>
