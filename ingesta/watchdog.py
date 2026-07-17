@@ -51,14 +51,21 @@ CHECKS = [
      "avisos meteorológicos",
      "los avisos meteorológicos pueden no reflejar el pronóstico actual"),
     # A diferencia de los anteriores (JSON publicados con campo "updated"),
-    # este es el crudo que sube satelite/fetch_cl.py por scp — ver
-    # ingesta/cortes.py y ingesta/farmacias.py. Si se congela, cortes.json y
+    # estos son los crudos que sube satelite/fetch_cl.py por scp — ver
+    # ingesta/cortes.py y ingesta/farmacias.py. Si se congelan, cortes.json y
     # farmacias.json quedan sirviendo el último dato bueno marcado "stale"
     # sin que nadie se entere (incidente 2026-07-16: 22 h ciego hasta que
-    # avisó la prensa, no el sistema).
+    # avisó la prensa, no el sistema). Checks separados: MINSAL puede caerse
+    # con SEC sano (y viceversa), un solo archivo no cubre al otro.
     ("satelite", config.INCOMING_DIR / "sec.json", 60,
-     "crudo del satélite (SEC cortes / MINSAL farmacias)",
-     "cortes de luz y farmacias de turno quedan congelados sin que nadie se entere"),
+     "crudo de cortes de luz (SEC, satélite omen)",
+     "los cortes de luz quedan congelados sin que nadie se entere"),
+    # Umbral más holgado: el crudo viaja cada 15 min, pero su consumidor
+    # (ingesta/farmacias.py, STALE_MIN de 26 h) corre 2x/día — una caída
+    # transitoria de MINSAL no afecta al usuario y no amerita alerta.
+    ("satelite-farmacias", config.INCOMING_DIR / "farmacias_raw.json", 240,
+     "crudo de farmacias de turno (MINSAL, satélite omen)",
+     "las farmacias de turno pueden quedar desactualizadas sin que nadie se entere"),
 ]
 
 
