@@ -17,12 +17,22 @@ reescribe igual, porque el respaldo sísmico de abajo es justo para ese
 escenario.
 
 Semántica de `cap_url is None` (verificado con curl real a PHEBAtom.xml,
-2026-07-14): el feed del PTWC siempre trae la entry del último evento
+2026-07-14): el feed del PTWC normalmente trae la entry del último evento
 registrado — aunque haya expirado hace días y ya no sea una amenaza vigente
 (eso lo maneja `_clasificar` con el chequeo de `expires`, y cuenta como
 lectura exitosa: `"ptwc": "ok"`). Que la entry no traiga link a CAP es
 entonces un feed malformado/excepcional, no "sin boletines recientes" —
 por eso también cuenta como `"ptwc": "sin_datos"`.
+
+Esa semántica quedó FALSIFICADA el 2026-07-17: durante un evento activo
+(sismo M7.4 en Chiapas, México, con boletines del PTWC en curso) el feed
+vino sin ninguna `<entry>` — solo metadatos a nivel de feed (`<title>`
+"TSUNAMI MESSAGE NUMBER N", `<updated>` reciente). No es un feed corrupto:
+es una ventana real en la que el PTWC todavía no publica la entry
+individual. Ese caso se distingue mirando el título/fecha del feed
+(`_evento_activo_sin_cap`) y se reporta como `"ptwc": "parcial"` con
+estado `"informativo"` — nunca como amenaza, porque no pudimos leer el CAP
+y no sabemos si declara a Chile.
 """
 import json
 import sqlite3
@@ -44,6 +54,15 @@ LON_MAX = -68.0
 MSG_PRECAUCION = (
     "Sismo mayor en la costa: si te costó mantenerte en pie, evacúa la costa"
     " de inmediato hacia terreno alto sin esperar confirmación oficial")
+MSG_SIN_DATOS = "Sin amenaza conocida para Chile (sin datos del PTWC en este momento)"
+MSG_EVENTO_ACTIVO_GENERICO = (
+    "El PTWC emitió boletines por un evento en el Pacífico — no hay amenaza"
+    " declarada para Chile")
+# Feed sin entries: evento activo si el título contiene "TSUNAMI" y el feed
+# se actualizó dentro de esta ventana (ver semántica en el docstring).
+VENTANA_EVENTO_ACTIVO_H = 12
+# Contexto del sismo (USGS, sin bbox) para el mensaje del estado "informativo".
+MAG_MIN_CONTEXTO_USGS = 6.5
 
 
 def _tag(el) -> str:
@@ -107,6 +126,55 @@ def _parse_cap(cap_xml: str) -> dict:
     }
 
 
+def _evento_activo_sin_cap(atom_xml: str, ahora) -> bool:
+    """Feed sin entries (ver semántica en el docstring del módulo): mira el
+    <title>/<updated> a nivel de feed para distinguir "evento activo cuyo
+    boletín individual aún no se publica como entry" de "feed vacío sin
+    novedad". Observado 2026-07-17 (sismo M7.4 México): título "TSUNAMI
+    MESSAGE NUMBER 4" con <updated> reciente, cero <entry>."""
+    root = ET.fromstring(atom_xml)
+    titulo = _findtext(root, "title")
+    actualizado = _parse_dt(_findtext(root, "updated"))
+    if not titulo or "TSUNAMI" not in titulo.upper():
+        return False
+    return actualizado is not None and (ahora - actualizado) <= timedelta(hours=VENTANA_EVENTO_ACTIVO_H)
+
+
+def _sismo_reciente_usgs(ahora) -> dict | None:
+    """Sismo M>=6.5 más reciente en cualquier parte (sin bbox de Chile) en
+    las últimas 24 h — solo contexto para el mensaje del estado
+    "informativo" cuando el feed del PTWC no trae entries; nunca se inserta
+    en la tabla quakes. Best-effort: cualquier falla (red, forma inesperada
+    del payload) devuelve None, nunca propaga."""
+    start = (ahora - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        data, _ = sources.http_get_json(config.API_SISMOS_USGS, {
+            "format": "geojson",
+            "starttime": start,
+            "minmagnitude": MAG_MIN_CONTEXTO_USGS,
+            "orderby": "magnitude",
+            "limit": 1,
+        })
+        feats = data.get("features") or []
+        if not feats:
+            return None
+        props = feats[0].get("properties") or {}
+        place, mag = props.get("place"), props.get("mag")
+        if place is None or mag is None:
+            return None
+        return {"place": place, "mag": float(mag)}
+    except (RuntimeError, AttributeError, TypeError, ValueError):
+        return None
+
+
+def _mensaje_evento_activo(ahora) -> str:
+    sismo = _sismo_reciente_usgs(ahora)
+    if sismo:
+        return (f"Sismo M{sismo['mag']:.1f} en {sismo['place']}: el PTWC emitió"
+                 " boletines por este evento — no hay amenaza declarada para Chile")
+    return MSG_EVENTO_ACTIVO_GENERICO
+
+
 def _clasificar(cap: dict, ahora) -> tuple[str, str, bool]:
     """(estado, mensaje, vigente). vigente = boletín con status Actual y no
     expirado (independiente de si clasifica como amenaza/informativo)."""
@@ -117,10 +185,19 @@ def _clasificar(cap: dict, ahora) -> tuple[str, str, bool]:
 
     evento = cap.get("event") or ""
     evento_upper = evento.upper()
-    area_texto = f"{evento_upper} {(cap.get('areaDesc') or '').upper()}"
+    area_desc = cap.get("areaDesc") or ""
+    area_texto = f"{evento_upper} {area_desc.upper()}"
     es_alerta = any(k in evento_upper for k in ("WARNING", "WATCH", "ADVISORY"))
-    if es_alerta and ("CHILE" in area_texto or cap.get("severity") in ("Extreme", "Severe")):
+    if es_alerta and "CHILE" in area_texto:
         return "amenaza", cap.get("headline") or evento, True
+    if es_alerta:
+        # Warning/Watch/Advisory real, pero Chile no figura en el área: antes
+        # un severity Extreme/Severe exclusivo para otra zona (p.ej. México)
+        # encendía "amenaza" para Chile igual — falsa alarma latente.
+        mensaje = (
+            f"El PTWC emitió {evento} para otras zonas del Pacífico"
+            f" ({area_desc}) — Chile no está incluido")
+        return "informativo", mensaje, True
     if "INFORMATION" in evento_upper:
         mensaje = f"Último boletín del PTWC ({evento}): no es una amenaza para Chile"
         return "informativo", mensaje, True
@@ -145,17 +222,23 @@ def update(con, fetched_at: str) -> int:
     ahora = datetime.now(timezone.utc)
 
     cap = None
-    ptwc_ok = False
-    estado, mensaje, vigente = "sin_amenaza", "Sin amenaza de tsunami vigente para Chile", False
+    ptwc_estado = "sin_datos"
+    estado, mensaje, vigente = "sin_amenaza", MSG_SIN_DATOS, False
     try:
         atom_xml = _fetch(API_ATOM)
         cap_url = _ultima_cap_url(atom_xml)
         if cap_url is not None:
             cap = _parse_cap(_fetch(cap_url))
             estado, mensaje, vigente = _clasificar(cap, ahora)
-            ptwc_ok = True
-        # cap_url is None con fetch exitoso: feed malformado (ver semántica
-        # documentada arriba) — no se sube ptwc_ok, cae a "sin_datos".
+            ptwc_estado = "ok"
+        elif _evento_activo_sin_cap(atom_xml, ahora):
+            # Feed sin entries pero con evento activo detectable a nivel de
+            # feed (ver semántica documentada arriba): leímos el feed, no el
+            # CAP — "parcial", nunca "amenaza" (no sabemos si declara Chile).
+            estado, mensaje, vigente = "informativo", _mensaje_evento_activo(ahora), True
+            ptwc_estado = "parcial"
+        # feed sin entries y sin evento activo detectable: se conserva el
+        # comportamiento anterior ("sin_datos").
     except (RuntimeError, ET.ParseError):
         # PTWC caído o feed corrupto: no propagamos la excepción. El cruce
         # sísmico de abajo se evalúa igual — es el respaldo para este caso.
@@ -177,7 +260,7 @@ def update(con, fetched_at: str) -> int:
         "estado": estado,
         "mensaje": mensaje,
         "boletin": boletin,
-        "ptwc": "ok" if ptwc_ok else "sin_datos",
+        "ptwc": ptwc_estado,
         "fuente": "PTWC (NOAA) + catálogo sísmico propio",
         "nota": ("La autoridad oficial de alerta de tsunami en Chile es el SHOA (SNAM);"
                  " ante un sismo fuerte en la costa no esperes confirmación: evacúa"),

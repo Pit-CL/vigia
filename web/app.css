@@ -680,6 +680,9 @@ main {
 }
 .tsunami-banner.tsunami-amenaza { background: var(--alerta-roja); }
 .tsunami-banner.tsunami-precaucion { background: var(--vol-naranja); }
+/* Informativo: leímos el feed del PTWC pero no el boletín (o el boletín no
+   incluye a Chile) — azul-gris neutro, --accent2 ya trae su variante oscura. */
+.tsunami-banner.tsunami-informativo { background: var(--accent2); }
 
 .colophon {
   max-width: 1080px;

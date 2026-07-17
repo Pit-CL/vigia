@@ -3778,6 +3778,10 @@ function renderTsunamiBanner() {
     el.textContent = tsunamiData.mensaje;
     el.className = 'tsunami-banner tsunami-precaucion';
     el.hidden = false;
+  } else if (estado === 'informativo') {
+    el.textContent = `🌊 ${tsunamiData.mensaje}`;
+    el.className = 'tsunami-banner tsunami-informativo';
+    el.hidden = false;
   } else {
     el.hidden = true;
   }
