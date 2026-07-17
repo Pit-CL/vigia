@@ -1850,6 +1850,9 @@ p.marejada-fuerte { color: var(--alerta-roja); }
 .rt-alto { color: var(--alerta-roja); }
 .rt-medio { color: var(--alerta-amarilla); }
 .rt-cero { color: var(--ink-soft); }
+/* Región aún no resuelta (modo 'cerca' sin comunas.json cargado): distinto
+   de rt-cero — "0" verificado no es lo mismo que "todavía no sabemos". */
+.rt-pendiente { color: var(--ink-soft); opacity: 0.55; }
 
 .riesgo-eventos {
   display: grid;
