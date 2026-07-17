@@ -83,6 +83,7 @@ services:
       PUSH_TSUNAMI: /data/tsunami.json
       PUSH_AVISOS: /data/avisos.json
       PUSH_INCENDIOS: /data/incendios.json
+      PUSH_COMUNAS: /app/web/comunas.json
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_SUB: ${VAPID_SUB:-}
@@ -93,6 +94,7 @@ services:
       SLACK_ZONA_REGION: ${SLACK_ZONA_REGION:-}
     volumes:
       - ./push:/app/push:ro
+      - ./web/comunas.json:/app/web/comunas.json:ro
       - ./data:/data
     security_opt:
       - no-new-privileges:true
