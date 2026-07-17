@@ -3838,9 +3838,17 @@ async function cargarComunas() {
     if (res.ok) comunasData = await res.json();
   } catch (_) { /* sin comunas.json: el buscador cae solo al geocoding remoto */ }
   comunasCargando = false;
-  if (comunasData) actualizarPlaceRegion();
+  // Solo re-renderizar el panel de riesgo si el fetch trajo datos: si falló
+  // (offline real, antes de que el service worker cachee comunas.json), no
+  // hay que reintentar aquí mismo — eso encadenaría renderRiesgos ↔
+  // cargarComunas sin backoff mientras dure el fallo. El próximo
+  // renderRiesgos() natural (cualquier otra fuente que termine de cargar)
+  // vuelve a intentarlo.
+  if (comunasData) {
+    actualizarPlaceRegion();
+    if (riesgoAmbito === 'cerca') renderRiesgos();
+  }
   if (capasActivas.has('alertas')) renderMapa();
-  if (riesgoAmbito === 'cerca') renderRiesgos();
 }
 
 // Coincidencias por prefijo primero (más relevantes), luego por infijo.
