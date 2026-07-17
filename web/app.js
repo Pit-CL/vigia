@@ -2303,9 +2303,10 @@ function paintAlertas(group) {
     marker.bindPopup(box, { maxWidth: 300, maxHeight: 300 });
   });
 
+  const sufijoParcialAlertas = alertasData.parcial ? ' · datos posiblemente desactualizados' : '';
   $('#map-meta').textContent = alertasData.updated
-    ? `${todas.length} alertas · ${horaLocal(alertasData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${todas.length} alertas`;
+    ? `${todas.length} alertas · ${horaLocal(alertasData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${sufijoParcialAlertas}`
+    : `${todas.length} alertas${sufijoParcialAlertas}`;
 }
 
 function paintVolcanes(group) {
