@@ -2303,9 +2303,10 @@ function paintAlertas(group) {
     marker.bindPopup(box, { maxWidth: 300, maxHeight: 300 });
   });
 
+  const sufijoParcialAlertas = alertasData.parcial ? ' · datos posiblemente desactualizados' : '';
   $('#map-meta').textContent = alertasData.updated
-    ? `${todas.length} alertas · ${horaLocal(alertasData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h`
-    : `${todas.length} alertas`;
+    ? `${todas.length} alertas · ${horaLocal(alertasData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${sufijoParcialAlertas}`
+    : `${todas.length} alertas${sufijoParcialAlertas}`;
 }
 
 function paintVolcanes(group) {
@@ -2553,9 +2554,10 @@ function paintEmergencia(group) {
     else pintarGrupoEmg(grupo, group, '🚑', 'servicios de emergencia');
   });
   const staleFarmacia = emergenciaData.farmaciaStale && !capasActivas.has('farmacias') ? ' · farmacias: datos antiguos (satélite sin actualizar)' : '';
+  const sufijoParcialEmg = emergenciaData.parcial ? ' · datos posiblemente desactualizados' : '';
   $('#map-meta').textContent = emergenciaData.updated
-    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${staleFarmacia}`
-    : `${todos.length} puntos de emergencia${staleFarmacia}`;
+    ? `${todos.length} puntos de emergencia · ${horaLocal(emergenciaData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${staleFarmacia}${sufijoParcialEmg}`
+    : `${todos.length} puntos de emergencia${staleFarmacia}${sufijoParcialEmg}`;
 }
 
 // Farmacias de turno como capa propia: además de aparecer dentro de
@@ -2654,9 +2656,16 @@ function paintEvacuacion(group) {
   // (zoom ≥ 12) no se pintan y no hay ninguna pista visual de que existen:
   // el usuario reportó "no las veo". El aviso solo aparece cuando falta el
   // requisito de zoom para las vías (el más bajo de los dos).
+  // Fecha y parcial: vías y áreas se cargan juntas (loadEmergencia) pero son
+  // JSON separados, cada uno con su propio updated/parcial — se toma el que
+  // haya (updated) y se marca parcial si CUALQUIERA de los dos quedó
+  // parcial (mismo criterio que paintVolcanes con fuente parcial).
+  const updatedEvac = (tsunamiViasData && tsunamiViasData.updated) || (tsunamiAreasData && tsunamiAreasData.updated);
+  const parcialEvac = !!((tsunamiViasData && tsunamiViasData.parcial) || (tsunamiAreasData && tsunamiAreasData.parcial));
+  const sufijoParcialEvac = parcialEvac ? ' · datos posiblemente desactualizados' : '';
   $('#map-meta').textContent = map.getZoom() < 11
     ? 'vías de evacuación: acerca el mapa a una zona costera o volcánica'
-    : `${pintadas} vías de evacuación en el encuadre`;
+    : metaConFecha(`${pintadas} vías de evacuación en el encuadre${sufijoParcialEvac}`, updatedEvac);
 }
 
 // ── Remociones en masa: catastro histórico (SENAPRED) ───────────

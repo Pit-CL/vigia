@@ -201,12 +201,13 @@ def _fetch_vias_tipo(tipo: str, layer: str, oid: str, campo: str, previo_tipo: l
 
 
 def _update_vias(con, fetched_at: str) -> int:
-    previo = []
+    previo_payload = {}
     if config.TSUNAMI_VIAS_PATH.exists():
         try:
-            previo = json.loads(config.TSUNAMI_VIAS_PATH.read_text()).get("vias", [])
+            previo_payload = json.loads(config.TSUNAMI_VIAS_PATH.read_text())
         except Exception:
-            previo = []
+            previo_payload = {}
+    previo = previo_payload.get("vias", [])
     # Corridas antes de F14 no traían "t": esas vías previas eran todas de tsunami.
     previo_tsunami = [v for v in previo if v.get("t", "tsunami") == "tsunami"]
     previo_volcan = [v for v in previo if v.get("t") == "volcan"]
@@ -226,8 +227,13 @@ def _update_vias(con, fetched_at: str) -> int:
          json.dumps({"vias_tsunami": len(vias_tsunami), "vias_volcan": len(vias_volcan)})))
     con.commit()
 
+    # Si quedó parcial (fallback a vías previas de algún tipo), el "updated"
+    # honesto es el del archivo anterior, no el de ahora — mismo criterio que
+    # cortes.py con "stale": no fingir frescura de un dato que no se refrescó.
+    updated = (previo_payload.get("updated") if parcial and previo_payload.get("updated")
+               else datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
     payload = {
-        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "updated": updated,
         "fuente": "SENAPRED · Visor Chile Preparado",
         "vias": vias,
     }
@@ -257,12 +263,13 @@ def _procesar_areas(features: list) -> list:
 
 
 def _update_areas(con, fetched_at: str) -> int:
-    previo = []
+    previo_payload = {}
     if config.TSUNAMI_AREAS_PATH.exists():
         try:
-            previo = json.loads(config.TSUNAMI_AREAS_PATH.read_text()).get("areas", [])
+            previo_payload = json.loads(config.TSUNAMI_AREAS_PATH.read_text())
         except Exception:
-            previo = []
+            previo_payload = {}
+    previo = previo_payload.get("areas", [])
 
     parcial = False
     try:
@@ -280,8 +287,10 @@ def _update_areas(con, fetched_at: str) -> int:
          json.dumps({"areas": len(areas)})))
     con.commit()
 
+    updated = (previo_payload.get("updated") if parcial and previo_payload.get("updated")
+               else datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
     payload = {
-        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "updated": updated,
         "fuente": "SENAPRED · Visor Chile Preparado",
         "areas": areas,
     }
@@ -308,12 +317,13 @@ def _procesar(categoria: str, features: list) -> list:
 
 
 def update(con, fetched_at: str) -> int:
-    previo = {}
+    previo_payload = {}
     if config.EMERGENCIA_PATH.exists():
         try:
-            previo = json.loads(config.EMERGENCIA_PATH.read_text()).get("categorias", {})
+            previo_payload = json.loads(config.EMERGENCIA_PATH.read_text())
         except Exception:
-            previo = {}
+            previo_payload = {}
+    previo = previo_payload.get("categorias", {})
 
     categorias = {}
     conteos = {}
@@ -342,8 +352,10 @@ def update(con, fetched_at: str) -> int:
          json.dumps(conteos, ensure_ascii=False)))
     con.commit()
 
+    updated = (previo_payload.get("updated") if parcial and previo_payload.get("updated")
+               else datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
     payload = {
-        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "updated": updated,
         "fuente": "SENAPRED · Visor Chile Preparado",
         "categorias": categorias,
     }
