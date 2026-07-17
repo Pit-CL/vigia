@@ -4,9 +4,10 @@
 # incendios (FIRMS) y alertas (SENAPRED) cada hora; volcanes (RNVV) 2x/día;
 # marea/oleaje (Open-Meteo Marine) 4x/día;
 # infraestructura de emergencia (SENAPRED) y catastro de remociones en masa
-# (SENAPRED) 1x/semana (ambas cuasi-estáticas); cortes de luz SEC cada 15 min
-# y farmacias de turno MINSAL 2x/día (barato: solo leen data/incoming/*.json
-# subido por el satélite en omen, sin red — ver satelite/README.md); precios
+# (SENAPRED) 1x/semana (ambas cuasi-estáticas); cortes de luz SEC y cortes de
+# agua Esval cada 15 min y farmacias de turno MINSAL 2x/día (barato: solo leen
+# data/incoming/* subido por el satélite en omen, sin red — ver
+# satelite/README.md); precios
 # de combustible CNE 2x/día (dormida sin CNE_API_KEY, accesible directo
 # desde el VPS — no requiere el satélite); crecidas de ríos (GloFAS,
 # Open-Meteo Flood API) 1x/día (el modelo global se actualiza diario).
@@ -29,6 +30,9 @@
 15 5 * * * python3 /app/ingesta/run.py --crecidas >> /data/ingesta.log 2>&1
 41 6 * * 1 python3 /app/ingesta/run.py --emergencia --remociones >> /data/ingesta.log 2>&1
 */15 * * * * python3 /app/ingesta/run.py --cortes >> /data/ingesta.log 2>&1
+# esval desfasado 2 min de la grilla del satélite (sube a :00/:15/:30/:45):
+# no leer el crudo mientras el scp lo está sobrescribiendo.
+2-59/15 * * * * python3 /app/ingesta/run.py --esval >> /data/ingesta.log 2>&1
 33 8,20 * * * python3 /app/ingesta/run.py --farmacias >> /data/ingesta.log 2>&1
 44 7,19 * * * python3 /app/ingesta/run.py --combustible >> /data/ingesta.log 2>&1
 # Mantener el log acotado (~100 KB)
