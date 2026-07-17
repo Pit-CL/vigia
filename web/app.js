@@ -2850,9 +2850,12 @@ function paintCortes(group) {
     marker.bindPopup(box, { maxWidth: 260 });
   });
   const stale = cortesData.stale ? ' · datos antiguos (satélite sin actualizar)' : '';
+  // Guarda de plausibilidad (ingesta/cortes.py): ciclo SEC degradado retenido
+  // o degradación sostenida — mismo patrón que sufijoParcial en paintVolcanes.
+  const parcial = cortesData.parcial ? ` · ${cortesData.nota || 'datos posiblemente incompletos'}` : '';
   $('#map-meta').textContent = cortesData.updated
-    ? `${cortesData.n_comunas} comunas con cortes · SEC best effort · ${horaLocal(cortesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${stale}`
-    : `${cortesData.n_comunas} comunas con cortes · SEC best effort${stale}`;
+    ? `${cortesData.n_comunas} comunas con cortes · SEC best effort · ${horaLocal(cortesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${stale}${parcial}`
+    : `${cortesData.n_comunas} comunas con cortes · SEC best effort${stale}${parcial}`;
 }
 
 // Colores de los 6 <Style> fijos del KML de Esval (AMARILLO/AZUL/CELESTE/
