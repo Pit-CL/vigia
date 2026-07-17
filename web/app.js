@@ -296,6 +296,11 @@ function savedPlace() {
 }
 
 let place = savedPlace();
+// Código de región (comunas.json, ej. 'V', 'RM') del lugar seleccionado.
+// Cacheado para no recorrer las 345 comunas por cada ítem del panel de
+// riesgo; se recalcula en setPlace y al terminar de cargar comunas.json
+// (ver actualizarPlaceRegion, más abajo junto a enAmbito).
+let placeRegionCod = null;
 
 // ── Utilidades ─────────────────────────────────────────────────
 
@@ -3231,9 +3236,6 @@ function distKm(lat1, lon1, lat2, lon2) {
   return 2 * r * Math.asin(Math.sqrt(a));
 }
 
-// Radio que cubre la región típica alrededor de una ciudad (p.ej. la RM completa).
-const RADIO_CERCA_KM = 200;
-
 function savedRiesgoAmbito() {
   try {
     const v = localStorage.getItem('sinoptica.riesgoAmbito');
@@ -3244,12 +3246,70 @@ function savedRiesgoAmbito() {
 
 let riesgoAmbito = savedRiesgoAmbito();
 
-// Ítems sin lat/lon (algunas alertas futuras) se excluyen en modo 'cerca':
-// sin coordenadas no se puede saber si están cerca del lugar seleccionado.
-function enAmbito(it, ambito = riesgoAmbito) {
+// Nombre de región tal como lo entrega SENAPRED (campo REGION del ArcGIS,
+// ver ingesta/alertas.py) → código de comunas.json. Verificado 2026-07-17
+// contra un alertas.json real de producción (16 regiones, todas presentes).
+// Otros generadores (crecidas.py, cortes.py) también traen un campo
+// `region`, pero con formatos distintos (nombres cortos o el código directo)
+// — por eso esta tabla solo se usa para alertas, nunca genérico.
+const REGION_SENAPRED_A_COD = {
+  'Arica y Parinacota': 'XV',
+  'Tarapacá': 'I',
+  'Antofagasta': 'II',
+  'Atacama': 'III',
+  'Coquimbo': 'IV',
+  'Valparaíso': 'V',
+  'Metropolitana de Santiago': 'RM',
+  "Libertador General Bernardo O'Higgins": 'VI',
+  'Maule': 'VII',
+  'Ñuble': 'XVI',
+  'Biobío': 'VIII',
+  'La Araucanía': 'IX',
+  'Los Ríos': 'XIV',
+  'Los Lagos': 'X',
+  'Aysén del General Carlos Ibáñez del Campo': 'XI',
+  'Magallanes y de la Antártica Chilena': 'XII',
+};
+
+// Región (código de comunas.json) de la comuna cuyo centroide está más
+// cerca de (lat, lon). Recorrer las 345 comunas es barato (una vez por
+// ítem filtrado, no por frame). Sin comunas.json cargado o sin coordenadas,
+// null — el llamador decide qué hacer (ver enAmbito).
+function regionDe(lat, lon) {
+  if (!comunasData || lat == null || lon == null) return null;
+  let mejor = null, mejorD = Infinity;
+  for (const c of comunasData.comunas) {
+    const d = distKm(lat, lon, c.lat, c.lon);
+    if (d < mejorD) { mejorD = d; mejor = c; }
+  }
+  return mejor ? mejor.r : null;
+}
+
+// Recalcula y cachea la región del lugar seleccionado (setPlace y
+// cargarComunas la llaman; enAmbito solo lee placeRegionCod, nunca la
+// recalcula por ítem).
+function actualizarPlaceRegion() {
+  placeRegionCod = regionDe(place.lat, place.lon);
+}
+
+// Modo 'cerca': el ítem entra solo si su región coincide con la del lugar
+// seleccionado (antes era un radio fijo de 200 km, que dejaba entrar p.ej.
+// Illapel — Región de Coquimbo — al filtrar por Viña del Mar). Para alertas
+// SENAPRED se prefiere su campo `region` explícito (más preciso que el
+// centroide de la alerta, que puede caer en la comuna vecina); el resto de
+// los ítems, y cualquier alerta cuyo nombre de región no matchee la tabla,
+// usan regionDe(lat, lon). Ítems sin región determinable (sin lat/lon, o
+// comunas.json aún no cargado) quedan excluidos: mejor omitir de más que
+// mostrar algo que podría ser de otra región. Mientras comunas.json no haya
+// cargado, placeRegionCod es null y esto excluye TODO transitoriamente — ver
+// el disparo de cargarComunas() en renderRiesgos(), que vuelve a renderizar
+// el panel apenas el catastro esté listo.
+function enAmbito(it, ambito = riesgoAmbito, esAlerta = false) {
   if (ambito === 'chile') return true;
-  if (it.lat == null || it.lon == null) return false;
-  return distKm(place.lat, place.lon, it.lat, it.lon) <= RADIO_CERCA_KM;
+  if (!placeRegionCod) return false;
+  const regionItem = (esAlerta && it.region && REGION_SENAPRED_A_COD[it.region])
+    || regionDe(it.lat, it.lon);
+  return regionItem === placeRegionCod;
 }
 
 // ambito es parámetro (no siempre el global) porque el badge nacional necesita
@@ -3260,7 +3320,7 @@ function riesgoCounts(ambito = riesgoAmbito) {
     ? sismosData.eventos.filter((e) => e.mag >= 4 && ahora - new Date(e.utc_time).getTime() <= 24 * 3600e3 && enAmbito(e, ambito))
     : [];
   const sismoMax6 = sismos24.filter((e) => e.mag >= 6).sort((a, b) => b.mag - a.mag)[0] || null;
-  const alertas = alertasData ? alertasData.alertas.filter((a) => enAmbito(a, ambito)) : [];
+  const alertas = alertasData ? alertasData.alertas.filter((a) => enAmbito(a, ambito, true)) : [];
   const rojas = alertas.filter((a) => a.nivel === 'roja').length;
   const amarillas = alertas.filter((a) => a.nivel === 'amarilla').length;
   const alertaRoja = alertas.find((a) => a.nivel === 'roja' && a.lat != null && a.lon != null) || null;
@@ -3336,7 +3396,7 @@ function riesgoEventos() {
     } else score = 0;
     if (!score) continue;
     items.push({
-      score, fecha, capa: 'alertas', lat: a.lat, lon: a.lon,
+      score, fecha, capa: 'alertas', lat: a.lat, lon: a.lon, region: a.region,
       emoji: emojiEvento(a.evento),
       texto: `${NIVEL_ALERTA_LABEL[a.nivel] || a.nivel} · ${a.evento} · ${a.region} (${a.n_comunas} comuna${a.n_comunas === 1 ? '' : 's'})`,
     });
@@ -3376,7 +3436,7 @@ function riesgoEventos() {
     });
   }
 
-  const filtrados = items.filter((it) => enAmbito(it));
+  const filtrados = items.filter((it) => enAmbito(it, riesgoAmbito, it.capa === 'alertas'));
   filtrados.sort((a, b) => b.score - a.score || (b.fecha?.getTime() || 0) - (a.fecha?.getTime() || 0));
   return filtrados.slice(0, 10);
 }
@@ -3453,6 +3513,11 @@ function renderRiskBadge(c) {
 function renderRiesgos() {
   const panel = document.querySelector('.panel-riesgos');
   if (!panel) return;
+  // Modo 'cerca' necesita comunas.json para saber la región de cada ítem;
+  // si aún no cargó, se dispara aquí (mismo patrón lazy que la capa de
+  // alertas del mapa) y este render deja todo excluido de "cerca" hasta que
+  // llegue — cargarComunas() vuelve a llamar renderRiesgos() al terminar.
+  if (riesgoAmbito === 'cerca' && !comunasData) cargarComunas();
   const hayAlgo = !!(sismosData || incendiosData || alertasData || volcanesData || avisosData || cortesData || crecidasData);
   panel.hidden = !hayAlgo;
   if (!hayAlgo) { $('#risk-badge').hidden = true; return; }
@@ -3726,6 +3791,7 @@ function renderCosta() {
 
 function setPlace(p) {
   place = p;
+  actualizarPlaceRegion();   // recachear la región del nuevo lugar (modo 'cerca')
   try { localStorage.setItem('sinoptica.place', JSON.stringify(p)); } catch (_) { /* opcional */ }
   // Zoom 11 ≈ la comuna y su entorno inmediato: elegir una ciudad debe
   // enfocarla, no mostrar media región. Si el usuario ya estaba más adentro
@@ -3759,8 +3825,9 @@ function renderChips() {
 }
 
 // Catastro de comunas (INE, web/comunas.json): fuente local instantánea, sin
-// red. Se carga una sola vez, al primer foco del buscador o al activar la
-// capa de alertas (lazy en CAPAS.alertas) — lo que ocurra primero.
+// red. Se carga una sola vez, al primer foco del buscador, al activar la
+// capa de alertas (lazy en CAPAS.alertas) o al entrar en modo 'cerca' del
+// panel de riesgo (lazy en renderRiesgos) — lo que ocurra primero.
 // comunasData/comunasCargando se declaran antes de CAPAS: la restauración de
 // capas desde localStorage los evalúa al cargar el script.
 async function cargarComunas() {
@@ -3771,7 +3838,9 @@ async function cargarComunas() {
     if (res.ok) comunasData = await res.json();
   } catch (_) { /* sin comunas.json: el buscador cae solo al geocoding remoto */ }
   comunasCargando = false;
+  if (comunasData) actualizarPlaceRegion();
   if (capasActivas.has('alertas')) renderMapa();
+  if (riesgoAmbito === 'cerca') renderRiesgos();
 }
 
 // Coincidencias por prefijo primero (más relevantes), luego por infijo.
