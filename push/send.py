@@ -55,6 +55,12 @@ VOLCANES_PATH = Path(os.environ.get("PUSH_VOLCANES", "/data/volcanes.json"))
 TSUNAMI_PATH = Path(os.environ.get("PUSH_TSUNAMI", "/data/tsunami.json"))
 AVISOS_PATH = Path(os.environ.get("PUSH_AVISOS", "/data/avisos.json"))
 INCENDIOS_PATH = Path(os.environ.get("PUSH_INCENDIOS", "/data/incendios.json"))
+# Catastro INE de comunas (mismo archivo versionado que usa web/app.js para
+# el filtro 'cerca' del panel de riesgo). No lo genera la ingesta: en prod va
+# montado aparte (ver docker-compose.yml, mismo patrón que usa el contenedor
+# ingesta); en dev local default al del repo.
+COMUNAS_PATH = Path(os.environ.get(
+    "PUSH_COMUNAS", Path(__file__).resolve().parent.parent / "web" / "comunas.json"))
 
 SITE_URL = "https://vigia.cavara.cl/"
 KIT_URL = "https://vigia.cavara.cl/emergencia.html#kit"
@@ -211,6 +217,64 @@ def _dist_km(lat1, lon1, lat2, lon2) -> float:
     dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(math.sqrt(a))
+
+
+_comunas_cache: list[dict] | None = None   # None = aún no se intentó cargar
+_comunas_disponibles = True                # False tras el primer intento fallido (no reintenta ni re-advierte)
+_region_cache: dict[tuple[float, float], str | None] = {}   # memoiza por punto: evita recorrer comunas por cada par evento×sub
+
+
+def _cargar_comunas() -> list[dict] | None:
+    """Catastro de comunas para el tope regional. Se intenta cargar una sola
+    vez por corrida; si falla (contenedor sin el volumen montado, archivo
+    corrupto), se advierte UNA vez y de ahí en más `_region_de` devuelve
+    siempre None — el tope regional queda inactivo (solo manda el radio),
+    nunca deja de pushear todo el evento."""
+    global _comunas_cache, _comunas_disponibles
+    if _comunas_cache is not None or not _comunas_disponibles:
+        return _comunas_cache
+    try:
+        data = json.loads(COMUNAS_PATH.read_text())
+        _comunas_cache = data.get("comunas") or []
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+        _comunas_disponibles = False
+        print(f"[push] comunas.json no disponible ({exc}): el tope regional de zona "
+              "queda inactivo esta corrida, solo aplica el radio/magnitud configurado")
+        return None
+    return _comunas_cache
+
+
+def _region_de(lat: float | None, lon: float | None) -> str | None:
+    """Código de región (comunas.json, ej. 'V', 'RM') de la comuna cuyo
+    centroide está más cerca de (lat, lon) — mismo criterio que regionDe en
+    web/app.js. None si falta lat/lon o el catastro no está disponible."""
+    if lat is None or lon is None:
+        return None
+    key = (lat, lon)
+    if key in _region_cache:
+        return _region_cache[key]
+    comunas = _cargar_comunas()
+    region = None
+    if comunas:
+        mejor, mejor_d = None, float("inf")
+        for c in comunas:
+            d = _dist_km(lat, lon, c["lat"], c["lon"])
+            if d < mejor_d:
+                mejor_d, mejor = d, c
+        region = mejor.get("r") if mejor else None
+    _region_cache[key] = region
+    return region
+
+
+def _misma_region(lat0: float, lon0: float, lat1: float, lon1: float) -> bool:
+    """Tope regional para eventos de zona: True si ambos puntos caen en la
+    misma región, o si la región de cualquiera de los dos no se pudo
+    determinar (comunas.json no disponible) — ahí el tope queda inactivo y
+    manda solo el radio, nunca bloquea el envío por esto."""
+    r0, r1 = _region_de(lat0, lon0), _region_de(lat1, lon1)
+    if r0 is None or r1 is None:
+        return True
+    return r0 == r1
 
 
 def _rumbo(lat0: float, lon0: float, lat: float, lon: float) -> str:
@@ -520,7 +584,8 @@ def _dia_relativo(fecha, hoy) -> str:
 
 def _eventos_avisos_slack(zona: dict, avisos: list[dict]) -> list[dict]:
     """Avisos Vigía (propios, no oficiales) de estaciones a <=RADIO_KM_AVISO_ZONA
-    de la zona, cualquier nivel (amarillo incluido).
+    de la zona Y en su misma región (ver _misma_region), cualquier nivel
+    (amarillo incluido).
 
     Dedup/escalada: event_id = aviso:{estacion_id}:{tipo}:{fecha-local}:{nivel}.
     Mientras el aviso siga en el mismo nivel el mismo día, el id no cambia
@@ -539,6 +604,8 @@ def _eventos_avisos_slack(zona: dict, avisos: list[dict]) -> list[dict]:
         if lat is None or lon is None:
             continue
         if _dist_km(zona["lat"], zona["lon"], lat, lon) > RADIO_KM_AVISO_ZONA:
+            continue
+        if not _misma_region(zona["lat"], zona["lon"], lat, lon):
             continue
         try:
             peak_utc = datetime.strptime(a["hora_peak"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
@@ -563,7 +630,8 @@ def _eventos_avisos_slack(zona: dict, avisos: list[dict]) -> list[dict]:
 
 
 def _eventos_incendios_slack(zona: dict, focos: list[dict]) -> list[dict]:
-    """Focos de calor FIRMS a <=RADIO_KM_INCENDIO_ZONA de la zona.
+    """Focos de calor FIRMS a <=RADIO_KM_INCENDIO_ZONA de la zona Y en su
+    misma región (ver _misma_region).
 
     Dedup: los focos FIRMS se re-detectan en cada pasada satelital, así que
     el event_id agrupa por celda (~1 km, lat/lon redondeados a 2 decimales)
@@ -579,6 +647,8 @@ def _eventos_incendios_slack(zona: dict, focos: list[dict]) -> list[dict]:
             continue
         dist = _dist_km(zona["lat"], zona["lon"], lat, lon)
         if dist > RADIO_KM_INCENDIO_ZONA:
+            continue
+        if not _misma_region(zona["lat"], zona["lon"], lat, lon):
             continue
         try:
             acq = datetime.strptime(f["utc"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=timezone.utc)
@@ -767,7 +837,14 @@ def _cumple(ev: dict, sub: dict) -> bool:
             return True
         radio = sub.get("radio_km") or RADIO_KM_ZONA
         umbral = sub.get("mag_min") or MAG_MIN_ZONA
-        return ev["mag"] >= umbral and _dist_km(lat, lon, ev["lat"], ev["lon"]) <= radio
+        if ev["mag"] < umbral or _dist_km(lat, lon, ev["lat"], ev["lon"]) > radio:
+            return False
+        # Tope regional (además del radio): un sismo fuera de la región de la
+        # sub no pushea aunque caiga dentro del radio — ej. Illapel (Coquimbo)
+        # a ~180 km de Viña del Mar (Valparaíso) entraba en el radio de 200 km
+        # por defecto. Cruces de borde cercanos (ej. Til Til, RM, a ~50 km de
+        # Viña) también quedan fuera: trade-off aceptado, ver _misma_region.
+        return _misma_region(lat, lon, ev["lat"], ev["lon"])
 
     # "regional": alertas rojas y volcanes naranja+. Sin ubicación en la sub
     # -> broadcast (comportamiento original). Con ubicación -> filtrar por
