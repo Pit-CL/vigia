@@ -3312,6 +3312,17 @@ function enAmbito(it, ambito = riesgoAmbito, esAlerta = false) {
   return regionItem === placeRegionCod;
 }
 
+// True mientras el modo 'cerca' no tiene región resuelta para el lugar
+// seleccionado (comunas.json sin cargar aún, o su carga falló). En ese
+// estado `enAmbito` excluye TODO, así que "0 eventos" no es un dato: sería
+// un all-clear no verificado (honestidad de frescura, regla dura #8). Los
+// renders del panel usan este helper para mostrar "verificando" en vez de
+// ceros — nunca 🟢. Se resuelve solo cuando cargarComunas() completa y
+// vuelve a llamar renderRiesgos().
+function catastroPendiente() {
+  return riesgoAmbito === 'cerca' && !placeRegionCod;
+}
+
 // ambito es parámetro (no siempre el global) porque el badge nacional necesita
 // las cuentas SIN filtrar por cercanía aunque el panel esté en modo 'cerca'.
 function riesgoCounts(ambito = riesgoAmbito) {
@@ -3350,13 +3361,21 @@ function riesgoCounts(ambito = riesgoAmbito) {
   };
 }
 
+const RT_IDS = ['#rt-sismos', '#rt-incendios', '#rt-alertas', '#rt-volcanes', '#rt-avisos', '#rt-cortes', '#rt-crecidas'];
+
 function renderRiesgoTiles(c) {
   const set = (id, val, cls) => {
     const el = $(id);
     el.textContent = val;
-    el.classList.remove('rt-alto', 'rt-medio', 'rt-cero');
+    el.classList.remove('rt-alto', 'rt-medio', 'rt-cero', 'rt-pendiente');
     el.classList.add(cls);
   };
+  if (catastroPendiente()) {
+    // Sin región resuelta todavía: '…' neutro, nunca '0' (que leería como
+    // "verificado y sin riesgo"). cargarComunas() re-renderiza solo al llegar.
+    RT_IDS.forEach((id) => set(id, '…', 'rt-pendiente'));
+    return;
+  }
   const sismoAlto = c.sismos24.some((e) => e.mag >= 5);
   set('#rt-sismos', c.sismos24.length, sismoAlto ? 'rt-alto' : c.sismos24.length > 0 ? 'rt-medio' : 'rt-cero');
   set('#rt-incendios', c.incendiosN, c.incendiosN > 0 ? 'rt-medio' : 'rt-cero');
@@ -3444,6 +3463,15 @@ function riesgoEventos() {
 function renderRiesgoEventos() {
   const ol = $('#riesgo-eventos');
   ol.innerHTML = '';
+  if (catastroPendiente()) {
+    // Sin región resuelta todavía no hay "sin eventos" honesto que mostrar
+    // (ver catastroPendiente): ni ceros ni 🟢, un estado explícito de espera.
+    const li = document.createElement('li');
+    li.className = 'riesgo-vacio';
+    li.textContent = `Verificando tu región para mostrar lo cercano a ${place.name}…`;
+    ol.appendChild(li);
+    return;
+  }
   const items = riesgoEventos();
   if (!items.length) {
     const li = document.createElement('li');
