@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 import config
 
 UA = "vigia-ingesta/1.0 (proyecto open source; vigia.cavara.cl)"
+PAGE_SIZE = 2000
 
 CATEGORIAS = {
     "METEOROLOGICAS": "meteorologica",
@@ -79,13 +80,15 @@ def _centroide(geometry: dict | None) -> tuple[float, float] | None:
     return lat, lon
 
 
-def _fetch_capa(categoria: str, nivel: str) -> tuple[dict | None, str, str | None]:
-    """Devuelve (data, url, error). data=None y error=None => la combinación
-    no existe hoy (400/404, HTTP o vía error JSON de ArcGIS): no es un fallo."""
+def _fetch_pagina(categoria: str, nivel: str, offset: int) -> tuple[dict | None, str, str | None]:
+    """Una página. Devuelve (data, url, error). data=None y error=None => la
+    combinación no existe hoy (400/404, HTTP o vía error JSON de ArcGIS): no
+    es un fallo."""
     url = f"{config.ALERTAS_ARCGIS_BASE}/{categoria}_{nivel}/FeatureServer/0/query"
     params = {
         "where": "1=1", "outFields": "*", "f": "json",
-        "returnGeometry": "true", "outSR": "4326", "resultRecordCount": "2000",
+        "returnGeometry": "true", "outSR": "4326",
+        "resultRecordCount": str(PAGE_SIZE), "resultOffset": str(offset),
     }
     full_url = f"{url}?{urllib.parse.urlencode(params)}"
     try:
@@ -104,6 +107,31 @@ def _fetch_capa(categoria: str, nivel: str) -> tuple[dict | None, str, str | Non
             return None, full_url, None
         return None, full_url, f"{categoria}_{nivel}: {data['error']}"
     return data, full_url, None
+
+
+def _fetch_capa(categoria: str, nivel: str) -> tuple[dict | None, str, str | None]:
+    """Pagina con resultOffset mientras exceededTransferLimit sea true (mismo
+    patrón que emergencia.py/remociones.py: un solo resultRecordCount=2000
+    truncaba en silencio las categorías con más features que eso, ej. las
+    alertas amarillas con miles de comunas). Devuelve (data, url, error) con
+    "features" ya agregadas de todas las páginas; data=None y error=None =>
+    la combinación no existe hoy (400/404 en la primera página). Si una
+    página posterior a la primera falla, se descartan las features ya
+    traídas de ESA combinación (mezclar una página parcial subrepresentaría
+    la alerta) y se reporta como error, igual que si hubiera fallado desde
+    el inicio."""
+    data, full_url, err = _fetch_pagina(categoria, nivel, 0)
+    if data is None or err:
+        return data, full_url, err
+    features = list(data.get("features", []))
+    offset = PAGE_SIZE
+    while data.get("exceededTransferLimit"):
+        data, full_url, err = _fetch_pagina(categoria, nivel, offset)
+        if data is None or err:
+            return None, full_url, err or f"{categoria}_{nivel}: paginación incompleta en offset {offset}"
+        features.extend(data.get("features", []))
+        offset += PAGE_SIZE
+    return {"features": features}, full_url, None
 
 
 def update(con, fetched_at: str) -> int:
@@ -184,6 +212,11 @@ def update(con, fetched_at: str) -> int:
         "alertas": alertas,
         "descartadas_antiguas": descartadas_antiguas,
     }
+    # Alguna categoría/nivel falló (o quedó truncada a mitad de paginación):
+    # lo que se publica es honesto (no hay fallback a datos viejos, cada
+    # combinación exitosa es fresca), pero puede faltar alguna alerta real.
+    if errores:
+        payload["parcial"] = True
     config.ALERTAS_PATH.parent.mkdir(parents=True, exist_ok=True)
     config.ALERTAS_PATH.write_text(json.dumps(payload, ensure_ascii=False) + "\n")
     return len(alertas)
