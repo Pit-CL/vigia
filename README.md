@@ -66,7 +66,7 @@ Instalable, con tema automático claro/oscuro, filtro «Chile» / «cerca de tu 
 
 ## Capas del mapa
 
-Catorce capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
+Quince capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
 
 | Capa | Qué muestra |
 |---|---|
@@ -82,6 +82,7 @@ Catorce capas, activables de a una o combinadas, sobre el mismo mapa de Chile:
 | ⛰️ Remociones | Catastro histórico de remociones en masa (SENAPRED) |
 | 🌊 Ríos | Pronóstico de crecidas GloFAS/Copernicus (Open-Meteo Flood), 29 ríos — no oficial, no reemplaza a la DGA/SENAPRED |
 | 🌊 Costa | Marea, oleaje, temperatura del mar y aviso de marejadas (32 puntos) |
+| 💧 Esval | Zonas de corte de agua potable de Esval (best effort, solo V Región) |
 | 🏃 Evacuación | Vías y zonas de inundación por tsunami, más rutas de evacuación volcánica |
 | 🚑 Emergencia | Centros de salud, bomberos, Carabineros y puntos de encuentro |
 

@@ -121,11 +121,12 @@ CRECIDAS_PATH = Path(os.environ.get("CLIMA_CRECIDAS", ROOT / "web" / "crecidas.j
 
 # ── Satélite (omen): fuentes que bloquean IPs de datacenter ─────
 # INCOMING_DIR es donde satelite/fetch_cl.py sube los JSON crudos por scp
-# (sec.json, farmacias_raw.json); ingesta/cortes.py solo los lee, nunca
-# fetchea la red (ver satelite/README.md).
+# (sec.json, farmacias_raw.json, esval.json); ingesta/cortes.py y hermanos
+# solo los leen, nunca fetchean la red (ver satelite/README.md).
 INCOMING_DIR = Path(os.environ.get("CLIMA_INCOMING", ROOT / "data" / "incoming"))
 CORTES_PATH = Path(os.environ.get("CLIMA_CORTES", ROOT / "web" / "cortes.json"))
 FARMACIAS_PATH = Path(os.environ.get("CLIMA_FARMACIAS", ROOT / "web" / "farmacias.json"))
+ESVAL_PATH = Path(os.environ.get("CLIMA_ESVAL", ROOT / "web" / "esval.json"))
 COMUNAS_PATH = ROOT / "web" / "comunas.json"  # catastro INE versionado, no lo genera la ingesta
 
 # ── Watchdog de frescura (aviso a Slack, ver watchdog.py) ───────

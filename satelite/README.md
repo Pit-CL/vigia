@@ -1,10 +1,11 @@
 # Satélite omen — fuentes que bloquean IPs de datacenter
 
-SEC (cortes de luz) y MINSAL (farmacias de turno) responden solo desde IPs
-residenciales chilenas: fallan desde el VPS (IP de datacenter) y
-funcionan desde `omen` (verificado). Este directorio corre **en omen**, no
-en el VPS — sube JSON crudos al VPS, que los procesa (`ingesta/cortes.py`,
-`ingesta/farmacias.py`).
+SEC (cortes de luz), MINSAL (farmacias de turno) y Esval (cortes de agua,
+V Región) responden solo desde IPs residenciales chilenas: fallan desde el
+VPS (IP de datacenter) y funcionan desde `omen` (verificado). Este
+directorio corre **en omen**, no en el VPS — sube JSON crudos al VPS, que
+los procesa (`ingesta/cortes.py`, `ingesta/farmacias.py`,
+`ingesta/esval.py`).
 
 ## Instalar en omen
 
@@ -40,11 +41,13 @@ en el VPS — sube JSON crudos al VPS, que los procesa (`ingesta/cortes.py`,
    */15 * * * * VIGIA_SSH_DEST='usuario@IP_DEL_VPS' ssh-agent bash -c 'ssh-add ~/.ssh/vigia_satelite 2>/dev/null; python3 ~/vigia-satelite/fetch_cl.py' >> ~/vigia-satelite.log 2>&1
    ```
    MINSAL (farmacias) solo se usa 1x/día en la ingesta, pero viajar junto con
-   SEC cada 15 min no cuesta nada (una fila de cron, un solo script).
+   SEC cada 15 min no cuesta nada (una fila de cron, un solo script). Esval
+   (cortes de agua) viaja también cada 15 min, misma urgencia que SEC.
 
 ## Degradación aceptada
 
-Si omen cae, `incoming/sec.json` y `incoming/farmacias_raw.json` dejan de
-refrescarse: `ingesta/cortes.py` y `ingesta/farmacias.py` detectan que el
-crudo tiene más de 30 min y conservan el JSON publicado previo marcándolo
-`"stale": true`. El resto de Vigía no se afecta.
+Si omen cae, `incoming/sec.json`, `incoming/farmacias_raw.json` e
+`incoming/esval.json` dejan de refrescarse: `ingesta/cortes.py`,
+`ingesta/farmacias.py` e `ingesta/esval.py` detectan que el crudo tiene más
+de 30 min (26 h para farmacias) y conservan el JSON publicado previo
+marcándolo `"stale": true`. El resto de Vigía no se afecta.

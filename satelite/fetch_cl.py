@@ -1,19 +1,21 @@
-"""Satélite de fuentes que bloquean IPs de datacenter (SEC, MINSAL).
+"""Satélite de fuentes que bloquean IPs de datacenter (SEC, MINSAL, Esval).
 
-Corre en omen (IP residencial chilena), NO en el VPS: se verificó que ambos
-endpoints responden desde omen y fallan desde el VPS. Este script solo
+Corre en omen (IP residencial chilena), NO en el VPS: se verificó que los
+tres endpoints responden desde omen y fallan desde el VPS. Este script solo
 fetchea y sube JSON crudos por scp a `data/incoming/` en el VPS — el
-procesamiento (georreferencia, agregación) vive en `ingesta/cortes.py` y
-`ingesta/farmacias.py`, que corren en el VPS y solo leen esos crudos.
+procesamiento (georreferencia, agregación, parseo KML) vive en
+`ingesta/cortes.py`, `ingesta/farmacias.py` e `ingesta/esval.py`, que corren
+en el VPS y solo leen esos crudos.
 
 Uso (cron en omen, ver satelite/README.md):
     python3 satelite/fetch_cl.py
 
-Tolerante: si una fuente falla, sube la otra igual. Sale 0 si al menos una
-fuente se subió con éxito, 1 si las dos fallaron.
+Tolerante: si una fuente falla, las demás suben igual. Sale 0 si al menos
+una fuente se subió con éxito, 1 si las tres fallaron.
 """
 import json
 import os
+import random
 import subprocess
 import sys
 import tempfile
@@ -33,6 +35,12 @@ SEC_URL = "https://apps.sec.cl/INTONLINEv1/ClientesAfectados/GetPorFecha"
 # se usa el último registro publicado como referencia de fecha/hora.
 SEC_SERIE_URL = "https://apps.sec.cl/INTONLINEv1/ClientesAfectados/Get"
 MINSAL_URL = "https://midas.minsal.cl/farmacia_v2/WS/getLocalesTurnos.php"
+# Zonas de corte de agua potable, V Región (Valparaíso) — la única región que
+# Esval opera. Devuelve KML 2.0 (XML), no JSON: a diferencia de SEC/MINSAL,
+# _fetch_esval() no hace json.loads, sube el texto crudo tal cual (ver
+# _escribir_y_subir: envuelve cualquier `data`, no solo dict/list).
+# Random=<float> replica el cache-busting del JS oficial del sitio.
+ESVAL_URL = "https://tupuntodeagua.esval.cl/script/generaKmlZonasCorte.aspx"
 
 # Destino en el VPS vía env VIGIA_SSH_DEST (se fija en la línea del crontab de
 # omen, ver satelite/README.md). NUNCA hardcodear usuario@IP aquí: el repo es
@@ -78,6 +86,17 @@ def _fetch_minsal() -> dict:
     req = urllib.request.Request(MINSAL_URL, headers={"User-Agent": UA, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=TIMEOUT_S) as res:
         return json.loads(res.read().decode("utf-8"))
+
+
+def _fetch_esval() -> str:
+    # Geo-bloqueado igual que SEC/MINSAL (verificado: timeout desde el VPS,
+    # 200 OK desde omen). Sin cortes activos el KML solo trae los 6 <Style>
+    # de color, cero <Placemark> — ingesta/esval.py lo trata como "0 zonas",
+    # no como error.
+    url = f"{ESVAL_URL}?region=5&Random={random.random()}"
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+    with urllib.request.urlopen(req, timeout=TIMEOUT_S) as res:
+        return res.read().decode("utf-8")
 
 
 def _escribir_y_subir(nombre: str, fetch_fn, tmpdir: str) -> bool:
@@ -127,7 +146,8 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmpdir:
         ok_sec = _escribir_y_subir("sec.json", _fetch_sec, tmpdir)
         ok_minsal = _escribir_y_subir("farmacias_raw.json", _fetch_minsal, tmpdir)
-    return 0 if (ok_sec or ok_minsal) else 1
+        ok_esval = _escribir_y_subir("esval.json", _fetch_esval, tmpdir)
+    return 0 if (ok_sec or ok_minsal or ok_esval) else 1
 
 
 if __name__ == "__main__":

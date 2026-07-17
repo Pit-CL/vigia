@@ -101,7 +101,7 @@
       } catch (e) { /* sin localStorage: queda auto */ }
     })();
   </script>
-  <link rel="stylesheet" href="app.css?v=99">
+  <link rel="stylesheet" href="app.css?v=100">
 </head>
 <body>
 
@@ -289,6 +289,7 @@
       <div class="map-group" role="group" aria-label="Servicios y emergencia">
         <span class="map-group-label">Servicios y emergencia</span>
         <button class="map-mode" data-capa="cortes" aria-pressed="false">⚡ Cortes</button>
+        <button class="map-mode" data-capa="esval" aria-pressed="false">💧 Esval</button>
         <button class="map-mode" data-capa="combustible" aria-pressed="false">⛽ Combustible</button>
         <button class="map-mode" data-capa="farmacias" aria-pressed="false">💊 Farmacias</button>
         <button class="map-mode" data-capa="emergencia" aria-pressed="false">🚑 Emergencia</button>
@@ -401,6 +402,7 @@
     <p id="map-note-crecidas" class="panel-note" hidden>Pronóstico de crecidas <strong>GloFAS/Copernicus</strong> vía Open-Meteo — modelo global ~5 km, pensado para ríos grandes; no reemplaza a la <strong>DGA</strong> (dga.mop.gob.cl) ni a las alertas oficiales de <strong>SENAPRED</strong>.</p>
     <p id="map-note-remociones" class="panel-note" hidden>Catastro histórico de remociones en masa · SENAPRED — marca dónde ya ocurrieron flujos (aluviones), deslizamientos y caídas de rocas; terreno con historial es terreno que puede repetir. Círculo = zona de influencia aproximada (150 m).</p>
     <p id="map-note-cortes" class="panel-note" hidden>Cortes de luz reportados por <strong>SEC</strong> (interrupciones en línea) · endpoint no documentado, <strong>best effort</strong> — círculo escalado por clientes afectados. Se actualiza vía un satélite fuera del VPS; si ves "datos antiguos" el satélite lleva más de 30 min sin refrescar.</p>
+    <p id="map-note-esval" class="panel-note" hidden>Zonas de corte de agua potable reportadas por <strong>Esval</strong> (solo V Región: Valparaíso) · endpoint no documentado, <strong>best effort</strong> — polígono coloreado según el estilo del KML oficial. Se actualiza vía un satélite fuera del VPS; si ves "datos antiguos" el satélite lleva más de 30 min sin refrescar.</p>
     <p id="map-note-combustible" class="panel-note" hidden>Precios de combustible en línea · <strong>CNE (Bencina en Línea)</strong> · se actualiza 2 veces al día.</p>
     <p id="map-note-marea" class="panel-note" hidden>Marea, oleaje y temperatura del mar de <strong>Open-Meteo Marine</strong> (modelo global ~8 km) · las tablas oficiales de marea son del <strong>SHOA</strong> (shoa.cl).</p>
     <p id="map-note-evacuacion" class="panel-note" hidden>Vías de evacuación y zona de inundación ante tsunami y volcán · SENAPRED (Visor Chile Preparado) · acerca el mapa (zoom ≥ 11) a una zona costera o volcánica para verlas.</p>
@@ -525,6 +527,6 @@
 
 <script src="vendor/chart.umd.min.js" defer></script>
 <script src="vendor/leaflet.js" defer></script>
-<script src="app.js?v=99" defer></script>
+<script src="app.js?v=100" defer></script>
 </body>
 </html>
