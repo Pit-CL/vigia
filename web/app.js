@@ -3565,15 +3565,35 @@ function renderRiesgos() {
 
   renderRiesgoTiles(riesgoCounts());
   renderRiesgoEventos();
-  // El badge respeta el ámbito elegido por el usuario: si el panel está
-  // filtrado a "cerca de <ciudad>", el badge no debe anunciar una alerta de
-  // otra región que después no aparezca al hacer clic en él.
-  renderRiskBadge(riesgoCounts());
+  // El badge es SIEMPRE nacional (ámbito 'chile' explícito): decisión
+  // 2026-07-17, reemplaza la del 10-07 (commit 295fdb7e) de que respetara
+  // el ámbito del panel. Esa versión anterior podía ocultar una alerta roja,
+  // un volcán en naranja/rojo o un sismo M≥6 con solo dejar el panel en
+  // "cerca" de una región sin relación con el evento — el badge es la red de
+  // seguridad de eventos graves y debe verse pase lo que pase en el panel,
+  // incluso mientras el catastro todavía está "verificando tu región" (con
+  // 'chile', enAmbito no depende de comunas.json). Al hacer clic, el panel
+  // cambia a "Chile" (ver el handler de #risk-badge en setupRiesgos) para
+  // que el evento anunciado sea visible ahí también, en vez de quedar
+  // invisible si el panel seguía en "cerca".
+  renderRiskBadge(riesgoCounts('chile'));
 }
 
 function actualizarLabelCerca() {
   const btn = $('#rf-cerca');
   if (btn) btn.textContent = `Cerca de ${place.name}`;
+}
+
+// Cambia el ámbito del panel de riesgo desde cualquier gesto (el toggle
+// manual Chile/Cerca, o el clic en el badge de eventos graves): persiste en
+// localStorage, refleja el estado en los botones del filtro y re-renderiza
+// el panel. Único punto de esta lógica — no duplicarla en cada gesto que
+// necesite cambiar de ámbito.
+function cambiarAmbito(nuevo) {
+  riesgoAmbito = nuevo;
+  try { localStorage.setItem('sinoptica.riesgoAmbito', riesgoAmbito); } catch (_) { /* opcional */ }
+  document.querySelectorAll('#riesgo-filtro-ambito .rf-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.ambito === riesgoAmbito)));
+  renderRiesgos();
 }
 
 function setupRiesgos() {
@@ -3586,6 +3606,10 @@ function setupRiesgos() {
   $('#risk-badge').addEventListener('click', () => {
     const badge = $('#risk-badge');
     const capa = badge.dataset.capa;
+    // El badge es nacional (ver renderRiesgos); si el panel está en 'cerca'
+    // cambia a 'chile' para que el evento anunciado sea visible en el panel
+    // en vez de quedar invisible por el filtro de región.
+    if (riesgoAmbito === 'cerca') cambiarAmbito('chile');
     if (capa && !capasActivas.has(capa)) toggleCapa(capa);
     if (badge.dataset.lat !== undefined && badge.dataset.lon !== undefined && ensureMap()) {
       map.setView([Number(badge.dataset.lat), Number(badge.dataset.lon)], 8);
@@ -3595,12 +3619,7 @@ function setupRiesgos() {
 
   document.querySelectorAll('#riesgo-filtro-ambito .rf-btn').forEach((btn) => {
     btn.setAttribute('aria-pressed', String(btn.dataset.ambito === riesgoAmbito));
-    btn.addEventListener('click', () => {
-      riesgoAmbito = btn.dataset.ambito;
-      try { localStorage.setItem('sinoptica.riesgoAmbito', riesgoAmbito); } catch (_) { /* opcional */ }
-      document.querySelectorAll('#riesgo-filtro-ambito .rf-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
-      renderRiesgos();
-    });
+    btn.addEventListener('click', () => cambiarAmbito(btn.dataset.ambito));
   });
   actualizarLabelCerca();
 }
