@@ -46,6 +46,7 @@ services:
       CLIMA_CRECIDAS: /data/crecidas.json
       CLIMA_CORTES: /data/cortes.json
       CLIMA_FARMACIAS: /data/farmacias.json
+      CLIMA_ESVAL: /data/esval.json
       CLIMA_COMBUSTIBLE: /data/combustible.json
       CLIMA_INCOMING: /data/incoming
       CLIMA_WATCHDOG_STATE: /data/watchdog_state.json

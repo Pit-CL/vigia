@@ -260,6 +260,7 @@ let tsunamiAreasData = null; // áreas de evacuación ante tsunami (SENAPRED), c
 let remocionesData = null; // catastro de remociones en masa (SENAPRED), capa 'remociones', carga lazy propia
 let crecidasData = null; // pronóstico de crecidas GloFAS/Copernicus (Open-Meteo Flood, no oficial), capa 'crecidas', carga lazy propia
 let cortesData = null;   // cortes de luz SEC (best effort, vía satélite en omen)
+let esvalData = null;    // cortes de agua Esval, V Región (best effort, vía satélite en omen)
 let combustibleData = null; // precios de combustible en línea (CNE), capa 'combustible', carga lazy propia; dormida sin CNE_API_KEY
 let biasData = null;     // correcciones de sesgo por estación/modelo/lead
 let biasStation = null;  // estación de calibración más cercana a `place` (o null)
@@ -1278,6 +1279,15 @@ async function loadCortes() {
   } catch (_) { /* sin cortes: la capa queda vacía */ }
 }
 
+async function loadEsval() {
+  try {
+    const res = await fetch('esval.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    esvalData = await res.json();
+    if (capasActivas.has('esval')) renderMapa();
+  } catch (_) { /* sin esval: la capa queda vacía */ }
+}
+
 async function loadMarea() {
   try {
     const res = await fetch('marea.json', { cache: 'no-store' });
@@ -1581,6 +1591,7 @@ const CAPAS = {
   remociones:    { paint: paintRemociones, lazy: loadRemociones, tieneData: () => remocionesData !== null },
   crecidas:      { paint: paintCrecidas, lazy: loadCrecidas, tieneData: () => crecidasData !== null },
   cortes:        { paint: paintCortes },
+  esval:         { paint: paintEsval },
   combustible:   { paint: paintCombustible, lazy: loadCombustible, tieneData: () => combustibleData !== null },
   marea:         { paint: paintMarea },
   evacuacion:    { paint: paintEvacuacion, lazy: loadEmergencia, tieneData: () => tsunamiViasData !== null || tsunamiAreasData !== null },
@@ -1600,7 +1611,7 @@ const CAPAS = {
 // acción más urgente (hacia dónde ir), por sobre el resto. 'satelite' va
 // primero: es la capa menos accionable, su texto en #map-meta no debe pisar
 // el de ninguna otra.
-const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'crecidas', 'cortes', 'combustible', 'avisos', 'viento', 'temp', 'aire', 'precipitacion', 'marea', 'farmacias', 'emergencia', 'evacuacion'];
+const ORDEN_PINTADO = ['satelite', 'volcanes', 'sismos', 'incendios', 'alertas', 'remociones', 'crecidas', 'cortes', 'esval', 'combustible', 'avisos', 'viento', 'temp', 'aire', 'precipitacion', 'marea', 'farmacias', 'emergencia', 'evacuacion'];
 
 function capasGuardadas() {
   try {
@@ -1771,6 +1782,7 @@ function renderMapa() {
   document.getElementById('map-note-remociones').hidden = !capasActivas.has('remociones');
   document.getElementById('map-note-crecidas').hidden = !capasActivas.has('crecidas');
   document.getElementById('map-note-cortes').hidden = !capasActivas.has('cortes');
+  document.getElementById('map-note-esval').hidden = !capasActivas.has('esval');
   document.getElementById('map-note-combustible').hidden = !capasActivas.has('combustible');
   document.getElementById('map-note-marea').hidden = !capasActivas.has('marea');
   document.getElementById('map-note-evacuacion').hidden = !capasActivas.has('evacuacion');
@@ -2836,6 +2848,59 @@ function paintCortes(group) {
   $('#map-meta').textContent = cortesData.updated
     ? `${cortesData.n_comunas} comunas con cortes · SEC best effort · ${horaLocal(cortesData.updated.replace(' UTC', 'Z').replace(' ', 'T'))} h${stale}`
     : `${cortesData.n_comunas} comunas con cortes · SEC best effort${stale}`;
+}
+
+// Colores de los 6 <Style> fijos del KML de Esval (AMARILLO/AZUL/CELESTE/
+// MORADO/ROJO/VERDE): se reutilizan tokens de color ya existentes en vez de
+// definir variables CSS nuevas solo para esta capa (semánticamente cercanos,
+// no una copia exacta del hex del KML — ver ingesta/esval.py, "estilo" es el
+// nombre, no el color real). ROJO/AMARILLO calzan con las alertas SENAPRED;
+// VERDE con el semáforo volcánico; AZUL/CELESTE con las tarjetas de marea;
+// MORADO con la escala de precipitación severa.
+const ESVAL_COLOR_VAR = {
+  ROJO: '--alerta-roja', AMARILLO: '--alerta-amarilla', VERDE: '--vol-verde',
+  AZUL: '--marea-sube', CELESTE: '--marea-baja', MORADO: '--pp-alto',
+};
+
+// Zonas de corte de agua Esval (V Región): polígonos KML, mismo patrón de
+// pintado que paintEvacuacion (tsunami_areas) — colorScope por estilo en vez
+// de un color fijo único, porque acá SÍ varía según el <Style> del KML.
+function paintEsval(group) {
+  const zonas = (esvalData && esvalData.zonas) || [];
+  if (!zonas.length) {
+    if (capasActivas.size === 1) {
+      $('#map-meta').textContent = metaConFecha('Sin cortes de agua informados · Esval (V Región)', esvalData && esvalData.updated, esvalData && esvalData.stale);
+    }
+    return;
+  }
+  zonas.forEach((z) => {
+    if (!Array.isArray(z.poligono) || z.poligono.length < 3) return;
+    const color = css(ESVAL_COLOR_VAR[z.estilo] || '--accent2');
+    const poly = L.polygon(z.poligono, { color, weight: 2, opacity: 0.85, fillColor: color, fillOpacity: 0.3 }).addTo(group);
+    const box = document.createElement('div');
+    box.className = 'stn-popup';
+    const h = document.createElement('strong');
+    h.textContent = z.nombre || 'Zona de corte de agua';
+    box.appendChild(h);
+    if (z.descripcion) {
+      const small = document.createElement('small');
+      small.textContent = z.descripcion;
+      box.appendChild(small);
+    }
+    if (z.atributos && Object.keys(z.atributos).length) {
+      const small = document.createElement('small');
+      small.textContent = Object.entries(z.atributos).map(([k, v]) => `${k}: ${v}`).join(' · ');
+      box.appendChild(small);
+    }
+    const fragFecha = actualizadoTexto(esvalData.updated, esvalData.stale);
+    if (fragFecha) {
+      const fecha = document.createElement('small');
+      fecha.textContent = fragFecha;
+      box.appendChild(fecha);
+    }
+    poly.bindPopup(box, { maxWidth: 260 });
+  });
+  $('#map-meta').textContent = metaConFecha(`${zonas.length} zona(s) con corte de agua · Esval (V Región) best effort`, esvalData.updated, esvalData.stale);
 }
 
 const PRECIO_COMBUSTIBLE_LABEL = {
@@ -4110,7 +4175,7 @@ async function setupPush() {
 // fijados a mano en PACK_CACHE vía postMessage (sin límite LRU).
 const PACK_JSON = [
   'emergencia.json', 'tsunami_vias.json', 'tsunami_areas.json', 'remociones.json',
-  'comunas.json', 'sismos.json', 'alertas.json', 'avisos.json', 'cortes.json', 'estaciones.json', 'status.json',
+  'comunas.json', 'sismos.json', 'alertas.json', 'avisos.json', 'cortes.json', 'esval.json', 'estaciones.json', 'status.json',
 ];
 // Incluye 8-10 porque ensureMap() abre en zoom 8: sin esos niveles, offline
 // la vista inicial saldría con tiles rotos (a esa escala son 1-2 tiles por zoom).
@@ -4263,6 +4328,7 @@ loadAvisos();
 loadMarea();
 loadTsunami();
 loadCortes();
+loadEsval();
 // crecidas.json se carga eager (a diferencia de remociones/combustible, que
 // no alimentan ningún tile) porque el tile del centro de riesgos necesita
 // el conteo de ríos en crecida ANTES de que el usuario active la capa del
@@ -4285,7 +4351,7 @@ let refreshing = false;
 // El "última actualización" es el más reciente `updated` entre los JSON ya
 // cargados (mejor esfuerzo: no todos llegaron a existir necesariamente).
 function ultimaActualizacionLocal() {
-  const updates = [estacionesData, sismosData, incendiosData, alertasData, volcanesData, avisosData, biasData, mareaData, tsunamiData, cortesData]
+  const updates = [estacionesData, sismosData, incendiosData, alertasData, volcanesData, avisosData, biasData, mareaData, tsunamiData, cortesData, esvalData]
     .filter((d) => d && d.updated).map((d) => d.updated);
   if (!updates.length) return null;
   const masReciente = updates.sort().pop();   // "YYYY-MM-DD HH:MM UTC" ordena bien como texto
@@ -4329,6 +4395,7 @@ async function refreshAll() {
   loadMarea();         // marea.json (Open-Meteo Marine, no oficial)
   loadTsunami();       // tsunami.json (PTWC + catálogo sísmico propio)
   loadCortes();        // cortes.json (SEC, best effort vía satélite en omen)
+  loadEsval();         // esval.json (Esval, cortes de agua V Región, best effort vía satélite en omen)
   loadCrecidas();      // crecidas.json (GloFAS/Copernicus vía Open-Meteo, no oficial)
   // El satélite no tiene JSON propio (fetch cross-origin a GIBS) y solo se
   // recarga si la capa está activa: sin esto no habría forma de ver frames

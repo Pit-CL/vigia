@@ -18,6 +18,7 @@ import cortes
 import crecidas
 import db
 import emergencia
+import esval
 import farmacias
 import incendios
 import marea
@@ -128,10 +129,12 @@ def main() -> int:
                      help="cortes de luz SEC (best effort, vía satélite en omen — solo lee incoming/, sin red)")
     ap.add_argument("--farmacias", action="store_true",
                      help="farmacias de turno MINSAL (vía satélite en omen — solo lee incoming/, sin red)")
+    ap.add_argument("--esval", action="store_true",
+                     help="cortes de agua Esval, V Región (best effort, vía satélite en omen — solo lee incoming/, sin red)")
     ap.add_argument("--combustible", action="store_true",
                      help="precios de bencina en línea (CNE, dormida sin CNE_EMAIL/CNE_PASSWORD — accesible directo desde el VPS)")
     ap.add_argument("--hazards", action="store_true",
-                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + crecidas + cortes + farmacias + combustible)")
+                     help="peligros naturales (sismos + incendios + alertas + volcanes + tsunami + crecidas + cortes + farmacias + esval + combustible)")
     ap.add_argument("--emergencia", action="store_true",
                      help="infraestructura de emergencia comunitaria (SENAPRED, cuasi-estático semanal)")
     ap.add_argument("--remociones", action="store_true",
@@ -143,7 +146,7 @@ def main() -> int:
         args.forecasts or args.all or args.sismos or args.incendios
         or args.alertas or args.volcanes or args.hazards or args.emergencia
         or args.remociones or args.avisos or args.marea or args.tsunami
-        or args.cortes or args.farmacias or args.combustible or args.crecidas)
+        or args.cortes or args.farmacias or args.esval or args.combustible or args.crecidas)
     do_sismos = args.sismos or args.hazards or args.all
     do_incendios = args.incendios or args.hazards or args.all
     do_alertas = args.alertas or args.hazards or args.all
@@ -153,6 +156,7 @@ def main() -> int:
     do_crecidas = args.crecidas or args.hazards or args.all
     do_cortes = args.cortes or args.hazards or args.all
     do_farmacias = args.farmacias or args.hazards or args.all
+    do_esval = args.esval or args.hazards or args.all
     do_combustible = args.combustible or args.hazards or args.all
     do_emergencia = args.emergencia or args.all
     do_remociones = args.remociones or args.emergencia or args.all
@@ -194,6 +198,8 @@ def main() -> int:
         ok &= step(con, run_at, "cortes", lambda: cortes.update(con, run_at))
     if do_farmacias:
         ok &= step(con, run_at, "farmacias", lambda: farmacias.update(con, run_at))
+    if do_esval:
+        ok &= step(con, run_at, "esval", lambda: esval.update(con, run_at))
     if do_combustible:
         ok &= step(con, run_at, "combustible", lambda: combustible.update(con, run_at))
     if do_emergencia:

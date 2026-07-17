@@ -87,6 +87,12 @@ CHECKS = [
     ("satelite-farmacias", config.INCOMING_DIR / "farmacias_raw.json", 240,
      "crudo de farmacias de turno (MINSAL, satélite omen)",
      "las farmacias de turno pueden quedar desactualizadas sin que nadie se entere"),
+    # Esval viaja cada 15 min igual que SEC (mismo cron, ver satelite/fetch_cl.py)
+    # y su consumidor (ingesta/esval.py) también usa STALE_MIN=30: mismo umbral
+    # que satelite (sec.json).
+    ("satelite-esval", config.INCOMING_DIR / "esval.json", 60,
+     "crudo de cortes de agua (Esval, satélite omen)",
+     "los cortes de agua quedan congelados sin que nadie se entere"),
 ]
 
 
